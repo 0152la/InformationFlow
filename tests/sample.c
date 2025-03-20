@@ -1,0 +1,35 @@
+#include <stdio.h>
+#include <stdbool.h>
+
+int
+get_val()
+{
+    static int i = 22;
+    i += 1;
+    return i;
+}
+
+
+int
+maybe_get(bool may)
+{
+    if (may)
+    {
+        return get_val();
+    }
+    return maybe_get(!may);
+}
+
+int
+main()
+{
+    int x = 24;
+    x = x + 19;
+    x = x % 3;
+    x = x == 2 ? get_val() : x;
+
+    printf("x = %d\n", x);
+
+    return x;
+}
+

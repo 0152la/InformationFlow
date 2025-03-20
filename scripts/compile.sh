@@ -10,6 +10,11 @@ build_dir=$src_dir/build
 cmake -G Ninja -B $build_dir -S $src_dir
 cmake --build $build_dir
 
+if [ ! -f $build_dir/tests/sample.ll ]
+then
+    cmake --build $build_dir --target sample-ll
+fi
+
 if [ "$1" == "san" ]
 then
     cmake -G Ninja -DCMAKE_CXX_FLAGS="-fsanitize=address" -B $build_dir\_asan -S $src_dir

@@ -3,3 +3,11 @@ add_executable(iflow
     entropy.cpp
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR})
+
+add_executable(reader
+    reader.cpp
+    reader-basicblock.cpp
+)
+target_include_directories(reader PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+target_link_libraries(reader PRIVATE ${llvm_libs})
