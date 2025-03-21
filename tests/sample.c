@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 int
 get_val()
@@ -8,7 +8,6 @@ get_val()
     i += 1;
     return i;
 }
-
 
 int
 maybe_get(bool may)
@@ -32,4 +31,3 @@ main()
 
     return x;
 }
-

@@ -1,9 +1,9 @@
 #ifndef _IF_MAIN_HPP
 #define _IF_MAIN_HPP
 
-#include <random>
-#include <iostream>
 #include <cmath>
+#include <iostream>
+#include <random>
 
 #include "entropy.hpp"
 

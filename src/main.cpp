@@ -29,7 +29,8 @@ main()
 
     double entropy_in = h.calculate_entropy_inputs();
     double entropy_out = h.calculate_entropy_outputs();
-    std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out << std::endl;
+    std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out
+              << std::endl;
 
     size_t fixed_point_it = 0;
     float diff;
@@ -46,10 +47,12 @@ main()
 
         entropy_in = h.calculate_entropy_inputs();
         entropy_out = h.calculate_entropy_outputs();
-        change_ratio = entropy_in  / e_in_old + entropy_out  / e_out_old - 2;
-        std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out << "; Ratio = " << change_ratio << std::endl;
+        change_ratio = entropy_in / e_in_old + entropy_out / e_out_old - 2;
+        std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out
+                  << "; Ratio = " << change_ratio << std::endl;
 
-        if (std::abs(change_ratio) < 2 * change_error || fixed_point_it >= max_extra_steps)
+        if (std::abs(change_ratio) < 2 * change_error
+            || fixed_point_it >= max_extra_steps)
         {
             break;
         }
@@ -59,7 +62,7 @@ main()
         fixed_point_it += 1;
     }
 
-    //std::cout << "CONDITIONAL ENTROPY == " << h.calculate_conditional_entropy_in_over_out() << std::endl;
+    // std::cout << "CONDITIONAL ENTROPY == " <<
+    // h.calculate_conditional_entropy_in_over_out() << std::endl;
     return 0;
 }
-

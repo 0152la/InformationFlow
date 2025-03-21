@@ -11,7 +11,8 @@ compute_entropy(IF_Histogram& vals)
  * IF_Histogram_Entry
  ******************************************************************************/
 
-IF_Histogram_Entry::IF_Histogram_Entry(if_in_t _input) : input(_input)
+IF_Histogram_Entry::IF_Histogram_Entry(if_in_t _input)
+    : input(_input)
 {
     this->outputs = std::vector<if_out_t>();
 }
@@ -26,11 +27,13 @@ void
 IF_Histogram_Entry::print(void)
 {
     std::cout << "== INPUT " << this->input << " -- OUTPUTS [";
-    std::ostringstream vals(this->outputs.empty() ? "" : std::to_string(this->outputs.at(0)), std::ios_base::ate);
+    std::ostringstream vals(
+        this->outputs.empty() ? "" : std::to_string(this->outputs.at(0)),
+        std::ios_base::ate);
 
     auto outs = this->outputs.begin();
     std::advance(outs, 1);
-    for ( ; outs != this->outputs.end(); ++outs)
+    for (; outs != this->outputs.end(); ++outs)
     {
         vals << ", " << *outs;
     }
@@ -69,7 +72,9 @@ IF_Histogram::insert(if_in_t key, if_out_t val)
     IF_Histogram_Entry* entry = this->find(key);
     if (!entry)
     {
-        entry = this->data.emplace_back(std::make_unique<IF_Histogram_Entry>(key)).get();
+        entry
+            = this->data.emplace_back(std::make_unique<IF_Histogram_Entry>(key))
+                  .get();
     }
     entry->insert(val);
     this->observations += 1;
@@ -159,4 +164,3 @@ IF_Histogram::print(void)
     }
     std::cout << "=== END" << std::endl;
 }
-
