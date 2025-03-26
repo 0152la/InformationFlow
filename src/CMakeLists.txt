@@ -11,3 +11,8 @@ add_executable(reader
 target_include_directories(reader PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 target_link_libraries(reader PRIVATE ${llvm_libs})
+
+add_library(entropy
+    entropy.cpp
+)
+target_include_directories(entropy PUBLIC ${INCLUDE_DIR})

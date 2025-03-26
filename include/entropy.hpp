@@ -69,6 +69,7 @@ public:
     double calculate_entropy_inputs(void);
     double calculate_entropy_outputs(void);
     double calculate_conditional_entropy_out_given_in(void);
+    double calculate_uncertainty_coefficient_out_given_in(void);
 
     void print(void);
 };

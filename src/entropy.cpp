@@ -135,7 +135,7 @@ IF_Histogram::calculate_entropy_outputs(void)
             if (auto entry = parsed_obs.find(entry_out.first);
                 entry != parsed_obs.end())
             {
-                entry->second += entry->second;
+                entry->second += entry_out.second;
             }
             else
             {
@@ -158,6 +158,14 @@ double
 IF_Histogram::calculate_conditional_entropy_out_given_in(void)
 {
     return compute_conditional_entropy(this->data, this->obs_count);
+}
+
+double
+IF_Histogram::calculate_uncertainty_coefficient_out_given_in(void)
+{
+    double out_entropy = this->calculate_entropy_outputs();
+    double cond_entropy = this->calculate_conditional_entropy_out_given_in();
+    return 1 - cond_entropy / out_entropy;
 }
 
 void

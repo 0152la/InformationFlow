@@ -1,10 +1,10 @@
 #include "main.hpp"
 
 static void
-gen_one(std::mt19937_64& gen, IF_Histogram& h)
+gen_one(IF_Randgen& gen, IF_Histogram& h)
 {
-    std::mt19937_64::result_type prog_in = gen() % in_scale;
-    std::mt19937_64::result_type prog_out = prog_in % out_scale;
+    int64_t prog_in = gen.gen_int64_t() % in_scale;
+    int64_t prog_out = prog_in % out_scale;
 
     h.insert(prog_in, prog_out);
 }
@@ -12,21 +12,29 @@ gen_one(std::mt19937_64& gen, IF_Histogram& h)
 int
 main()
 {
-    std::mt19937_64 gen(42);
+    // std::mt19937_64 gen(42);
+    IF_Randgen generator(42);
     IF_Histogram h;
 
-    std::mt19937_64::result_type prog_in;
-    std::mt19937_64::result_type prog_out;
+    int64_t prog_in;
+    int64_t prog_out;
 
-    std::cout << "Initial computations - ";
     for (size_t i = 0; i < initial_tests; ++i)
     {
-        prog_in = gen() % in_scale;
-        prog_out = prog_in % out_scale;
+        prog_in = generator.gen_int64_t() % in_scale;
+        // prog_out = (prog_in + i) % out_scale;
+        prog_out = prog_in;
 
         h.insert(prog_in, prog_out);
     }
 
+    std::cout << "CONDITIONAL ENTROPY == "
+              << h.calculate_conditional_entropy_out_given_in() << std::endl;
+    std::cout << "UNCERTAINTY COEFFICIENT == "
+              << h.calculate_uncertainty_coefficient_out_given_in()
+              << std::endl;
+
+    std::cout << "Initial computations - ";
     double entropy_in = h.calculate_entropy_inputs();
     double entropy_out = h.calculate_entropy_outputs();
     std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out
@@ -42,7 +50,7 @@ main()
         std::cout << "Iteration " << fixed_point_it << " - ";
         for (size_t j = 0; j < extra_step; ++j)
         {
-            gen_one(gen, h);
+            gen_one(generator, h);
         }
 
         entropy_in = h.calculate_entropy_inputs();
@@ -62,7 +70,5 @@ main()
         fixed_point_it += 1;
     }
 
-    std::cout << "CONDITIONAL ENTROPY == "
-              << h.calculate_conditional_entropy_out_given_in() << std::endl;
     return 0;
 }
