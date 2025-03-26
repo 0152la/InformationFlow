@@ -62,7 +62,7 @@ main()
         fixed_point_it += 1;
     }
 
-    // std::cout << "CONDITIONAL ENTROPY == " <<
-    // h.calculate_conditional_entropy_in_over_out() << std::endl;
+    std::cout << "CONDITIONAL ENTROPY == "
+              << h.calculate_conditional_entropy_out_given_in() << std::endl;
     return 0;
 }

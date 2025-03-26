@@ -1,26 +1,63 @@
 #include "entropy.hpp"
 
-float
-compute_entropy(IF_Histogram& vals)
+static double
+compute_entropy(const obs_t& observations, const size_t obs_count)
 {
-    vals.print();
-    return 0.0;
+    double entropy = 0.0;
+    double prob;
+
+    // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
+    for (const auto& entry : observations)
+    {
+        prob = entry / static_cast<double>(obs_count);
+        entropy += prob * log2(prob);
+    }
+
+    // Return the negation of the sum
+    return -entropy;
+}
+
+static double
+compute_conditional_entropy(
+    const std::vector<std::unique_ptr<IF_Histogram_Entry>>& observations,
+    uint64_t obs_count)
+{
+    double entropy = 0.0;
+    double prob;
+    double in_prob;
+    double obs_count_d = static_cast<double>(obs_count);
+
+    for (const auto& entry : observations)
+    {
+        in_prob = entry->get_total_out_count() / obs_count_d;
+        for (const auto& out : entry->get_outs())
+        {
+            prob = out.second / obs_count_d;
+            entropy += prob * log2(prob / in_prob);
+        }
+    }
+
+    return -entropy;
 }
 
 /*******************************************************************************
  * IF_Histogram_Entry
  ******************************************************************************/
 
-IF_Histogram_Entry::IF_Histogram_Entry(if_in_t _input)
-    : input(_input)
-{
-    this->outputs = std::vector<if_out_t>();
-}
-
 void
 IF_Histogram_Entry::insert(if_out_t _output)
 {
-    this->outputs.push_back(_output);
+    // this->outputs.push_back(_output);
+
+    if (auto entry = this->outputs.find(_output); entry != this->outputs.end())
+    {
+        entry->second += 1;
+    }
+    else
+    {
+        this->outputs.insert({ _output, 1 });
+    }
+    this->out_count += 1;
 }
 
 void
@@ -35,7 +72,7 @@ IF_Histogram_Entry::print(void)
     std::advance(outs, 1);
     for (; outs != this->outputs.end(); ++outs)
     {
-        vals << ", " << *outs;
+        vals << ", <" << outs->first << ", " << outs->second << ">";
     }
     std::cout << vals.str() << "]" << std::endl;
 }
@@ -43,28 +80,6 @@ IF_Histogram_Entry::print(void)
 /*******************************************************************************
  * IF_Histogram
  ******************************************************************************/
-
-in_out_obs
-IF_Histogram::get_in_out_obs(void)
-{
-    in_out_obs new_obs;
-    for (const auto& entry : this->data)
-    {
-        for (const if_out_t entry_out : entry->get_outs())
-        {
-            in_out_obs::key_type entry_obs { entry->get_in(), entry_out };
-            if (auto entry = new_obs.find(entry_obs); entry != new_obs.end())
-            {
-                entry->second += 1;
-            }
-            else
-            {
-                new_obs.insert({ entry_obs, 1 });
-            }
-        }
-    }
-    return new_obs;
-}
 
 void
 IF_Histogram::insert(if_in_t key, if_out_t val)
@@ -77,7 +92,7 @@ IF_Histogram::insert(if_in_t key, if_out_t val)
                   .get();
     }
     entry->insert(val);
-    this->observations += 1;
+    this->obs_count += 1;
 }
 
 IF_Histogram_Entry*
@@ -96,62 +111,53 @@ IF_Histogram::find(if_in_t key)
 double
 IF_Histogram::calculate_entropy_inputs(void)
 {
-    double entropy = 0.0;
-    double prob;
+    obs_t parsed_obs;
 
-    // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
+    // Flatten observations
     for (const auto& entry : this->data)
     {
-        prob = entry->get_out_count() / static_cast<double>(this->observations);
-        entropy += prob * log2(prob);
+        parsed_obs.push_back(entry->get_total_out_count());
     }
 
-    // Return the negation of the sum
-    return -entropy;
+    return compute_entropy(parsed_obs, this->obs_count);
 }
 
 double
 IF_Histogram::calculate_entropy_outputs(void)
 {
-    double entropy = 0.0;
-    double prob;
+    std::map<if_out_t, size_t> parsed_obs;
 
-    std::map<if_out_t, size_t> outs;
-    // Gather outputs
+    // Parse output observations
     for (const auto& entry : this->data)
     {
-        for (if_out_t entry_out : entry->get_outs())
+        for (const std::pair<if_out_t, uint64_t>& entry_out : entry->get_outs())
         {
-            if (auto entry = outs.find(entry_out); entry != outs.end())
+            if (auto entry = parsed_obs.find(entry_out.first);
+                entry != parsed_obs.end())
             {
-                entry->second += 1;
+                entry->second += entry->second;
             }
             else
             {
-                outs.insert({ entry_out, 1 });
+                parsed_obs.insert(entry_out);
             }
         }
     }
 
-    // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
-    for (const auto out : outs)
+    // Flatten observations
+    obs_t flatten_obs;
+    for (const auto& entry : parsed_obs)
     {
-        prob = out.second / static_cast<double>(this->observations);
-        entropy += prob * log2(prob);
+        flatten_obs.push_back(entry.second);
     }
 
-    // Return the negation of the sum
-    return -entropy;
+    return compute_entropy(flatten_obs, this->obs_count);
 }
 
 double
-IF_Histogram::calculate_conditional_entropy_in_over_out(void)
+IF_Histogram::calculate_conditional_entropy_out_given_in(void)
 {
-    double entropy = 0.0;
-
-    in_out_obs obs = this->get_in_out_obs();
-
-    return -entropy;
+    return compute_conditional_entropy(this->data, this->obs_count);
 }
 
 void
