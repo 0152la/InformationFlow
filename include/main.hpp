@@ -6,7 +6,8 @@
 #include <random>
 
 #include "entropy.hpp"
-#include "if_randgen.hpp"
+#include "randgen.hpp"
+#include "reader.hpp"
 
 constexpr unsigned long initial_tests = 10000;
 constexpr unsigned long extra_step = 1000;

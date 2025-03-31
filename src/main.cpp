@@ -9,10 +9,9 @@ gen_one(IF_Randgen& gen, IF_Histogram& h)
     h.insert(prog_in, prog_out);
 }
 
-int
-main()
+static int
+entropy_dev(void)
 {
-    // std::mt19937_64 gen(42);
     IF_Randgen generator(42);
     IF_Histogram h;
 
@@ -71,4 +70,34 @@ main()
     }
 
     return 0;
+}
+
+static int
+reader_dev(void)
+{
+    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+                                "InformationFlow/build/tests/sample.ll";
+    IF_Parser if_p;
+    std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
+    if_p.make_entropy_map(*if_module->get_module());
+
+    return 0;
+}
+
+static int
+test_printer(void)
+{
+    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+                                "InformationFlow/build/tests/sample.ll";
+    IF_Parser if_p;
+    std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
+    IF_Parser::print_instrs(*if_module->get_module());
+    return 0;
+}
+
+int
+main()
+{
+    return test_printer();
+    // return reader_dev();
 }

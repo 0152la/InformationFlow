@@ -6,3 +6,5 @@ ColumnLimit: 80
 IndentCaseLabels: true
 SeparateDefinitionBlocks: Always
 SpaceAfterCStyleCast: true
+PackConstructorInitializers: Never
+BreakConstructorInitializers: AfterColon

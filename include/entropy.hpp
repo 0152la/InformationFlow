@@ -31,8 +31,8 @@ private:
     size_t out_count = 0;
 
 public:
-    IF_Histogram_Entry(if_in_t _input)
-        : input(_input) { };
+    IF_Histogram_Entry(if_in_t _input) :
+        input(_input) { };
 
     void insert(if_out_t);
 

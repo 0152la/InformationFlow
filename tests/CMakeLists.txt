@@ -12,7 +12,6 @@ add_custom_target(sample-ll
 
 # Generic functions
 function(add_binary_test test_name)
-    message(STATUS "ADD BINARY ${test_name}")
     add_test(
         NAME ${test_name}
         COMMAND ${test_name}
@@ -31,12 +30,12 @@ function(add_entropy_test test_name)
         ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE test_harness ${ENTROPY_LIBS})
     target_include_directories(${test_name} PRIVATE ${INCLUDE_DIR})
-    message(STATUS "ADD ENTROPY ${test_name}")
     add_binary_test(${test_name})
 endfunction()
 
 set(entropy_tests
     entropy-coin_flip
+    entropy-dice_roll
 )
 
 foreach(entropy_t IN LISTS entropy_tests)

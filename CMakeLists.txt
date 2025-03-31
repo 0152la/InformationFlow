@@ -5,8 +5,8 @@ project(InformationFlow LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 
 # Set global compilation options
-#add_compile_options(-pedantic -Wextra)
-#add_compile_options($<$<CONFIG:Debug>:-Werror>)
+add_compile_options(-pedantic -Wextra)
+add_compile_options($<$<CONFIG:Debug>:-Werror>)
 
 # Enable `compile_commands.json` generations
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
