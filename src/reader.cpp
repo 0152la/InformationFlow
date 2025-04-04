@@ -83,9 +83,44 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
             llvm::errs() << "\t Instruction " << fn_inst.getOpcodeName() << " ";
             for (const auto& fn_inst_arg : fn_inst.operand_values())
             {
+                if (const llvm::Value* v
+                    = llvm::dyn_cast<llvm::Value>(fn_inst_arg))
+                {
+                    llvm::errs() << "[ ";
+                    // v->print(llvm::errs(), true);
+                    // llvm::errs() << v->getNameOrAsOperand() << '\n';
+                    v->printAsOperand(llvm::errs());
+                    llvm::errs() << " --- ";
+                    v->printAsOperand(llvm::errs(), false, &llvm_module);
+                    llvm::errs() << " ]";
+                }
+                else
+                {
+                    throw std::runtime_error("Got non-Value argument");
+                }
+                // This is a function (TODO check)
                 if (fn_inst_arg->hasName())
                 {
                     llvm::errs() << fn_inst_arg->getName();
+                }
+                // This is a constant
+                else if (const llvm::ConstantData* cd
+                    = llvm::dyn_cast<llvm::ConstantData>(fn_inst_arg))
+                {
+                    if (const llvm::ConstantInt* ci
+                        = llvm::dyn_cast<llvm::ConstantInt>(fn_inst_arg))
+                    {
+                        ci->getValue().print(llvm::errs(), true);
+                    }
+                    else if (const llvm::ConstantFP* cfp
+                        = llvm::dyn_cast<llvm::ConstantFP>(fn_inst_arg))
+                    {
+                        cfp->getValue().print(llvm::errs());
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Unhandled ConstantData type");
+                    }
                 }
                 else
                 {

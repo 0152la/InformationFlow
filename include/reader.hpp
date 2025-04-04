@@ -6,6 +6,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -22,9 +23,9 @@
 class IF_LLVM_Module
 {
 private:
-    std::unique_ptr<llvm::LLVMContext> llvm_ctx;
-    std::unique_ptr<llvm::SMDiagnostic> llvm_smd;
-    std::unique_ptr<llvm::Module> llvm_module;
+    const std::unique_ptr<llvm::LLVMContext> llvm_ctx;
+    const std::unique_ptr<llvm::SMDiagnostic> llvm_smd;
+    const std::unique_ptr<llvm::Module> llvm_module;
 
 public:
     IF_LLVM_Module(llvm::LLVMContext* _ctx, llvm::SMDiagnostic* _smd,
