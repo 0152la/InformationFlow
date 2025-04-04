@@ -17,10 +17,15 @@ compute_entropy(const obs_t& observations, const size_t obs_count)
     return -entropy;
 }
 
+/* This computes the conditional entropy, given a structure of observations, of
+ * the form `<given, <for:count>>`, where count is the number of times a `for`
+ * was observed for the respective `given`. We also take the total number of
+ * observations (equal to the total number of `count`s), for performance
+ * reasons.
+ */
 static double
 compute_conditional_entropy(
-    const std::vector<std::unique_ptr<IF_Histogram_Entry>>& observations,
-    uint64_t obs_count)
+    const IF_Histogram::data_t& observations, uint64_t obs_count)
 {
     double entropy = 0.0;
     double prob;
@@ -29,10 +34,21 @@ compute_conditional_entropy(
 
     for (const auto& entry : observations)
     {
+        // Compute the probability of a specific `given` observation
+        //
+        // p(x) = no of a specific `x` / total no of observations
         in_prob = entry->get_total_out_count() / obs_count_d;
+
         for (const auto& out : entry->get_outs())
         {
+            // Compute the probabilty of a specific pair of `(given, for)`
+            // observations. Since we are iterating over observed `for`s for a
+            // `given`, this is just the number of observed `for`s
+            //
+            // p(x, y) = no of (x, y) / total no of observations
             prob = out.second / obs_count_d;
+
+            // Plug in entropy formula
             entropy += prob * log2(prob / in_prob);
         }
     }
@@ -47,17 +63,21 @@ compute_conditional_entropy(
 void
 IF_Histogram_Entry::insert(if_out_t _output)
 {
-    // this->outputs.push_back(_output);
+    this->insert_many(_output, 1);
+}
 
+void
+IF_Histogram_Entry::insert_many(if_out_t _output, uint64_t _out_count)
+{
     if (auto entry = this->outputs.find(_output); entry != this->outputs.end())
     {
-        entry->second += 1;
+        entry->second += _out_count;
     }
     else
     {
-        this->outputs.insert({ _output, 1 });
+        this->outputs.insert({ _output, _out_count });
     }
-    this->out_count += 1;
+    this->out_count += _out_count;
 }
 
 void
@@ -108,22 +128,8 @@ IF_Histogram::find(if_in_t key)
     return nullptr;
 }
 
-double
-IF_Histogram::calculate_entropy_inputs(void)
-{
-    obs_t parsed_obs;
-
-    // Flatten observations
-    for (const auto& entry : this->data)
-    {
-        parsed_obs.push_back(entry->get_total_out_count());
-    }
-
-    return compute_entropy(parsed_obs, this->obs_count);
-}
-
-double
-IF_Histogram::calculate_entropy_outputs(void)
+obs_t
+IF_Histogram::get_output_observations(void)
 {
     std::map<if_out_t, size_t> parsed_obs;
 
@@ -151,7 +157,63 @@ IF_Histogram::calculate_entropy_outputs(void)
         flatten_obs.push_back(entry.second);
     }
 
-    return compute_entropy(flatten_obs, this->obs_count);
+    return flatten_obs;
+}
+
+auto
+IF_Histogram::invert_obs(void) -> const decltype(this->data)
+{
+    decltype(this->data) inverted_obs;
+
+    // Iterate over all observations
+    for (const auto& obs : this->data)
+    {
+        // Iterate over the observed outputs for a recorded input
+        for (const auto& out_obs : obs->get_outs())
+        {
+            // Check if the output is already logged
+            for (const auto& inv_obs : inverted_obs)
+            {
+                // If we found the logged observation, add the number of times
+                // we saw this pair
+                if (inv_obs->get_in() == out_obs.first)
+                {
+                    inv_obs->insert_many(obs->get_in(), out_obs.second);
+                    goto done;
+                }
+            }
+            // We didn't see this observation yet, so we must insert it
+            {
+                auto& inv_ref = inverted_obs.emplace_back(
+                    std::make_unique<IF_Histogram_Entry>(out_obs.first));
+                inv_ref->insert_many(obs->get_in(), out_obs.second);
+            }
+        done:
+            (void) 0;
+        }
+    }
+
+    return inverted_obs;
+}
+
+double
+IF_Histogram::calculate_entropy_inputs(void)
+{
+    obs_t parsed_obs;
+
+    // Flatten observations
+    for (const auto& entry : this->data)
+    {
+        parsed_obs.push_back(entry->get_total_out_count());
+    }
+
+    return compute_entropy(parsed_obs, this->obs_count);
+}
+
+double
+IF_Histogram::calculate_entropy_outputs(void)
+{
+    return compute_entropy(this->get_output_observations(), this->obs_count);
 }
 
 double
@@ -161,11 +223,26 @@ IF_Histogram::calculate_conditional_entropy_out_given_in(void)
 }
 
 double
+IF_Histogram::calculate_conditional_entropy_in_given_out(void)
+{
+    const decltype(this->data) inverted_obs = this->invert_obs();
+    return compute_conditional_entropy(inverted_obs, this->obs_count);
+}
+
+double
 IF_Histogram::calculate_uncertainty_coefficient_out_given_in(void)
 {
     double out_entropy = this->calculate_entropy_outputs();
     double cond_entropy = this->calculate_conditional_entropy_out_given_in();
     return 1 - cond_entropy / out_entropy;
+}
+
+double
+IF_Histogram::calculate_uncertainty_coefficient_in_given_out(void)
+{
+    double in_entropy = this->calculate_entropy_inputs();
+    double cond_entropy = this->calculate_conditional_entropy_in_given_out();
+    return 1 - cond_entropy / in_entropy;
 }
 
 void
