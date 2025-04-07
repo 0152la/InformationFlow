@@ -57,65 +57,25 @@ compute_conditional_entropy(
 }
 
 /*******************************************************************************
- * IF_Histogram_Entry
- ******************************************************************************/
-
-void
-IF_Histogram_Entry::insert(if_out_t _output)
-{
-    this->insert_many(_output, 1);
-}
-
-void
-IF_Histogram_Entry::insert_many(if_out_t _output, uint64_t _out_count)
-{
-    if (auto entry = this->outputs.find(_output); entry != this->outputs.end())
-    {
-        entry->second += _out_count;
-    }
-    else
-    {
-        this->outputs.insert({ _output, _out_count });
-    }
-    this->out_count += _out_count;
-}
-
-void
-IF_Histogram_Entry::print(void)
-{
-    std::cout << "== INPUT " << this->input << " -- OUTPUTS [";
-    std::ostringstream vals(
-        this->outputs.empty() ? "" : std::to_string(this->outputs.at(0)),
-        std::ios_base::ate);
-
-    auto outs = this->outputs.begin();
-    std::advance(outs, 1);
-    for (; outs != this->outputs.end(); ++outs)
-    {
-        vals << ", <" << outs->first << ", " << outs->second << ">";
-    }
-    std::cout << vals.str() << "]" << std::endl;
-}
-
-/*******************************************************************************
  * IF_Histogram
  ******************************************************************************/
 
 void
 IF_Histogram::insert(if_in_t key, if_out_t val)
 {
-    IF_Histogram_Entry* entry = this->find(key);
+    IF_Histogram_Entry<if_in_t, if_out_t>* entry = this->find(key);
     if (!entry)
     {
-        entry
-            = this->data.emplace_back(std::make_unique<IF_Histogram_Entry>(key))
-                  .get();
+        entry = this->data
+                    .emplace_back(
+                        std::make_unique<IF_Histogram_Entry<if_in_t, if_out_t>>(key))
+                    .get();
     }
     entry->insert(val);
     this->obs_count += 1;
 }
 
-IF_Histogram_Entry*
+IF_Histogram_Entry<if_in_t, if_out_t>*
 IF_Histogram::find(if_in_t key)
 {
     for (const auto& entry : this->data)
@@ -185,7 +145,8 @@ IF_Histogram::invert_obs(void) -> const decltype(this->data)
             // We didn't see this observation yet, so we must insert it
             {
                 auto& inv_ref = inverted_obs.emplace_back(
-                    std::make_unique<IF_Histogram_Entry>(out_obs.first));
+                    std::make_unique<IF_Histogram_Entry<if_in_t, if_out_t>>(
+                        out_obs.first));
                 inv_ref->insert_many(obs->get_in(), out_obs.second);
             }
         done:

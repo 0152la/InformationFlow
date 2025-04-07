@@ -2,7 +2,7 @@
 #include <iostream>
 
 #include "entropy.hpp"
-#include "if_randgen.hpp"
+#include "randgen.hpp"
 
 class EntropyHarness
 {

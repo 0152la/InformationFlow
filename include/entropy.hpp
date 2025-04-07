@@ -24,21 +24,22 @@ typedef std::map<std::pair<if_in_t, if_out_t>, size_t> pair_obs_t;
 /* Class representing an entry in the histogram, recording all outputs for a
  * given input.
  */
+template <typename I, typename O>
 class IF_Histogram_Entry
 {
 private:
-    const if_in_t input;
-    std::map<if_out_t, uint64_t> outputs = std::map<if_out_t, uint64_t>();
+    const I input;
+    std::map<O, uint64_t> outputs = std::map<O, uint64_t>();
     size_t out_count = 0;
 
 public:
-    IF_Histogram_Entry(if_in_t _input) :
+    IF_Histogram_Entry(I _input) :
         input(_input) { };
 
-    void insert(if_out_t);
-    void insert_many(if_out_t, uint64_t);
+    void insert(O);
+    void insert_many(O, uint64_t);
 
-    if_in_t get_in(void) { return this->input; };
+    I get_in(void) { return this->input; };
 
     auto get_outs(void) -> decltype(this->outputs) { return this->outputs; };
 
@@ -61,7 +62,7 @@ public:
 class IF_Histogram
 {
 public:
-    using data_t = std::deque<std::unique_ptr<IF_Histogram_Entry>>;
+    using data_t = std::deque<std::unique_ptr<IF_Histogram_Entry<if_in_t, if_out_t>>>;
 
 private:
     data_t data;
@@ -72,7 +73,7 @@ private:
 
 public:
     void insert(if_in_t, if_out_t);
-    IF_Histogram_Entry* find(if_in_t);
+    IF_Histogram_Entry<if_in_t, if_out_t>* find(if_in_t);
 
     double calculate_entropy_inputs(void);
     double calculate_entropy_outputs(void);
@@ -88,5 +89,7 @@ static double
 compute_entropy(const obs_t&, const size_t);
 static double
 compute_conditional_entropy(const IF_Histogram::data_t&, const uint64_t);
+
+#include "entropy.tpp"
 
 #endif // _IF_ENTROPY_HPP
