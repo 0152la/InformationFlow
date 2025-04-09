@@ -1,6 +1,9 @@
 #ifndef _IF_READER_HPP
 #define _IF_READER_HPP
 
+#include <memory>
+#include <set>
+#include <sstream>
 #include <string>
 
 #pragma clang diagnostic push
@@ -8,6 +11,8 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
@@ -37,10 +42,87 @@ public:
     const llvm::Module* get_module(void) { return this->llvm_module.get(); };
 };
 
+class IF_EntropyMap_Instr
+{
+private:
+    unsigned int opcode;
+    double entropy_loss;
+
+public:
+    IF_EntropyMap_Instr(const llvm::Instruction& _instr) :
+        opcode(_instr.getOpcode()) { };
+
+    unsigned int get_opcode(void) const { return this->opcode; };
+
+    double get_lost_entropy() const { return this->entropy_loss; };
+
+    // TODO better name? This is retained entropy I believe
+    void set_lost_entropy(double _entropy) { this->entropy_loss = _entropy; };
+
+    const std::string to_str(void) const;
+};
+
+class IF_EntropyMap_Func
+{
+private:
+    const std::string name;
+    std::vector<std::unique_ptr<IF_EntropyMap_Instr>> instrs;
+    std::vector<const IF_EntropyMap_Func*> callees;
+
+public:
+    IF_EntropyMap_Func() = delete;
+
+    IF_EntropyMap_Func(const llvm::Function& _fn) :
+        name(_fn.getName().str())
+    {
+        this->instrs.reserve(_fn.getInstructionCount());
+    };
+
+    const std::string get_name(void) const { return this->name; };
+
+    auto get_instrs(void) const -> const decltype(this->instrs)&
+    {
+        return this->instrs;
+    };
+
+    void insert(std::unique_ptr<IF_EntropyMap_Instr> _instr)
+    {
+        this->instrs.push_back(std::move(_instr));
+    };
+
+    void insert_call(const IF_EntropyMap_Func*);
+
+    const std::string to_str(void) const;
+};
+
+class IF_EntropyMap
+{
+private:
+    std::vector<std::unique_ptr<IF_EntropyMap_Func>> funcs;
+
+public:
+    IF_EntropyMap(const llvm::Module& _module)
+    {
+        this->funcs.reserve(_module.size());
+    };
+
+    auto get_funcs(void) const -> const decltype(funcs)&
+    {
+        return this->funcs;
+    };
+
+    void insert(std::unique_ptr<IF_EntropyMap_Func> em_fn)
+    {
+        this->funcs.push_back(std::move(em_fn));
+    };
+
+    const std::string to_str(void) const;
+};
+
 class IF_Parser
 {
 private:
-    IF_Histogram data;
+    IF_Histogram<if_in_t, if_out_t> data;
     IF_Randgen in_gen;
     // IF_EntropyMap H_map; // H cause H = entropy :>
 
@@ -48,7 +130,7 @@ public:
     IF_Parser();
     IF_Parser(int);
 
-    void make_entropy_map(const llvm::Module&);
+    std::unique_ptr<IF_EntropyMap> make_entropy_map(const llvm::Module&);
 
     static std::unique_ptr<IF_LLVM_Module> parse_ll(const std::string&);
     static void print_instrs(const llvm::Module&);

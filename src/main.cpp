@@ -1,7 +1,11 @@
 #include "main.hpp"
 
+/*******************************************************************************
+ * Helper functions
+ ******************************************************************************/
+
 static void
-gen_one(IF_Randgen& gen, IF_Histogram& h, auto alter_fn)
+gen_one(IF_Randgen& gen, IF_Histogram<uint64_t, uint64_t>& h, auto alter_fn)
 {
     int64_t prog_in = gen.gen_int64_t() % in_scale;
     int64_t prog_out = alter_fn(prog_in) % out_scale;
@@ -9,23 +13,9 @@ gen_one(IF_Randgen& gen, IF_Histogram& h, auto alter_fn)
     h.insert(prog_in, prog_out);
 }
 
-static int
-entropy_dev(void)
-{
-    return 0;
-}
-
-static int
-reader_dev(void)
-{
-    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/sample.ll";
-    IF_Parser if_p;
-    std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
-    if_p.make_entropy_map(*if_module->get_module());
-
-    return 0;
-}
+/*******************************************************************************
+ * Test functions
+ ******************************************************************************/
 
 static int
 test_printer(void)
@@ -42,7 +32,7 @@ static int
 test_entropies(void)
 {
     IF_Randgen generator(42);
-    IF_Histogram h;
+    IF_Histogram<uint64_t, uint64_t> h;
 
     int64_t prog_in;
     int64_t prog_out;
@@ -112,10 +102,42 @@ test_entropies(void)
     return 0;
 }
 
+/*******************************************************************************
+ * Dev playground
+ *
+ *
+ ******************************************************************************/
+
+// Need to test that the calculated entropy values are right
+static int
+entropy_dev(void)
+{
+    return 0;
+}
+
+// WIP mapping stuff, probably just the entropy loss values for now
+static int
+reader_dev(void)
+{
+    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+                                "InformationFlow/build/tests/sample.ll";
+    IF_Parser if_p;
+    std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
+    if_p.make_entropy_map(*if_module->get_module());
+
+    return 0;
+}
+
+/*******************************************************************************
+ * Main function
+ ******************************************************************************/
+
 int
 main()
 {
     // return test_printer();
-    //  return reader_dev();
-    return test_entropies();
+    // return test_entropies();
+    // return test_emulator();
+
+    return reader_dev();
 }

@@ -12,7 +12,7 @@ private:
     const float expected_entropy;
 
     IF_Randgen generator;
-    IF_Histogram results;
+    IF_Histogram<uint64_t, uint64_t> results;
 
 public:
     EntropyHarness(unsigned long _samples, float _error, float _expected)
@@ -21,7 +21,7 @@ public:
         , expected_entropy(_expected)
     {
         this->generator = IF_Randgen();
-        this->results = IF_Histogram();
+        this->results = IF_Histogram<uint64_t, uint64_t>();
     };
 
     // Getters

@@ -17,15 +17,13 @@
 typedef uint64_t if_in_t;
 typedef uint64_t if_out_t;
 
-typedef std::map<std::pair<if_in_t, if_out_t>, size_t> in_out_obs_t;
-typedef std::deque<uint64_t> obs_t;
-typedef std::map<std::pair<if_in_t, if_out_t>, size_t> pair_obs_t;
+using obs_t = std::deque<uint64_t>;
+using in_out_obs_t = std::map<uint64_t, obs_t>;
 
 /* Class representing an entry in the histogram, recording all outputs for a
  * given input.
  */
-template <typename I, typename O>
-class IF_Histogram_Entry
+template <typename I, typename O> class IF_Histogram_Entry
 {
 private:
     const I input;
@@ -59,21 +57,24 @@ public:
  * over it. Most interestingly, we can compute the entropies, and uncertainty
  * coefficient.
  */
-class IF_Histogram
+template <typename I, typename O> class IF_Histogram
 {
 public:
-    using data_t = std::deque<std::unique_ptr<IF_Histogram_Entry<if_in_t, if_out_t>>>;
+    using data_t = std::deque<std::unique_ptr<IF_Histogram_Entry<I, O>>>;
 
 private:
     data_t data;
     uint64_t obs_count = 0;
 
+    obs_t get_input_observations(void);
     obs_t get_output_observations(void);
-    auto invert_obs(void) -> const decltype(this->data);
+    data_t invert_obs(void);
+
+    in_out_obs_t data_t_to_in_out_obs_t(const data_t&);
 
 public:
-    void insert(if_in_t, if_out_t);
-    IF_Histogram_Entry<if_in_t, if_out_t>* find(if_in_t);
+    void insert(I, O);
+    IF_Histogram_Entry<I, O>* find(I);
 
     double calculate_entropy_inputs(void);
     double calculate_entropy_outputs(void);
@@ -85,10 +86,10 @@ public:
     void print(void);
 };
 
-static double
+double
 compute_entropy(const obs_t&, const size_t);
-static double
-compute_conditional_entropy(const IF_Histogram::data_t&, const uint64_t);
+double
+compute_conditional_entropy(const in_out_obs_t&, const uint64_t);
 
 #include "entropy.tpp"
 
