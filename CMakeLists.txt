@@ -28,7 +28,7 @@ set(INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(${SRC_DIR})
 
 # Enable CTest and build tests
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
 endif()
 add_subdirectory(${TEST_DIR})

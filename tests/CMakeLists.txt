@@ -1,16 +1,4 @@
-# Custom targets
-add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/sample.ll
-    COMMAND ${CMAKE_CXX_COMPILER} -S -emit-llvm -o ${CMAKE_CURRENT_BINARY_DIR}/sample.ll sample.c
-    DEPENDS sample.c
-    WORKING_DIRECTORY ${TEST_DIR}
-)
-
-add_custom_target(sample-ll
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/sample.ll
-)
-
-# Generic functions
+#Generic functions
 function(add_binary_test test_name)
     add_test(
         NAME ${test_name}
@@ -18,7 +6,7 @@ function(add_binary_test test_name)
     )
 endfunction()
 
-# Entropy tests
+#Entropy tests
 set(ENTROPY_LIBS
     entropy)
 
@@ -40,4 +28,34 @@ set(entropy_tests
 
 foreach(entropy_t IN LISTS entropy_tests)
     add_entropy_test(${entropy_t})
+endforeach()
+
+# `ll` generation tests
+add_custom_target(gen-lls)
+
+function(add_ll_gen_test ll_src_t)
+    cmake_path(REPLACE_EXTENSION ll_src_t "ll-src")
+    cmake_path(REPLACE_EXTENSION ll_src_t "ll" OUTPUT_VARIABLE ll_test_name)
+    cmake_path(ABSOLUTE_PATH ll_test_name
+               BASE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+               OUTPUT_VARIABLE ll_test_path)
+    add_custom_command(
+        OUTPUT ${ll_test_path}
+        COMMAND ${CMAKE_CXX_COMPILER} -x c++ -S -emit-llvm
+                -o ${ll_test_path} ${ll_src_t}
+        DEPENDS ${ll_src_t}
+        WORKING_DIRECTORY ${TEST_DIR}
+    )
+    add_custom_target(${ll_src_t}
+        DEPENDS ${ll_test_path})
+    add_dependencies(gen-lls ${ll_src_t})
+endfunction()
+
+set(ll_srcs
+    simple-add
+    sample
+)
+
+foreach(ll_src_t IN LISTS ll_srcs)
+    add_ll_gen_test(${ll_src_t})
 endforeach()

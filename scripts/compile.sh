@@ -1,7 +1,13 @@
 #!/bin/bash
 
-export CC=${CC:-clang}
-export CXX=${CXX:-clang++}
+if [[ -z "${LLVM_DIR}" ]]
+then
+    export CC=${CC:-clang}
+    export CXX=${CXX:-clang++}
+else
+    export CC=${LLVM_DIR}/../../../bin/clang
+    export CXX=${LLVM_DIR}/../../../bin/clang++
+fi
 export CMAKE_BUILD_TYPE=Debug
 
 src_dir=$(realpath $(dirname $0)/..)
@@ -10,9 +16,9 @@ build_dir=$src_dir/build
 cmake -G Ninja -B $build_dir -S $src_dir
 cmake --build $build_dir
 
-if [ ! -f $build_dir/tests/sample.ll ]
+if [ "$1" == "ll" ]
 then
-    cmake --build $build_dir --target sample-ll
+    cmake --build $build_dir --target gen-lls
 fi
 
 if [ "$1" == "san" ]
