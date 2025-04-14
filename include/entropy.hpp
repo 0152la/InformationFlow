@@ -37,13 +37,16 @@ public:
     void insert(O);
     void insert_many(O, uint64_t);
 
-    I get_in(void) { return this->input; };
+    I get_in(void) const { return this->input; };
 
-    auto get_outs(void) -> decltype(this->outputs) { return this->outputs; };
+    auto get_outs(void) const -> decltype(this->outputs)
+    {
+        return this->outputs;
+    };
 
-    size_t get_total_out_count(void) { return this->out_count; };
+    size_t get_total_out_count(void) const { return this->out_count; };
 
-    double get_out_count(if_out_t _out)
+    double get_out_count(if_out_t _out) const
     {
         const auto& found = this->outputs.find(_out);
         return found == this->outputs.end() ? 0 : found->second;
@@ -59,6 +62,9 @@ public:
  */
 template <typename I, typename O> class IF_Histogram
 {
+private:
+    using data_inv_t = std::deque<std::unique_ptr<IF_Histogram_Entry<O, I>>>;
+
 public:
     using data_t = std::deque<std::unique_ptr<IF_Histogram_Entry<I, O>>>;
 
@@ -66,11 +72,11 @@ private:
     data_t data;
     uint64_t obs_count = 0;
 
-    obs_t get_input_observations(void);
-    obs_t get_output_observations(void);
-    data_t invert_obs(void);
+    obs_t get_input_observations(void) const;
+    obs_t get_output_observations(void) const;
+    data_inv_t invert_obs(void) const;
 
-    in_out_obs_t data_t_to_in_out_obs_t(const data_t&);
+    template <typename U> in_out_obs_t count_observations(const U&) const;
 
 public:
     void insert(I, O);
@@ -83,7 +89,7 @@ public:
     double calculate_uncertainty_coefficient_out_given_in(void);
     double calculate_uncertainty_coefficient_in_given_out(void);
 
-    void print(void);
+    void print_measures(void);
 };
 
 double

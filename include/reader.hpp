@@ -23,6 +23,7 @@
 
 // #include "reader-basicblock.hpp"
 #include "entropy.hpp"
+#include "fuzz_engine.hpp"
 #include "randgen.hpp"
 
 class IF_LLVM_Module

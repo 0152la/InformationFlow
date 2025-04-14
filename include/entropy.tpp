@@ -2,6 +2,9 @@
  * IF_Histogram_Entry
  ******************************************************************************/
 
+#include <deque>
+#include <memory>
+
 template <typename I, typename O>
 void
 IF_Histogram_Entry<I, O>::insert(O _output)
@@ -78,7 +81,7 @@ IF_Histogram<I, O>::find(I key)
 
 template <typename I, typename O>
 obs_t
-IF_Histogram<I, O>::get_input_observations(void)
+IF_Histogram<I, O>::get_input_observations(void) const
 {
     obs_t input_obs;
 
@@ -92,14 +95,14 @@ IF_Histogram<I, O>::get_input_observations(void)
 
 template <typename I, typename O>
 obs_t
-IF_Histogram<I, O>::get_output_observations(void)
+IF_Histogram<I, O>::get_output_observations(void) const
 {
-    std::map<I, size_t> parsed_obs;
+    std::map<O, size_t> parsed_obs;
 
     // Parse output observations
     for (const auto& entry : this->data)
     {
-        for (const std::pair<I, uint64_t>& entry_out : entry->get_outs())
+        for (const std::pair<O, uint64_t>& entry_out : entry->get_outs())
         {
             if (auto entry = parsed_obs.find(entry_out.first);
                 entry != parsed_obs.end())
@@ -124,10 +127,10 @@ IF_Histogram<I, O>::get_output_observations(void)
 }
 
 template <typename I, typename O>
-IF_Histogram<I, O>::data_t
-IF_Histogram<I, O>::invert_obs(void)
+IF_Histogram<I, O>::data_inv_t
+IF_Histogram<I, O>::invert_obs(void) const
 {
-    decltype(this->data) inverted_obs;
+    data_inv_t inverted_obs;
 
     // Iterate over all observations
     for (const auto& obs : this->data)
@@ -136,7 +139,7 @@ IF_Histogram<I, O>::invert_obs(void)
         for (const auto& out_obs : obs->get_outs())
         {
             // Check if the output is already logged
-            for (const auto& inv_obs : inverted_obs)
+            for (auto& inv_obs : inverted_obs)
             {
                 // If we found the logged observation, add the number of times
                 // we saw this pair
@@ -149,7 +152,7 @@ IF_Histogram<I, O>::invert_obs(void)
             // We didn't see this observation yet, so we must insert it
             {
                 auto& inv_ref = inverted_obs.emplace_back(
-                    std::make_unique<IF_Histogram_Entry<I, O>>(out_obs.first));
+                    std::make_unique<IF_Histogram_Entry<O, I>>(out_obs.first));
                 inv_ref->insert_many(obs->get_in(), out_obs.second);
             }
         done:
@@ -161,23 +164,24 @@ IF_Histogram<I, O>::invert_obs(void)
 }
 
 template <typename I, typename O>
+template <typename U>
 in_out_obs_t
-IF_Histogram<I, O>::data_t_to_in_out_obs_t(const data_t& in_out_data)
+IF_Histogram<I, O>::count_observations(const U& obs_data) const
 {
-    in_out_obs_t in_out_obs;
-    obs_t one_out_obs;
+    in_out_obs_t obs_count;
+    obs_t one_obs;
 
-    for (const auto& entry : in_out_data)
+    for (const auto& entry : obs_data)
     {
-        one_out_obs.clear();
+        one_obs.clear();
         for (const auto& entry_out : entry->get_outs())
         {
-            one_out_obs.emplace_back(entry_out.second);
+            one_obs.emplace_back(entry_out.second);
         }
-        in_out_obs.emplace(entry->get_total_out_count(), one_out_obs);
+        obs_count.emplace(entry->get_total_out_count(), one_obs);
     }
 
-    return in_out_obs;
+    return obs_count;
 }
 
 template <typename I, typename O>
@@ -198,7 +202,7 @@ template <typename I, typename O>
 double
 IF_Histogram<I, O>::calculate_conditional_entropy_out_given_in(void)
 {
-    in_out_obs_t inputs_obs_count = this->data_t_to_in_out_obs_t(this->data);
+    in_out_obs_t inputs_obs_count = this->count_observations(this->data);
     return compute_conditional_entropy(inputs_obs_count, this->obs_count);
 }
 
@@ -206,9 +210,9 @@ template <typename I, typename O>
 double
 IF_Histogram<I, O>::calculate_conditional_entropy_in_given_out(void)
 {
-    const decltype(this->data) inverted_obs = this->invert_obs();
+    const IF_Histogram<I, O>::data_inv_t inverted_obs = this->invert_obs();
     return compute_conditional_entropy(
-        this->data_t_to_in_out_obs_t(inverted_obs), this->obs_count);
+        this->count_observations(inverted_obs), this->obs_count);
 }
 
 template <typename I, typename O>
@@ -231,12 +235,20 @@ IF_Histogram<I, O>::calculate_uncertainty_coefficient_in_given_out(void)
 
 template <typename I, typename O>
 void
-IF_Histogram<I, O>::print(void)
+IF_Histogram<I, O>::print_measures(void)
 {
-    std::cout << "=== Dumping Histogram" << std::endl;
-    for (auto&& data : this->data)
-    {
-        data.get()->print();
-    }
-    std::cout << "=== END" << std::endl;
+    std::cout << "=== Histogram measures\n";
+    std::cout << "\t Entropy(I) = " << this->calculate_entropy_inputs() << "\n";
+    std::cout << "\t Entropy(O) = " << this->calculate_entropy_outputs()
+              << "\n";
+    std::cout << "\t Entropy(I|O) = "
+              << this->calculate_conditional_entropy_in_given_out() << "\n";
+    std::cout << "\t Entropy(O|I) = "
+              << this->calculate_conditional_entropy_out_given_in() << "\n";
+    std::cout << "\t U(I|O) = "
+              << this->calculate_uncertainty_coefficient_in_given_out() << "\n";
+    std::cout << "\t U(O|I) = "
+              << this->calculate_uncertainty_coefficient_out_given_in() << "\n";
+    std::cout << "=== END\n";
 }
+

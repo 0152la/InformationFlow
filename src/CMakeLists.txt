@@ -4,6 +4,7 @@ add_executable(iflow
     reader.cpp
     randgen.cpp
     instr_emulator.cpp
+    fuzz_engine.cpp
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 llvm_map_components_to_libnames(llvm_libs support core irreader)

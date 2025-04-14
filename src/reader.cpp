@@ -53,9 +53,12 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             }
             else if (fn_inst.isBinaryOp())
             {
+
                 if (fn_inst.getOpcode() == llvm::Instruction::Add)
                 {
-                    // TODO emulate
+                    IF_FuzzEngine if_fe;
+                    double entropy = if_fe.get_fuzzed_entropy(fn_inst);
+                    std::cout << "IM ENTROPY " << entropy << '\n';
                 }
                 else
                 {
