@@ -47,7 +47,7 @@ class IF_EntropyMap_Instr
 {
 private:
     unsigned int opcode;
-    double entropy_loss;
+    double retained_entropy;
 
 public:
     IF_EntropyMap_Instr(const llvm::Instruction& _instr) :
@@ -55,10 +55,13 @@ public:
 
     unsigned int get_opcode(void) const { return this->opcode; };
 
-    double get_lost_entropy() const { return this->entropy_loss; };
+    double get_retained_entropy() const { return this->retained_entropy; };
 
     // TODO better name? This is retained entropy I believe
-    void set_lost_entropy(double _entropy) { this->entropy_loss = _entropy; };
+    void set_retained_entropy(double _entropy)
+    {
+        this->retained_entropy = _entropy;
+    };
 
     const std::string to_str(void) const;
 };
@@ -80,6 +83,11 @@ public:
     };
 
     const std::string get_name(void) const { return this->name; };
+
+    auto get_callees(void) const -> const decltype(this->callees)&
+    {
+        return this->callees;
+    };
 
     auto get_instrs(void) const -> const decltype(this->instrs)&
     {
@@ -118,6 +126,7 @@ public:
     };
 
     const std::string to_str(void) const;
+    void print(void) const;
 };
 
 class IF_Parser

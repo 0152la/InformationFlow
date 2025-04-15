@@ -1,6 +1,7 @@
 #include "reader.hpp"
 #include "llvm/IR/Instruction.h"
 #include "llvm/Support/Casting.h"
+#include <algorithm>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -36,6 +37,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         for (const auto& fn_inst : llvm::instructions(fn))
         {
             auto em_instr = std::make_unique<IF_EntropyMap_Instr>(fn_inst);
+            double retained_entropy = 1.0;
             if (fn_inst.isUnaryOp())
             {
                 if (fn_inst.getOpcode() != llvm::Instruction::FNeg)
@@ -49,7 +51,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 // TODO check two's complement extreme value - we should lose
                 // one value here
                 // TODO check for constants?
-                em_instr->set_lost_entropy(1.0);
+                em_instr->set_retained_entropy(retained_entropy);
             }
             else if (fn_inst.isBinaryOp())
             {
@@ -57,13 +59,12 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 if (fn_inst.getOpcode() == llvm::Instruction::Add)
                 {
                     IF_FuzzEngine if_fe;
-                    double entropy = if_fe.get_fuzzed_entropy(fn_inst);
-                    std::cout << "IM ENTROPY " << entropy << '\n';
+                    retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
                 }
                 else
                 {
                     // TODO add other cases, turns this into an exception
-                    em_instr->set_lost_entropy(1.0);
+                    em_instr->set_retained_entropy(1.0);
                     // throw std::runtime_error(
                     //"Unhandled binary instruction opcode "
                     //+ fn_inst.getOpcode());
@@ -82,6 +83,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 llvm::errs() << fn_call_name << '\n';
                 names_call_map.at(em_fn.get()).push_back(fn_call_name.str());
             }
+            em_instr->set_retained_entropy(retained_entropy);
             em_fn->insert(std::move(em_instr));
         }
         em->insert(std::move(em_fn));
@@ -207,7 +209,7 @@ IF_EntropyMap_Instr::to_str(void) const
 {
     std::ostringstream oss;
     oss << llvm::Instruction::getOpcodeName(this->get_opcode());
-    oss << " -- Entropy " << this->get_lost_entropy() << '\n';
+    oss << " -- Entropy " << this->get_retained_entropy() << '\n';
     return oss.str();
 }
 
@@ -252,4 +254,28 @@ IF_EntropyMap::to_str(void) const
         oss << em_fn->to_str();
     }
     return oss.str();
+}
+
+void
+IF_EntropyMap::print(void) const
+{
+    for (const auto& em_fn : this->get_funcs())
+    {
+        std::cout << "Fn " << em_fn->get_name() << '\n';
+        std::cout << "Calls: [  ";
+        for (const auto& em_call_fn : em_fn->get_callees())
+        {
+            std::cout << em_call_fn->get_name() << "  ";
+        }
+        std::cout << "]\n";
+
+        for (const auto& em_fn_instr : em_fn->get_instrs())
+        {
+            std::cout << "\t"
+                      << llvm::Instruction::getOpcodeName(
+                             em_fn_instr->get_opcode());
+            std::cout << " -- " << em_fn_instr->get_retained_entropy() << '\n';
+            // TODO arguments
+        }
+    }
 }

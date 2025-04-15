@@ -11,6 +11,7 @@
 #pragma clang diagnostic pop
 
 #include "entropy.hpp"
+#include "instr_emulator.hpp"
 #include "randgen.hpp"
 
 class IF_FuzzEngine
@@ -21,13 +22,15 @@ private:
 
     int64_t rng_int64_t(void) { return this->rng->gen_int64_t(); };
 
+    int64_t rng_int_t(unsigned int8_t);
+
 public:
     IF_FuzzEngine() :
         rng(std::make_unique<IF_Randgen>()) { };
     IF_FuzzEngine(int seed) :
         rng(std::make_unique<IF_Randgen>(seed)) { };
 
-    double get_fuzzed_entropy(const llvm::Instruction&);
+    double fuzz_retained_entropy(const llvm::Instruction&);
 };
 
 #endif // _IF_FUZZENGINE_HPP

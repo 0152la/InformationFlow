@@ -119,11 +119,15 @@ entropy_dev(void)
 static int
 reader_dev(void)
 {
+    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+    //"InformationFlow/build/tests/sample.ll";
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/sample.ll";
+                                "InformationFlow/build/tests/simple-add.ll";
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
-    if_p.make_entropy_map(*if_module->get_module());
+    std::unique_ptr<IF_EntropyMap> em
+        = if_p.make_entropy_map(*if_module->get_module());
+    em->print();
 
     return 0;
 }
