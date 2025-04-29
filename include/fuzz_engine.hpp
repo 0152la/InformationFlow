@@ -1,6 +1,11 @@
 #ifndef _IF_FUZZENGINE_HPP
 #define _IF_FUZZENGINE_HPP
 
+#include <functional>
+#include <map>
+#include <random>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -23,6 +28,8 @@ private:
     int64_t rng_int64_t(void) { return this->rng->gen_int64_t(); };
 
     int64_t rng_int_t(unsigned int8_t);
+
+    IF_ArgList gen_args(uint8_t, uint8_t) const;
 
 public:
     IF_FuzzEngine() :

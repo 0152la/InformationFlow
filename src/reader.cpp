@@ -6,6 +6,73 @@
 #include <sstream>
 #include <stdexcept>
 
+std::map<uint16_t, double> set_entropy {
+    // Terminator Instructions
+    { llvm::Instruction::Ret, 1.0 }, { llvm::Instruction::Br, 1.0 },
+    //{ llvm::Instruction::Switch, }, // TODO
+    { llvm::Instruction::IndirectBr, 1.0 },
+    { llvm::Instruction::Invoke, 1.0 }, /* This seems like a `Call` instruction
+                                           in most cases, but consider edge
+                                           cases
+                                           */
+    { llvm::Instruction::CallBr, 1.0 }, { llvm::Instruction::Resume, 1.0 },
+    //{ llvm::Instruction::CatchSwitch, }, // TODO
+    { llvm::Instruction::CatchRet, 1.0 },
+    { llvm::Instruction::CleanupRet, 1.0 },
+    { llvm::Instruction::Unreachable, 0.0 },
+
+    // Unary Instructions
+    { llvm::Instruction::FNeg, 1.0 }, /* The entropy here is actually off by
+                                         one sample, due to two's complement
+                                         and negating the maximum representable
+                                         value; however, we estimate it to 1.0
+                                         */
+    // Vector Operations
+    { llvm::Instruction::InsertElement, 1.0 },
+    { llvm::Instruction::ShuffleVector, 0.5 },
+
+    // Aggregate Operations
+    //{ llvm::Instruction::ExtractValue, 1.0 },
+    { llvm::Instruction::InsertValue, 1.0 },
+
+    // Memory Operations
+    { llvm::Instruction::Alloca, 1.0 },
+    { llvm::Instruction::Load, 1.0 }, /* TODO does the value overwritten lose
+                                         information?
+                                         */
+    { llvm::Instruction::Store, 1.0 }, { llvm::Instruction::Fence, 1.0 },
+    { llvm::Instruction::AtomicCmpXchg, 1.0 }, // TODO same as Load
+    { llvm::Instruction::GetElementPtr, 1.0 }, // TODO same as load
+
+    // Conversion Operations
+    //{ llvm::Instruction::Trunc, 1.0 },
+    { llvm::Instruction::ZExt, 1.0 }, { llvm::Instruction::SExt, 1.0 },
+    //{ llvm::Instruction::FPTrunc, 1.0 },
+    { llvm::Instruction::FPExt, 1.0 },
+
+    //{ llvm::Instruction::FPToUI, 1.0 }, // TODO might be fine to approximate
+    // to 1, but I think there is quite a bit of lost entropy from rounding
+
+    //{ llvm::Instruction::FPToSI, 1.0 }, // TODO same as above
+    { llvm::Instruction::UIToFP, 1.0 }, // TODO any unrepresentable integer?
+    { llvm::Instruction::SIToFP, 1.0 }, // TODO same as above
+    //{ llvm::Instruction::PtrToInt, 1.0 }, // TODO could truncate
+    //{ llvm::Instruction::IntToPtr, 1.0 }, // TODO same as above
+    { llvm::Instruction::BitCast, 1.0 },
+    { llvm::Instruction::AddrSpaceCast, 1.0 },
+
+    // Other Operations
+    //{ llvm::Instruction::PHI, 1.0 }, // TODO
+    { llvm::Instruction::Call, 1.0 },
+    //{ llvm::Instruction::Select, 1.0 }, // XXX
+    //{ llvm::Instruction::LandingPad, 1.0 },
+    //{ llvm::Instruction::Freeze, 1.0 }, // XXX
+
+};
+
+extern std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
+    estimate_entropy;
+
 /*******************************************************************************
  * IF_Parser
  ******************************************************************************/
@@ -25,6 +92,7 @@ IF_Parser::IF_Parser(int seed)
 std::unique_ptr<IF_EntropyMap>
 IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 {
+    uint32_t instr_idx = 0;
     auto em = std::make_unique<IF_EntropyMap>(llvm_module);
     std::map<IF_EntropyMap_Func*, std::vector<std::string>> names_call_map;
     // Iterate over functions ...
@@ -36,44 +104,39 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            auto em_instr = std::make_unique<IF_EntropyMap_Instr>(fn_inst);
-            double retained_entropy = 1.0;
-            if (fn_inst.isUnaryOp())
-            {
-                if (fn_inst.getOpcode() != llvm::Instruction::FNeg)
-                {
-                    throw std::invalid_argument(
-                        "Unhandled unary instruction that is not `fneg`");
-                }
+            auto em_instr
+                = std::make_unique<IF_EntropyMap_Instr>(instr_idx, fn_inst);
+            double retained_entropy;
 
-                // Negating a value is a one-to-one computation, so no entropy
-                // is lost
-                // TODO check two's complement extreme value - we should lose
-                // one value here
-                // TODO check for constants?
-                em_instr->set_retained_entropy(retained_entropy);
-            }
-            else if (fn_inst.isBinaryOp())
+            // We first search whether this instruction is one we have a
+            // default entropy for. If we do, then we simply set the entropy to
+            // that value.
+            if (auto fn_set_entropy = set_entropy.find(fn_inst.getOpcode());
+                fn_set_entropy != set_entropy.end())
             {
-
-                if (fn_inst.getOpcode() == llvm::Instruction::Add)
-                {
-                    IF_FuzzEngine if_fe;
-                    retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
-                }
-                else
-                {
-                    // TODO add other cases, turns this into an exception
-                    em_instr->set_retained_entropy(1.0);
-                    // throw std::runtime_error(
-                    //"Unhandled binary instruction opcode "
-                    //+ fn_inst.getOpcode());
-                }
+                em_instr->unset_fuzzed();
+                retained_entropy = fn_set_entropy->second;
             }
+            // Then we check whether we can estimate the entropy, without having
+            // to fuzz
+            else if (auto fn_est_entropy
+                = estimate_entropy.find(fn_inst.getOpcode());
+                fn_est_entropy != estimate_entropy.end())
+            {
+                em_instr->unset_fuzzed();
+                retained_entropy = (fn_est_entropy->second)(fn_inst);
+            }
+            // Otherwise, we perform fuzzing, via emulated instructions.
+            else
+            {
+                IF_FuzzEngine if_fe;
+                retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
+            }
+
             // TODO do these have some entropy loss?
             // TODO probably wanna handle CallBase
             // else if (llvm::isa<llvm::CallInst>(fn_inst))
-            else if (llvm::isa<llvm::CallBase>(&fn_inst))
+            if (llvm::isa<llvm::CallBase>(&fn_inst))
             {
                 llvm::StringRef fn_call_name
                     = llvm::dyn_cast<llvm::CallBase>(&fn_inst)
@@ -85,6 +148,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             }
             em_instr->set_retained_entropy(retained_entropy);
             em_fn->insert(std::move(em_instr));
+            instr_idx += 1;
         }
         em->insert(std::move(em_fn));
     }
@@ -196,86 +260,6 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                 llvm::errs() << " ";
             }
             llvm::errs() << '\n';
-        }
-    }
-}
-
-/*******************************************************************************
- * IF_EntropyMap_Instr
- ******************************************************************************/
-
-const std::string
-IF_EntropyMap_Instr::to_str(void) const
-{
-    std::ostringstream oss;
-    oss << llvm::Instruction::getOpcodeName(this->get_opcode());
-    oss << " -- Entropy " << this->get_retained_entropy() << '\n';
-    return oss.str();
-}
-
-/*******************************************************************************
- * IF_EntropyMap_Func
- ******************************************************************************/
-
-// bool
-// IF_EntropyMap_Func::operator<(const IF_EntropyMap_Func& other) const
-//{
-// return this->get_name() < other.get_name();
-//}
-
-void
-IF_EntropyMap_Func::insert_call(const IF_EntropyMap_Func* em_fn)
-{
-    this->callees.push_back(em_fn);
-}
-
-const std::string
-IF_EntropyMap_Func::to_str(void) const
-{
-    std::ostringstream oss;
-    oss << this->get_name() << '\n';
-    for (const auto& instr : this->get_instrs())
-    {
-        oss << "\t" << instr->to_str();
-    }
-    return oss.str();
-}
-
-/*******************************************************************************
- * IF_EntropyMap
- ******************************************************************************/
-
-const std::string
-IF_EntropyMap::to_str(void) const
-{
-    std::ostringstream oss;
-    for (const auto& em_fn : this->get_funcs())
-    {
-        oss << em_fn->to_str();
-    }
-    return oss.str();
-}
-
-void
-IF_EntropyMap::print(void) const
-{
-    for (const auto& em_fn : this->get_funcs())
-    {
-        std::cout << "Fn " << em_fn->get_name() << '\n';
-        std::cout << "Calls: [  ";
-        for (const auto& em_call_fn : em_fn->get_callees())
-        {
-            std::cout << em_call_fn->get_name() << "  ";
-        }
-        std::cout << "]\n";
-
-        for (const auto& em_fn_instr : em_fn->get_instrs())
-        {
-            std::cout << "\t"
-                      << llvm::Instruction::getOpcodeName(
-                             em_fn_instr->get_opcode());
-            std::cout << " -- " << em_fn_instr->get_retained_entropy() << '\n';
-            // TODO arguments
         }
     }
 }

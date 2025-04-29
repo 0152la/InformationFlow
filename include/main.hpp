@@ -8,6 +8,7 @@
 #include "entropy.hpp"
 #include "randgen.hpp"
 #include "reader.hpp"
+#include "entropy_map_graph.hpp"
 
 constexpr unsigned long initial_tests = 10000;
 constexpr unsigned long extra_step = 1000;

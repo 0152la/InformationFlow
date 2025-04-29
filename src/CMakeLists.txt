@@ -1,10 +1,12 @@
 add_executable(iflow
-    main.cpp
     entropy.cpp
-    reader.cpp
-    randgen.cpp
-    instr_emulator.cpp
+    entropy_map.cpp
+    entropy_map_graph.cpp
     fuzz_engine.cpp
+    instr_emulator.cpp
+    main.cpp
+    randgen.cpp
+    reader.cpp
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 llvm_map_components_to_libnames(llvm_libs support core irreader)

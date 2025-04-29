@@ -26,6 +26,7 @@ main()
     x = x + 19;
     x = x % 3;
     x = x == 2 ? get_val() : x;
+    x += maybe_get(rand() % 2);
 
     printf("x = %d\n", x);
 

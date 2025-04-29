@@ -1,0 +1,16 @@
+#include <cstdlib>
+
+int
+main()
+{
+    int x = 2 + 4;
+
+    int y = std::rand();
+    int z = x + y;
+    z = z - y;
+    z = z * x;
+    z = z / (x * x);
+    z = x % z;
+    return 0;
+}
+

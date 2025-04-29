@@ -54,6 +54,7 @@ endfunction()
 set(ll_srcs
     simple-add
     sample
+    simple-arith
 )
 
 foreach(ll_src_t IN LISTS ll_srcs)

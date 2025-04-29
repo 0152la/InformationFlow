@@ -1,11 +1,6 @@
 #ifndef _IF_READER_HPP
 #define _IF_READER_HPP
 
-#include <memory>
-#include <set>
-#include <sstream>
-#include <string>
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -25,6 +20,7 @@
 #include "entropy.hpp"
 #include "fuzz_engine.hpp"
 #include "randgen.hpp"
+#include "entropy_map.hpp"
 
 class IF_LLVM_Module
 {
@@ -41,92 +37,6 @@ public:
         llvm_module(std::move(_mod)) { };
 
     const llvm::Module* get_module(void) { return this->llvm_module.get(); };
-};
-
-class IF_EntropyMap_Instr
-{
-private:
-    unsigned int opcode;
-    double retained_entropy;
-
-public:
-    IF_EntropyMap_Instr(const llvm::Instruction& _instr) :
-        opcode(_instr.getOpcode()) { };
-
-    unsigned int get_opcode(void) const { return this->opcode; };
-
-    double get_retained_entropy() const { return this->retained_entropy; };
-
-    // TODO better name? This is retained entropy I believe
-    void set_retained_entropy(double _entropy)
-    {
-        this->retained_entropy = _entropy;
-    };
-
-    const std::string to_str(void) const;
-};
-
-class IF_EntropyMap_Func
-{
-private:
-    const std::string name;
-    std::vector<std::unique_ptr<IF_EntropyMap_Instr>> instrs;
-    std::vector<const IF_EntropyMap_Func*> callees;
-
-public:
-    IF_EntropyMap_Func() = delete;
-
-    IF_EntropyMap_Func(const llvm::Function& _fn) :
-        name(_fn.getName().str())
-    {
-        this->instrs.reserve(_fn.getInstructionCount());
-    };
-
-    const std::string get_name(void) const { return this->name; };
-
-    auto get_callees(void) const -> const decltype(this->callees)&
-    {
-        return this->callees;
-    };
-
-    auto get_instrs(void) const -> const decltype(this->instrs)&
-    {
-        return this->instrs;
-    };
-
-    void insert(std::unique_ptr<IF_EntropyMap_Instr> _instr)
-    {
-        this->instrs.push_back(std::move(_instr));
-    };
-
-    void insert_call(const IF_EntropyMap_Func*);
-
-    const std::string to_str(void) const;
-};
-
-class IF_EntropyMap
-{
-private:
-    std::vector<std::unique_ptr<IF_EntropyMap_Func>> funcs;
-
-public:
-    IF_EntropyMap(const llvm::Module& _module)
-    {
-        this->funcs.reserve(_module.size());
-    };
-
-    auto get_funcs(void) const -> const decltype(funcs)&
-    {
-        return this->funcs;
-    };
-
-    void insert(std::unique_ptr<IF_EntropyMap_Func> em_fn)
-    {
-        this->funcs.push_back(std::move(em_fn));
-    };
-
-    const std::string to_str(void) const;
-    void print(void) const;
 };
 
 class IF_Parser
