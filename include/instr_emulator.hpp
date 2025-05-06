@@ -102,15 +102,26 @@ public:
     static IF_Arg emulate_urem(const IF_ArgList&);
     static IF_Arg emulate_srem(const IF_ArgList&);
 
+    // Bitwise Binary Operations
+    static IF_Arg emulate_shl(const IF_ArgList&);
+    static IF_Arg emulate_lshr(const IF_ArgList&);
+    static IF_Arg emulate_ashr(const IF_ArgList&);
+    static IF_Arg emulate_and(const IF_ArgList&);
+    static IF_Arg emulate_or(const IF_ArgList&);
+    static IF_Arg emulate_xor(const IF_ArgList&);
+
+
     // Memory Operations
     static IF_Arg emulate_atomic_rmw(const IF_ArgList&);
 
     // TODO
     static IF_Arg emulate_icmp(const IF_ArgList&);
 
+    // TODO organize
     static double estimate_extract_element(const llvm::Instruction&);
     static double estimate_extract_value(const llvm::Instruction&);
     static double estimate_trunc(const llvm::Instruction&);
+    static double estimate_phi(const llvm::Instruction&);
 };
 
 #endif // _IF_INSTR_EMULATOR_HPP

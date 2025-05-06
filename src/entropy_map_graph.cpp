@@ -43,8 +43,9 @@ IF_EM_Graph::draw_callgraph(void) const
     {
         for (const auto& callee : em_fn->get_callees())
         {
-            graph_ss << "\t" << em_fn->get_name() << " -> "
-                     << callee->get_name() << ";\n";
+            graph_ss << "\t"
+                     << em_fn->get_representing_name()
+                     << " -> " << callee->get_representing_name() << ";\n";
             // graph_ss << std::format(
             //"\t{} -> {};\n", em_fn->get_name(), callee->get_name());
         }

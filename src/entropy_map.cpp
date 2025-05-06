@@ -22,6 +22,27 @@ IF_EntropyMap_Instr::to_str(void) const
 //{
 // return this->get_name() < other.get_name();
 //}
+//
+const std::string
+IF_EntropyMap_Func::set_demangled_name(const llvm::Function& _fn)
+{
+    const llvm::DISubprogram* dis = _fn.getSubprogram();
+    if (!dis)
+    {
+        return std::string();
+    }
+    return dis->getName().str();
+}
+
+const std::string
+IF_EntropyMap_Func::get_representing_name(void) const
+{
+    if (this->get_demangled_name().empty())
+    {
+        return this->get_name();
+    }
+    return this->get_demangled_name();
+}
 
 void
 IF_EntropyMap_Func::insert_call(const IF_EntropyMap_Func* em_fn)
@@ -33,7 +54,12 @@ const std::string
 IF_EntropyMap_Func::to_str(void) const
 {
     std::ostringstream oss;
-    oss << this->get_name() << '\n';
+    oss << this->get_name();
+    if (this->get_demangled_name().empty())
+    {
+        oss << "[ " << this->get_demangled_name() << " ]";
+    }
+    oss << '\n';
     for (const auto& instr : this->get_instrs())
     {
         oss << "\t" << instr->to_str();
@@ -61,8 +87,12 @@ IF_EntropyMap::print(void) const
 {
     for (const auto& em_fn : this->get_funcs())
     {
-        std::cout << "Fn " << em_fn->get_name() << '\n';
-        std::cout << "Calls: [  ";
+        std::cout << "Fn " << em_fn->get_name();
+        if (!em_fn->get_demangled_name().empty())
+        {
+            std::cout << " -- " << em_fn->get_demangled_name();
+        }
+        std::cout << "\nCalls: [  ";
         for (const auto& em_call_fn : em_fn->get_callees())
         {
             std::cout << em_call_fn->get_name() << "  ";
@@ -71,7 +101,7 @@ IF_EntropyMap::print(void) const
 
         for (const auto& em_fn_instr : em_fn->get_instrs())
         {
-            if (this->verbose || em_fn_instr->get_is_fuzzed())
+            if (this->verbose || !em_fn_instr->is_trivial())
             {
                 std::cout << "\t"
                           << llvm::Instruction::getOpcodeName(

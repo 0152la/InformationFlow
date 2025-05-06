@@ -127,6 +127,7 @@ reader_dev(void)
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap> em
         = if_p.make_entropy_map(*if_module->get_module());
+    em->set_verbose(true);
     em->print();
 
     IF_EM_Graph g(*em, "test.dot");

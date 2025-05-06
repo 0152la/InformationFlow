@@ -12,6 +12,8 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #pragma clang diagnostic pop
 
 class IF_EntropyMap_Instr
@@ -20,7 +22,8 @@ private:
     uint32_t idx;
     unsigned int opcode;
     double retained_entropy;
-    bool is_fuzzed = true;
+    bool trivial = false;
+    std::vector<const IF_EntropyMap_Instr*>> succs;
 
 public:
     IF_EntropyMap_Instr(uint32_t _idx, const llvm::Instruction& _instr) :
@@ -33,15 +36,16 @@ public:
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
-    bool get_is_fuzzed(void) const { return this->is_fuzzed; };
+    bool is_trivial(void) const { return this->is_trivial; };
 
-    // TODO better name? This is retained entropy I believe
     void set_retained_entropy(double _entropy)
     {
         this->retained_entropy = _entropy;
+        if (_entropy == 1.0)
+        {
+            this->trivial = true;
+        }
     };
-
-    void unset_fuzzed(void) { this->is_fuzzed = false; };
 
     const std::string to_str(void) const;
 };
@@ -50,19 +54,30 @@ class IF_EntropyMap_Func
 {
 private:
     const std::string name;
+    const std::string demangled_name;
     std::vector<std::unique_ptr<IF_EntropyMap_Instr>> instrs;
     std::vector<const IF_EntropyMap_Func*> callees;
+
+    const std::string set_demangled_name(const llvm::Function&);
 
 public:
     IF_EntropyMap_Func() = delete;
 
     IF_EntropyMap_Func(const llvm::Function& _fn) :
-        name(_fn.getName().str())
+        name(_fn.getName().str()),
+        demangled_name(IF_EntropyMap_Func::set_demangled_name(_fn))
     {
         this->instrs.reserve(_fn.getInstructionCount());
     };
 
     const std::string get_name(void) const { return this->name; };
+
+    const std::string get_demangled_name(void) const
+    {
+        return this->demangled_name;
+    };
+
+    const std::string get_representing_name(void) const;
 
     auto get_callees(void) const -> const decltype(this->callees)&
     {

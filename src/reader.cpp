@@ -62,9 +62,8 @@ std::map<uint16_t, double> set_entropy {
     { llvm::Instruction::AddrSpaceCast, 1.0 },
 
     // Other Operations
-    //{ llvm::Instruction::PHI, 1.0 }, // TODO
     { llvm::Instruction::Call, 1.0 },
-    //{ llvm::Instruction::Select, 1.0 }, // XXX
+    { llvm::Instruction::Select, 0.5 }, // TODO handle constant case (for all)
     //{ llvm::Instruction::LandingPad, 1.0 },
     //{ llvm::Instruction::Freeze, 1.0 }, // XXX
 
@@ -114,7 +113,6 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             if (auto fn_set_entropy = set_entropy.find(fn_inst.getOpcode());
                 fn_set_entropy != set_entropy.end())
             {
-                em_instr->unset_fuzzed();
                 retained_entropy = fn_set_entropy->second;
             }
             // Then we check whether we can estimate the entropy, without having
@@ -123,7 +121,6 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 = estimate_entropy.find(fn_inst.getOpcode());
                 fn_est_entropy != estimate_entropy.end())
             {
-                em_instr->unset_fuzzed();
                 retained_entropy = (fn_est_entropy->second)(fn_inst);
             }
             // Otherwise, we perform fuzzing, via emulated instructions.
@@ -133,17 +130,15 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
             }
 
-            // TODO do these have some entropy loss?
-            // TODO probably wanna handle CallBase
-            // else if (llvm::isa<llvm::CallInst>(fn_inst))
+            // Record `call` instructions in a function, so we can draw a
+            // callgraph
+            // TODO maybe just handle this with instruction successors?
             if (llvm::isa<llvm::CallBase>(&fn_inst))
             {
                 llvm::StringRef fn_call_name
                     = llvm::dyn_cast<llvm::CallBase>(&fn_inst)
                           ->getCalledFunction()
                           ->getName();
-                llvm::errs() << "\t Call " << fn_inst.getOpcodeName() << " ";
-                llvm::errs() << fn_call_name << '\n';
                 names_call_map.at(em_fn.get()).push_back(fn_call_name.str());
             }
             em_instr->set_retained_entropy(retained_entropy);

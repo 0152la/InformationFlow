@@ -1,5 +1,7 @@
 #include "instr_emulator.hpp"
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
 #include <stdexcept>
 
 std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
@@ -39,6 +41,9 @@ std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
 
         // Converstion Operations
         { llvm::Instruction::Trunc, IF_Emulator::estimate_trunc },
+
+        // Other Operations
+        { llvm::Instruction::PHI, IF_Emulator::estimate_phi },
     };
 
 /*******************************************************************************
@@ -79,7 +84,7 @@ IF_ArgList::get_arg(size_t idx) const
         throw std::logic_error("Attempt to retrieve arg `" + std::to_string(idx)
             + " of " + std::to_string(this->get_args_count()) + " total!");
     }
-    return this->get_args().at(idx);
+    return *this->get_args().at(idx);
 }
 
 std::vector<const IF_Arg_Int*>
@@ -322,7 +327,7 @@ IF_Emulator::emulate_shl(const IF_ArgList& args)
         shl = op1 << op2;
     }
 
-    return IF_Arg_Int(shl, sizeof(IF_Arg_Int::val_t), op1.is_sgn());
+    return IF_Arg_Int(shl, sizeof(IF_Arg_Int::val_t), true);
 }
 
 IF_Arg
@@ -339,11 +344,66 @@ IF_Emulator::emulate_lshr(const IF_ArgList& args)
     }
     else
     {
-        // TODO I think this is arithmetic shift - double check
-        lshr = op1 >> op2;
+        // TODO days in tears: 1
+        IF_Arg_Int::val_t mask = 0 << (args.get_arg(0).get_sz() - 1);
+        lshr = (op1 >> op2) & mask;
     }
 
-    return IF_Arg_Int(lshr, sizeof(IF_Arg_Int::val_t), op1.is_sgn());
+    return IF_Arg_Int(lshr, sizeof(IF_Arg_Int::val_t), true);
+}
+
+IF_Arg
+IF_Emulator::emulate_ashr(const IF_ArgList& args)
+{
+    std::vector<IF_Arg_Int::val_t> args_val = extract_binop_ops(args);
+    IF_Arg_Int::val_t op1 = args_val.at(0);
+    IF_Arg_Int::val_t op2 = args_val.at(1);
+    IF_Arg_Int::val_t ashr;
+
+    if (op2 >= args.get_arg(0).get_sz())
+    {
+        ashr = 0;
+    }
+    else
+    {
+        // TODO ensure this is an arithmetic shift
+        ashr = op1 >> op2;
+    }
+
+    return IF_Arg_Int(ashr, sizeof(IF_Arg_Int::val_t), true);
+}
+
+IF_Arg
+IF_Emulator::emulate_and(const IF_ArgList& args)
+{
+    std::vector<IF_Arg_Int::val_t> args_val = extract_binop_ops(args);
+    IF_Arg_Int::val_t op1 = args_val.at(0);
+    IF_Arg_Int::val_t op2 = args_val.at(1);
+    IF_Arg_Int::val_t and_res;
+
+    return IF_Arg_Int(op1 & op2, sizeof(IF_Arg_Int::val_t), true);
+}
+
+IF_Arg
+IF_Emulator::emulate_or(const IF_ArgList& args)
+{
+    std::vector<IF_Arg_Int::val_t> args_val = extract_binop_ops(args);
+    IF_Arg_Int::val_t op1 = args_val.at(0);
+    IF_Arg_Int::val_t op2 = args_val.at(1);
+    IF_Arg_Int::val_t or_res;
+
+    return IF_Arg_Int(op1 | op2, sizeof(IF_Arg_Int::val_t), true);
+}
+
+IF_Arg
+IF_Emulator::emulate_xor(const IF_ArgList& args)
+{
+    std::vector<IF_Arg_Int::val_t> args_val = extract_binop_ops(args);
+    IF_Arg_Int::val_t op1 = args_val.at(0);
+    IF_Arg_Int::val_t op2 = args_val.at(1);
+    IF_Arg_Int::val_t xor_res;
+
+    return IF_Arg_Int(op1 ^ op2, sizeof(IF_Arg_Int::val_t), true);
 }
 
 /* Memory Operations **********************************************************/
@@ -374,8 +434,25 @@ IF_Emulator::emulate_icmp(const IF_ArgList& args)
 double
 IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
 {
-    // TODO
-    auto& instr2 = instr;
+    const llvm::ExtractElementInst* eei
+        = llvm::dyn_cast<llvm::ExtractElementInst>(&instr);
+    if (!eei)
+    {
+        throw std::runtime_error(
+            "Could not cast instruction to `ExtractElementInst`!");
+    }
+
+    const llvm::VectorType* vt
+        = llvm::dyn_cast<llvm::VectorType>(eei->getType());
+    if (!vt)
+    {
+        throw std::runtime_error(
+            "Could not cast type to expected `VectorType`!");
+    }
+
+    // TODO finish
+    vt->print(llvm::errs());
+    // return vt->ElementCount()
     return 1.0;
 }
 
@@ -394,12 +471,10 @@ IF_Emulator::estimate_extract_value(const llvm::Instruction& instr)
 double
 IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
 {
-    auto& instr2 = instr;
     const llvm::TruncInst* ti = llvm::dyn_cast<llvm::TruncInst>(&instr);
     if (!ti)
     {
-        throw std::runtime_error(
-            "Could not cast expected instruction to `TruncInst`!");
+        throw std::runtime_error("Could not cast instruction to expected `TruncInst`!");
     }
     const llvm::Type* ty_src = ti->getSrcTy();
     const llvm::Type* ty_dst = ti->getDestTy();
@@ -412,4 +487,18 @@ IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
     return 1.0
         / (2 << (ty_src->getIntegerBitWidth() - ty_dst->getIntegerBitWidth()
                - 1));
+}
+
+/* Other Operations ***********************************************************/
+
+double
+IF_Emulator::estimate_phi(const llvm::Instruction& instr)
+{
+    const llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(&instr);
+    if (!phi)
+    {
+        throw std::runtime_error("Could not cast instruction to expected `PHINode`!");
+    }
+
+    return 1.0 / phi->getNumIncomingValues();
 }

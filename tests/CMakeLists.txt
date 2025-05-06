@@ -41,7 +41,7 @@ function(add_ll_gen_test ll_src_t)
                OUTPUT_VARIABLE ll_test_path)
     add_custom_command(
         OUTPUT ${ll_test_path}
-        COMMAND ${CMAKE_CXX_COMPILER} -x c++ -S -emit-llvm
+        COMMAND ${CMAKE_CXX_COMPILER} -x c++ -S -emit-llvm -g
                 -o ${ll_test_path} ${ll_src_t}
         DEPENDS ${ll_src_t}
         WORKING_DIRECTORY ${TEST_DIR}
