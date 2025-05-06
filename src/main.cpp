@@ -131,7 +131,8 @@ reader_dev(void)
     em->print();
 
     IF_EM_Graph g(*em, "test.dot");
-    g.draw_callgraph();
+    //g.draw_callgraph();
+    g.draw_graph();
 
     return 0;
 }

@@ -13,6 +13,7 @@ private:
     const std::string out_file;
     const IF_EntropyMap& em;
 
+    const std::string emit_instr_node_name(const IF_EntropyMap_Instr&) const;
     const std::string emit_instr_node(const IF_EntropyMap_Instr&) const;
     const std::string emit_func_node(const IF_EntropyMap_Func&) const;
 

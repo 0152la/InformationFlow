@@ -1,6 +1,13 @@
 #ifndef _IF_READER_HPP
 #define _IF_READER_HPP
 
+#include <algorithm>
+#include <memory>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <vector>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -12,15 +19,15 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
 
-// #include "reader-basicblock.hpp"
 #include "entropy.hpp"
+#include "entropy_map.hpp"
 #include "fuzz_engine.hpp"
 #include "randgen.hpp"
-#include "entropy_map.hpp"
 
 class IF_LLVM_Module
 {

@@ -4,6 +4,12 @@
  * IF_EntropyMap_Instr
  ******************************************************************************/
 
+void
+IF_EntropyMap_Instr::add_successor(const IF_EntropyMap_Instr* to_add)
+{
+    this->succs.insert(to_add->get_idx());
+}
+
 const std::string
 IF_EntropyMap_Instr::to_str(void) const
 {
@@ -42,12 +48,6 @@ IF_EntropyMap_Func::get_representing_name(void) const
         return this->get_name();
     }
     return this->get_demangled_name();
-}
-
-void
-IF_EntropyMap_Func::insert_call(const IF_EntropyMap_Func* em_fn)
-{
-    this->callees.push_back(em_fn);
 }
 
 const std::string
@@ -92,12 +92,6 @@ IF_EntropyMap::print(void) const
         {
             std::cout << " -- " << em_fn->get_demangled_name();
         }
-        std::cout << "\nCalls: [  ";
-        for (const auto& em_call_fn : em_fn->get_callees())
-        {
-            std::cout << em_call_fn->get_name() << "  ";
-        }
-        std::cout << "]\n";
 
         for (const auto& em_fn_instr : em_fn->get_instrs())
         {

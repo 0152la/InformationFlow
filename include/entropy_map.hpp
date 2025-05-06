@@ -6,14 +6,16 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <set>
+#include <vector>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/DebugInfoMetadata.h"
 #pragma clang diagnostic pop
 
 class IF_EntropyMap_Instr
@@ -23,7 +25,7 @@ private:
     unsigned int opcode;
     double retained_entropy;
     bool trivial = false;
-    std::vector<const IF_EntropyMap_Instr*>> succs;
+    std::set<decltype(idx)> succs;
 
 public:
     IF_EntropyMap_Instr(uint32_t _idx, const llvm::Instruction& _instr) :
@@ -36,7 +38,12 @@ public:
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
-    bool is_trivial(void) const { return this->is_trivial; };
+    auto get_succs(void) const -> const decltype(this->succs)&
+    {
+        return this->succs;
+    };
+
+    bool is_trivial(void) const { return this->trivial; };
 
     void set_retained_entropy(double _entropy)
     {
@@ -47,6 +54,8 @@ public:
         }
     };
 
+    void add_successor(const IF_EntropyMap_Instr*);
+
     const std::string to_str(void) const;
 };
 
@@ -56,7 +65,6 @@ private:
     const std::string name;
     const std::string demangled_name;
     std::vector<std::unique_ptr<IF_EntropyMap_Instr>> instrs;
-    std::vector<const IF_EntropyMap_Func*> callees;
 
     const std::string set_demangled_name(const llvm::Function&);
 
@@ -79,11 +87,6 @@ public:
 
     const std::string get_representing_name(void) const;
 
-    auto get_callees(void) const -> const decltype(this->callees)&
-    {
-        return this->callees;
-    };
-
     auto get_instrs(void) const -> const decltype(this->instrs)&
     {
         return this->instrs;
@@ -93,8 +96,6 @@ public:
     {
         this->instrs.push_back(std::move(_instr));
     };
-
-    void insert_call(const IF_EntropyMap_Func*);
 
     const std::string to_str(void) const;
 };

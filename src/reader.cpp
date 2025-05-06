@@ -1,10 +1,4 @@
 #include "reader.hpp"
-#include "llvm/IR/Instruction.h"
-#include "llvm/Support/Casting.h"
-#include <algorithm>
-#include <memory>
-#include <sstream>
-#include <stdexcept>
 
 std::map<uint16_t, double> set_entropy {
     // Terminator Instructions
@@ -93,12 +87,14 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 {
     uint32_t instr_idx = 0;
     auto em = std::make_unique<IF_EntropyMap>(llvm_module);
-    std::map<IF_EntropyMap_Func*, std::vector<std::string>> names_call_map;
+    std::map<IF_EntropyMap_Instr*, std::vector<const llvm::Instruction*>>
+        instr_succ_map;
+    std::map<const llvm::Instruction*, const IF_EntropyMap_Instr*> em_instr_map;
     // Iterate over functions ...
     for (const auto& fn : llvm_module.getFunctionList())
     {
         auto em_fn = std::make_unique<IF_EntropyMap_Func>(fn);
-        names_call_map.emplace(em_fn.get(), std::vector<std::string>());
+        IF_EntropyMap_Instr* em_instr_prev = nullptr;
 
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
@@ -106,6 +102,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             auto em_instr
                 = std::make_unique<IF_EntropyMap_Instr>(instr_idx, fn_inst);
             double retained_entropy;
+            em_instr_map.emplace(&fn_inst, em_instr.get());
 
             // We first search whether this instruction is one we have a
             // default entropy for. If we do, then we simply set the entropy to
@@ -130,17 +127,50 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
             }
 
-            // Record `call` instructions in a function, so we can draw a
-            // callgraph
-            // TODO maybe just handle this with instruction successors?
+            // Record special instruction successors, such as from calls or
+            // branch instructions
             if (llvm::isa<llvm::CallBase>(&fn_inst))
             {
-                llvm::StringRef fn_call_name
+                instr_succ_map.emplace(
+                    em_instr.get(), std::vector<const llvm::Instruction*>());
+                const llvm::Instruction& instr_succ
                     = llvm::dyn_cast<llvm::CallBase>(&fn_inst)
                           ->getCalledFunction()
-                          ->getName();
-                names_call_map.at(em_fn.get()).push_back(fn_call_name.str());
+                          ->getEntryBlock()
+                          .front();
+                instr_succ_map.at(em_instr.get()).push_back(&instr_succ);
+                fn_inst.print(llvm::outs());
+                llvm::outs() << '\n';
+                // instr_succ.print(llvm::outs());
+                llvm::outs() << '\n';
+                llvm::outs() << "-----\n";
             }
+            else if (llvm::isa<llvm::BranchInst>(&fn_inst))
+            {
+                instr_succ_map.emplace(
+                    em_instr.get(), std::vector<const llvm::Instruction*>());
+                const llvm::BranchInst* bi
+                    = llvm::dyn_cast<llvm::BranchInst>(&fn_inst);
+                fn_inst.print(llvm::outs());
+                llvm::outs() << '\n';
+                for (const auto& succ : bi->successors())
+                {
+                    instr_succ_map.at(em_instr.get())
+                        .push_back(&(succ->front()));
+                    succ->front().print(llvm::outs());
+                    llvm::outs() << '\n';
+                }
+                llvm::outs() << "-----\n";
+            }
+
+            // If this is not the last instruction in a function, then set next
+            // instruction as successor
+            if (em_instr_prev)
+            {
+                em_instr_prev->add_successor(em_instr.get());
+            }
+
+            em_instr_prev = em_instr.get();
             em_instr->set_retained_entropy(retained_entropy);
             em_fn->insert(std::move(em_instr));
             instr_idx += 1;
@@ -148,21 +178,23 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         em->insert(std::move(em_fn));
     }
 
-    // Resolve call names to `IF_EntropyMap_Func`s
-    for (auto& [fn, calls] : names_call_map)
+    // Resolve instruction successors to `IF_EntropyMap_Instr`s
+    for (auto& [em_instr, llvm_instrs] : instr_succ_map)
     {
-        for (const std::string& call_name : calls)
+        for (const llvm::Instruction* instr : llvm_instrs)
         {
-            auto called_fn = std::find_if(names_call_map.begin(),
-                names_call_map.end(), [&call_name](const auto& fn)
-                { return fn.first->get_name() == call_name; });
-            if (called_fn == names_call_map.end())
+            try
             {
-                throw std::logic_error(
-                    "Did not find `IF_EntropyMap_Func` entry for function `"
-                    + call_name + "`!");
+                em_instr->add_successor(em_instr_map.at(instr));
             }
-            fn->insert_call((*called_fn).first);
+            catch (const std::out_of_range& ex)
+            {
+                // TODO
+                continue;
+                // std::cout << "Could not find entropy map entry for LLVM "
+                //"instruction: ";
+                // instr->print(llvm::outs());
+            }
         }
     }
 
