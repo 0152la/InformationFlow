@@ -10,6 +10,12 @@ IF_EntropyMap_Instr::add_successor(const IF_EntropyMap_Instr* to_add)
     this->succs.insert(to_add->get_idx());
 }
 
+void
+IF_EntropyMap_Instr::add_external_succ(std::string ex_fn)
+{
+    this->succs_extern.insert(ex_fn);
+}
+
 const std::string
 IF_EntropyMap_Instr::to_str(void) const
 {
@@ -70,6 +76,12 @@ IF_EntropyMap_Func::to_str(void) const
 /*******************************************************************************
  * IF_EntropyMap
  ******************************************************************************/
+
+void
+IF_EntropyMap::insert_external_func(std::string ex_fn)
+{
+    this->external_funcs.insert(ex_fn);
+}
 
 const std::string
 IF_EntropyMap::to_str(void) const

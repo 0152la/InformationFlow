@@ -26,6 +26,7 @@ private:
     double retained_entropy;
     bool trivial = false;
     std::set<decltype(idx)> succs;
+    std::set<std::string> succs_extern;
 
 public:
     IF_EntropyMap_Instr(uint32_t _idx, const llvm::Instruction& _instr) :
@@ -43,6 +44,11 @@ public:
         return this->succs;
     };
 
+    auto get_external_succs(void) const -> const decltype(this->succs_extern)&
+    {
+        return this->succs_extern;
+    };
+
     bool is_trivial(void) const { return this->trivial; };
 
     void set_retained_entropy(double _entropy)
@@ -55,6 +61,8 @@ public:
     };
 
     void add_successor(const IF_EntropyMap_Instr*);
+
+    void add_external_succ(std::string);
 
     const std::string to_str(void) const;
 };
@@ -104,6 +112,7 @@ class IF_EntropyMap
 {
 private:
     std::vector<std::unique_ptr<IF_EntropyMap_Func>> funcs;
+    std::set<std::string> external_funcs;
     bool verbose = false;
 
 public:
@@ -117,10 +126,17 @@ public:
         return this->funcs;
     };
 
+    auto get_external_funcs(void) const -> const decltype(external_funcs)&
+    {
+        return this->external_funcs;
+    };
+
     void insert(std::unique_ptr<IF_EntropyMap_Func> em_fn)
     {
         this->funcs.push_back(std::move(em_fn));
     };
+
+    void insert_external_func(std::string);
 
     void set_verbose(bool _verbose) { this->verbose = _verbose; };
 

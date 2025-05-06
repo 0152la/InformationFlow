@@ -93,6 +93,11 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
     // Iterate over functions ...
     for (const auto& fn : llvm_module.getFunctionList())
     {
+        if (fn.isDeclaration())
+        {
+            continue;
+        }
+
         auto em_fn = std::make_unique<IF_EntropyMap_Func>(fn);
         IF_EntropyMap_Instr* em_instr_prev = nullptr;
 
@@ -131,19 +136,21 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             // branch instructions
             if (llvm::isa<llvm::CallBase>(&fn_inst))
             {
-                instr_succ_map.emplace(
-                    em_instr.get(), std::vector<const llvm::Instruction*>());
-                const llvm::Instruction& instr_succ
+                const llvm::Function* callee
                     = llvm::dyn_cast<llvm::CallBase>(&fn_inst)
-                          ->getCalledFunction()
-                          ->getEntryBlock()
-                          .front();
-                instr_succ_map.at(em_instr.get()).push_back(&instr_succ);
-                fn_inst.print(llvm::outs());
-                llvm::outs() << '\n';
-                // instr_succ.print(llvm::outs());
-                llvm::outs() << '\n';
-                llvm::outs() << "-----\n";
+                          ->getCalledFunction();
+                if (callee->isDeclaration())
+                {
+                    em->insert_external_func(callee->getName().str());
+                    em_instr->add_external_succ(callee->getName().str());
+                }
+                else
+                {
+                    instr_succ_map.emplace(em_instr.get(),
+                        std::vector<const llvm::Instruction*>());
+                    instr_succ_map.at(em_instr.get())
+                        .push_back(&(callee->getEntryBlock().front()));
+                }
             }
             else if (llvm::isa<llvm::BranchInst>(&fn_inst))
             {
@@ -151,16 +158,11 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                     em_instr.get(), std::vector<const llvm::Instruction*>());
                 const llvm::BranchInst* bi
                     = llvm::dyn_cast<llvm::BranchInst>(&fn_inst);
-                fn_inst.print(llvm::outs());
-                llvm::outs() << '\n';
                 for (const auto& succ : bi->successors())
                 {
                     instr_succ_map.at(em_instr.get())
                         .push_back(&(succ->front()));
-                    succ->front().print(llvm::outs());
-                    llvm::outs() << '\n';
                 }
-                llvm::outs() << "-----\n";
             }
 
             // If this is not the last instruction in a function, then set next
