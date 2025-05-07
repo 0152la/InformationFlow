@@ -34,8 +34,7 @@ public:
     IF_Histogram_Entry(I _input) :
         input(_input) { };
 
-    void insert(O);
-    void insert_many(O, uint64_t);
+    /* Getters ***************************************************************/
 
     I get_in(void) const { return this->input; };
 
@@ -51,6 +50,13 @@ public:
         const auto& found = this->outputs.find(_out);
         return found == this->outputs.end() ? 0 : found->second;
     };
+
+    /* Modifiers *************************************************************/
+
+    void insert(O);
+    void insert_many(O, uint64_t);
+
+    /* Utility ***************************************************************/
 
     void print(void);
 };
@@ -82,12 +88,16 @@ public:
     void insert(I, O);
     IF_Histogram_Entry<I, O>* find(I);
 
+    /* Calculators  **********************************************************/
+
     double calculate_entropy_inputs(void);
     double calculate_entropy_outputs(void);
     double calculate_conditional_entropy_out_given_in(void);
     double calculate_conditional_entropy_in_given_out(void);
     double calculate_uncertainty_coefficient_out_given_in(void);
     double calculate_uncertainty_coefficient_in_given_out(void);
+
+    /* Utility ***************************************************************/
 
     void print_measures(void);
 };

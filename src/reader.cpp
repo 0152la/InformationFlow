@@ -191,11 +191,9 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             }
             catch (const std::out_of_range& ex)
             {
-                // TODO
-                continue;
-                // std::cout << "Could not find entropy map entry for LLVM "
-                //"instruction: ";
-                // instr->print(llvm::outs());
+                std::cout << "Could not find entropy map entry for LLVM "
+                             "instruction: ";
+                instr->print(llvm::outs());
             }
         }
     }
@@ -247,8 +245,6 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                     = llvm::dyn_cast<llvm::Value>(fn_inst_arg))
                 {
                     llvm::errs() << "[ ";
-                    // v->print(llvm::errs(), true);
-                    // llvm::errs() << v->getNameOrAsOperand() << '\n';
                     v->printAsOperand(llvm::errs());
                     llvm::errs() << " --- ";
                     v->printAsOperand(llvm::errs(), false, &llvm_module);

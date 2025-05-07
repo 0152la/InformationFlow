@@ -1,9 +1,10 @@
 #ifndef _IF_ENTROPYMAP_GRAPH_HPP
 #define _IF_ENTROPYMAP_GRAPH_HPP
 
-#include <sstream>
 #include <fstream>
-//#include <format>
+#include <sstream>
+#include <string>
+#include <utility>
 
 #include "entropy_map.hpp"
 
@@ -13,9 +14,18 @@ private:
     const std::string out_file;
     const IF_EntropyMap& em;
 
-    const std::string emit_instr_node_name(const IF_EntropyMap_Instr&) const;
-    const std::string emit_instr_node(const IF_EntropyMap_Instr&) const;
-    const std::string emit_func_node(const IF_EntropyMap_Func&) const;
+    static const std::string emit_instr_node_name(const IF_EntropyMap_Instr&);
+    static const std::string emit_instr_node_link(
+        const IF_EntropyMap_Instr&, const IF_EntropyMap_Instr&);
+    static const std::string emit_instr_node_link(const IF_EntropyMap_Instr&,
+        decltype(std::declval<IF_EntropyMap_Instr>().get_idx()));
+    static const std::string emit_instr_node_link(
+        const IF_EntropyMap_Instr&, std::string);
+
+    static const std::string emit_instr_node(const IF_EntropyMap_Instr&);
+    static const std::string emit_func_node(const IF_EntropyMap_Func&);
+
+    static const std::string emit_external_func_nodes(const IF_EntropyMap&);
 
 public:
     IF_EM_Graph(const IF_EntropyMap& _em, std::string _out) :

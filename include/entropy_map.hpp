@@ -4,9 +4,9 @@
 // #include <format>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
-#include <set>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -33,7 +33,7 @@ public:
         idx(_idx),
         opcode(_instr.getOpcode()) { };
 
-    uint32_t get_idx(void) const { return this->idx; };
+    auto get_idx(void) const -> decltype(this->idx) { return this->idx; };
 
     unsigned int get_opcode(void) const { return this->opcode; };
 

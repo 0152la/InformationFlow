@@ -29,12 +29,6 @@ IF_EntropyMap_Instr::to_str(void) const
  * IF_EntropyMap_Func
  ******************************************************************************/
 
-// bool
-// IF_EntropyMap_Func::operator<(const IF_EntropyMap_Func& other) const
-//{
-// return this->get_name() < other.get_name();
-//}
-//
 const std::string
 IF_EntropyMap_Func::set_demangled_name(const llvm::Function& _fn)
 {

@@ -1,43 +1,86 @@
 #include "entropy_map_graph.hpp"
-#include <llvm/IR/Instruction.h>
+
+constexpr std::string instr_node_prefix = "i";
+
+/*******************************************************************************
+ * Helper functions
+ ******************************************************************************/
 
 const std::string
-IF_EM_Graph::emit_instr_node_name(const IF_EntropyMap_Instr& em_instr) const
+IF_EM_Graph::emit_instr_node_name(const IF_EntropyMap_Instr& em_instr)
 {
-    return "i" + std::to_string(em_instr.get_idx());
+    return instr_node_prefix + std::to_string(em_instr.get_idx());
 }
 
 const std::string
-IF_EM_Graph::emit_instr_node(const IF_EntropyMap_Instr& em_instr) const
+IF_EM_Graph::emit_instr_node_link(
+    const IF_EntropyMap_Instr& instr_from, const IF_EntropyMap_Instr& instr_to)
+{
+    return emit_instr_node_name(instr_from) + " -> "
+        + emit_instr_node_name(instr_to);
+}
+
+const std::string
+IF_EM_Graph::emit_instr_node_link(const IF_EntropyMap_Instr& instr_from,
+    decltype(std::declval<IF_EntropyMap_Instr>().get_idx()) instr_to_idx)
+{
+    return emit_instr_node_name(instr_from) + " -> " + instr_node_prefix
+        + std::to_string(instr_to_idx);
+}
+
+const std::string
+IF_EM_Graph::emit_instr_node_link(
+    const IF_EntropyMap_Instr& instr_from, std::string node_to)
+{
+    return emit_instr_node_name(instr_from) + " -> " + node_to;
+}
+
+const std::string
+IF_EM_Graph::emit_external_func_nodes(const IF_EntropyMap& em)
+{
+    const std::string ex_fn_shape = "box";
+    std::ostringstream oss;
+    for (const auto& ex_fn_name : em.get_external_funcs())
+    {
+        oss << ex_fn_name << " [shape = " << ex_fn_shape << "];\n";
+    }
+
+    return oss.str();
+}
+
+/*******************************************************************************
+ * Component functions
+ ******************************************************************************/
+
+const std::string
+IF_EM_Graph::emit_instr_node(const IF_EntropyMap_Instr& em_instr)
 {
     std::ostringstream oss;
-    oss << this->emit_instr_node_name(em_instr) << " [shape = record, label=\""
+    oss << emit_instr_node_name(em_instr) << " [shape = record, label=\""
         << llvm::Instruction::getOpcodeName(em_instr.get_opcode()) << " | "
         << em_instr.get_retained_entropy() << "\"];\n";
 
     for (const auto& succ : em_instr.get_succs())
     {
-        oss << this->emit_instr_node_name(em_instr) << " -> "
-            << "i" << succ << ";\n";
+        oss << emit_instr_node_link(em_instr, succ) << ";\n";
     }
 
     return oss.str();
 }
 
 const std::string
-IF_EM_Graph::emit_func_node(const IF_EntropyMap_Func& em_fn) const
+IF_EM_Graph::emit_func_node(const IF_EntropyMap_Func& em_fn)
 {
     std::ostringstream oss;
     std::ostringstream oss_ex_fn;
     oss << "subgraph cluster_" << em_fn.get_representing_name() << " {\n";
     oss << "label=\"" << em_fn.get_representing_name() << "\";\n";
-    // oss << std::format("subgraph cluster_{} {{\n", this->get_name());
     for (const auto& instr : em_fn.get_instrs())
     {
         oss << emit_instr_node(*instr);
         for (const auto& succ_fn : instr->get_external_succs())
         {
-            oss_ex_fn << this->emit_instr_node_name(*instr) << " -> " << succ_fn << ";\n";
+            oss_ex_fn << emit_instr_node_link(*instr, succ_fn) << ";\n";
         }
     }
 
@@ -49,18 +92,19 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap_Func& em_fn) const
     return oss.str();
 }
 
+/*******************************************************************************
+ * Graph draw functions
+ ******************************************************************************/
+
 void
 IF_EM_Graph::draw_graph(void) const
 {
+
     std::ostringstream graph_ss;
     graph_ss << "digraph G {\n";
     graph_ss << "label=\"Entropy graph for `<file>`\";\n";
 
-    // External function nodes
-    for (const auto& ex_fn_name : this->get_entropy_map().get_external_funcs())
-    {
-        graph_ss << ex_fn_name << " [shape = box];\n";
-    }
+    graph_ss << emit_external_func_nodes(this->get_entropy_map());
 
     // Function subgraphs with their instructions
     for (const auto& em_fn : this->get_entropy_map().get_funcs())
@@ -78,23 +122,25 @@ IF_EM_Graph::draw_graph(void) const
 void
 IF_EM_Graph::draw_callgraph(void) const
 {
-    // std::ostringstream graph_ss;
-    // graph_ss << "digraph G{\n";
-    // graph_ss << "\tnode [shape=box];\n";
-    // for (const auto& em_fn : this->get_entropy_map().get_funcs())
-    //{
-    // for (const auto& callee : em_fn->get_callees())
-    //{
-    // graph_ss << "\t"
-    //<< em_fn->get_representing_name()
-    //<< " -> " << callee->get_representing_name() << ";\n";
-    //// graph_ss << std::format(
-    ////"\t{} -> {};\n", em_fn->get_name(), callee->get_name());
-    //}
-    //}
-    // graph_ss << "}";
+    const std::string fn_shape = "diamond";
 
-    // std::ofstream out_file(this->get_output_name());
-    // out_file << graph_ss.str();
-    // out_file.close();
+    std::ostringstream graph_ss;
+    graph_ss << "digraph G{\n";
+    graph_ss << "node [shape = " << fn_shape << "];\n";
+
+    graph_ss << emit_external_func_nodes(this->get_entropy_map());
+
+    for (const auto& em_fn : this->get_entropy_map().get_funcs())
+    {
+        graph_ss << em_fn->get_representing_name() << "[shape = " << fn_shape << "];\n";
+        for (const auto& fn_instr : em_fn->get_instrs())
+        {
+            // TODO
+        }
+    }
+    graph_ss << "}";
+
+    std::ofstream out_file(this->get_output_name());
+    out_file << graph_ss.str();
+    out_file.close();
 }

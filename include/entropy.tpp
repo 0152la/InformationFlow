@@ -2,9 +2,6 @@
  * IF_Histogram_Entry
  ******************************************************************************/
 
-#include <deque>
-#include <memory>
-
 template <typename I, typename O>
 void
 IF_Histogram_Entry<I, O>::insert(O _output)
