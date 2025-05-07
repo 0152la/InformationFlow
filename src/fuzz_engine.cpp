@@ -1,6 +1,4 @@
 #include "fuzz_engine.hpp"
-#include <llvm/IR/Instruction.h>
-#include <stdexcept>
 
 extern std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>>
     emulated_fns;
@@ -35,7 +33,7 @@ IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
     std::function<IF_Arg(const IF_ArgList&)> fn;
     try
     {
-            fn = emulated_fns.at(instr.getOpcode());
+        fn = emulated_fns.at(instr.getOpcode());
     }
     catch (const std::out_of_range& e)
     {
@@ -47,6 +45,7 @@ IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
 
     if (!instr.getType()->isIntegerTy())
     {
+        // TODO remove this once we implement more argument types
         throw std::runtime_error("Invalid argument type; expected integer!");
     }
 

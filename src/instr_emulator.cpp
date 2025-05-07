@@ -1,8 +1,4 @@
 #include "instr_emulator.hpp"
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <stdexcept>
 
 std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
     // Binary Operations
@@ -474,7 +470,8 @@ IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
     const llvm::TruncInst* ti = llvm::dyn_cast<llvm::TruncInst>(&instr);
     if (!ti)
     {
-        throw std::runtime_error("Could not cast instruction to expected `TruncInst`!");
+        throw std::runtime_error(
+            "Could not cast instruction to expected `TruncInst`!");
     }
     const llvm::Type* ty_src = ti->getSrcTy();
     const llvm::Type* ty_dst = ti->getDestTy();
@@ -497,7 +494,8 @@ IF_Emulator::estimate_phi(const llvm::Instruction& instr)
     const llvm::PHINode* phi = llvm::dyn_cast<llvm::PHINode>(&instr);
     if (!phi)
     {
-        throw std::runtime_error("Could not cast instruction to expected `PHINode`!");
+        throw std::runtime_error(
+            "Could not cast instruction to expected `PHINode`!");
     }
 
     return 1.0 / phi->getNumIncomingValues();

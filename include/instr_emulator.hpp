@@ -19,15 +19,19 @@
 #include "llvm/IR/Instructions.h"
 #pragma clang diagnostic pop
 
+/* A base class for an argument to be used in emulation. This allows us to pass
+ * a list of `IF_Arg`s without caring about explicit types, as they will be set
+ * in derived classes.
+ */
 class IF_Arg
 {
 protected:
     uint8_t sz;
 
-public:
     IF_Arg(uint8_t _sz) :
         sz(_sz) { };
 
+public:
     virtual bool is_int() const { return false; };
 
     virtual bool is_float() const { return false; };
@@ -37,6 +41,8 @@ public:
     auto get_sz(void) const -> decltype(this->sz) { return this->sz; };
 };
 
+/* An argument of integer type, with variable size.
+ */
 class IF_Arg_Int final : public IF_Arg
 {
 public:
@@ -57,6 +63,15 @@ public:
     bool is_sgn(void) const { return this->sgn; };
 };
 
+/* A collection of `IF_Arg`, to be used when passing to an emulated operation.
+ * An emulated invocation should be passed an `IF_ArgList` containing all
+ * required input arguments for that operation, as described in the LLVM
+ * Language Reference [1]. The types of the arguments will be determined by
+ * derived types inheriting from `IF_Arg`, which can then be cast back for
+ * parsing as required during emulation.
+ *
+ * [1] https://llvm.org/docs/LangRef.html
+ */
 class IF_ArgList
 {
 private:
@@ -68,6 +83,8 @@ public:
     IF_ArgList(std::vector<std::unique_ptr<IF_Arg>> _args) :
         args(std::move(_args)) { };
 
+    /* Getters ***************************************************************/
+
     const IF_Arg& get_arg(size_t) const;
 
     auto get_args(void) const -> const decltype(this->args)&
@@ -78,6 +95,8 @@ public:
     size_t get_args_count(void) const { return this->args.size(); };
 
     std::vector<const IF_Arg_Int*> extract_arg_int(void) const;
+
+    /* Checkers **************************************************************/
 
     static void check_args(bool);
     bool check_all_ints(void) const;
@@ -91,9 +110,14 @@ private:
     static std::vector<IF_Arg_Int::val_t> extract_binop_ops(const IF_ArgList&);
 
 public:
-    // Binary Operations
-    // If these operations over-/under-flow, we clamp them to the
-    // respective max/min value
+    /* Emulated operations
+     * The entropy of these operations are computed by fuzzing their
+     * non-constant inputs
+     */
+
+    /* Binary Operations ******************************************************
+     * If these operations over-/under-flow, we clamp them to the
+     * respective max/min value */
     static IF_Arg emulate_add(const IF_ArgList&);
     static IF_Arg emulate_sub(const IF_ArgList&);
     static IF_Arg emulate_mul(const IF_ArgList&);
@@ -102,7 +126,7 @@ public:
     static IF_Arg emulate_urem(const IF_ArgList&);
     static IF_Arg emulate_srem(const IF_ArgList&);
 
-    // Bitwise Binary Operations
+    /* Bitwise Binary Operations *********************************************/
     static IF_Arg emulate_shl(const IF_ArgList&);
     static IF_Arg emulate_lshr(const IF_ArgList&);
     static IF_Arg emulate_ashr(const IF_ArgList&);
@@ -110,17 +134,29 @@ public:
     static IF_Arg emulate_or(const IF_ArgList&);
     static IF_Arg emulate_xor(const IF_ArgList&);
 
-
-    // Memory Operations
+    /* Memory Operations *****************************************************/
     static IF_Arg emulate_atomic_rmw(const IF_ArgList&);
 
-    // TODO
+    /* Other Operations ******************************************************/
     static IF_Arg emulate_icmp(const IF_ArgList&);
 
-    // TODO organize
+    /* Estimated operations
+     * These operations do not need to be fuzzed to compute their entropy, but
+     * certain dynamic elements need to be inspected in order to estimate it.
+     * For example, a `trunt` instruction would retain entropy relative to the
+     * number of bits removed from it.
+     */
+
+    /* Vector Operations *****************************************************/
     static double estimate_extract_element(const llvm::Instruction&);
+
+    /* Aggregate Operations **************************************************/
     static double estimate_extract_value(const llvm::Instruction&);
+
+    /* Conversion Operations *************************************************/
     static double estimate_trunc(const llvm::Instruction&);
+
+    /* Other Operations ******************************************************/
     static double estimate_phi(const llvm::Instruction&);
 };
 

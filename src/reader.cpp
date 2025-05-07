@@ -1,5 +1,8 @@
 #include "reader.hpp"
 
+/* For certain instructions, we can directly calculate the entropy, as they
+ * either affect only control flow, or move data around.
+ */
 std::map<uint16_t, double> set_entropy {
     // Terminator Instructions
     { llvm::Instruction::Ret, 1.0 }, { llvm::Instruction::Br, 1.0 },
