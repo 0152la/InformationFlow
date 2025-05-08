@@ -39,10 +39,8 @@ std::map<uint16_t, double> set_entropy {
                                          */
     { llvm::Instruction::Store, 1.0 }, { llvm::Instruction::Fence, 1.0 },
     { llvm::Instruction::AtomicCmpXchg, 1.0 }, // TODO same as Load
-    { llvm::Instruction::GetElementPtr, 1.0 }, // TODO same as load
 
     // Conversion Operations
-    //{ llvm::Instruction::Trunc, 1.0 },
     { llvm::Instruction::ZExt, 1.0 }, { llvm::Instruction::SExt, 1.0 },
     //{ llvm::Instruction::FPTrunc, 1.0 },
     { llvm::Instruction::FPExt, 1.0 },
@@ -53,7 +51,6 @@ std::map<uint16_t, double> set_entropy {
     //{ llvm::Instruction::FPToSI, 1.0 }, // TODO same as above
     { llvm::Instruction::UIToFP, 1.0 }, // TODO any unrepresentable integer?
     { llvm::Instruction::SIToFP, 1.0 }, // TODO same as above
-    //{ llvm::Instruction::PtrToInt, 1.0 }, // TODO could truncate
     //{ llvm::Instruction::IntToPtr, 1.0 }, // TODO same as above
     { llvm::Instruction::BitCast, 1.0 },
     { llvm::Instruction::AddrSpaceCast, 1.0 },
@@ -61,7 +58,7 @@ std::map<uint16_t, double> set_entropy {
     // Other Operations
     { llvm::Instruction::Call, 1.0 },
     { llvm::Instruction::Select, 0.5 }, // TODO handle constant case (for all)
-    //{ llvm::Instruction::LandingPad, 1.0 },
+    { llvm::Instruction::LandingPad, 1.0 }, // TODO need double checking
     //{ llvm::Instruction::Freeze, 1.0 }, // XXX
 
 };

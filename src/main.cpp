@@ -120,9 +120,7 @@ static int
 reader_dev(void)
 {
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/sample.ll";
-    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-    //"InformationFlow/build/tests/simple-arith.ll";
+                                "InformationFlow/build/tests/simple-vector.ll";
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap> em

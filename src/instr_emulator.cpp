@@ -1,4 +1,5 @@
 #include "instr_emulator.hpp"
+#include <llvm/IR/Instructions.h>
 
 std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
     // Binary Operations
@@ -37,6 +38,7 @@ std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
 
         // Converstion Operations
         { llvm::Instruction::Trunc, IF_Emulator::estimate_trunc },
+        { llvm::Instruction::PtrToInt, IF_Emulator::estimate_ptrtoint },
 
         // Other Operations
         { llvm::Instruction::PHI, IF_Emulator::estimate_phi },
@@ -345,6 +347,7 @@ IF_Emulator::emulate_lshr(const IF_ArgList& args)
         lshr = (op1 >> op2) & mask;
     }
 
+    throw std::runtime_error("unimplemented lshr");
     return IF_Arg_Int(lshr, sizeof(IF_Arg_Int::val_t), true);
 }
 
@@ -409,6 +412,7 @@ IF_Emulator::emulate_atomic_rmw(const IF_ArgList& args)
 {
     // TODO
     const IF_ArgList& args2 = args;
+    throw std::runtime_error("unimplemented rmw");
     return IF_Arg_Int(1, sizeof(IF_Arg_Int::val_t), false);
 }
 
@@ -419,6 +423,7 @@ IF_Emulator::emulate_icmp(const IF_ArgList& args)
 {
     // TODO
     const IF_ArgList& args2 = args;
+    throw std::runtime_error("unimplemented icmp");
     return IF_Arg_Int(1, sizeof(IF_Arg_Int::val_t), false);
 }
 
@@ -449,6 +454,7 @@ IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
     // TODO finish
     vt->print(llvm::errs());
     // return vt->ElementCount()
+    throw std::runtime_error("unimplemented ee");
     return 1.0;
 }
 
@@ -459,6 +465,7 @@ IF_Emulator::estimate_extract_value(const llvm::Instruction& instr)
 {
     // TODO
     auto& instr2 = instr;
+    throw std::runtime_error("unimplemented ev");
     return 1.0;
 }
 
@@ -473,21 +480,44 @@ IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
         throw std::runtime_error(
             "Could not cast instruction to expected `TruncInst`!");
     }
-    const llvm::Type* ty_src = ti->getSrcTy();
-    const llvm::Type* ty_dst = ti->getDestTy();
-    if (ty_src->getIntegerBitWidth() <= ty_dst->getIntegerBitWidth())
+
+    uint8_t from_sz = ti->getSrcTy()->getIntegerBitWidth();
+    uint8_t to_sz = ti->getDestTy()->getIntegerBitWidth();
+    if (from_sz <= to_sz)
     {
         throw std::logic_error("Found invalid `trunc` type bit-widths!");
     }
 
     // TODO double check
-    return 1.0
-        / (2 << (ty_src->getIntegerBitWidth() - ty_dst->getIntegerBitWidth()
-               - 1));
+    return 1.0 / (1 << (from_sz - to_sz));
+}
+
+double
+IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
+{
+    const llvm::PtrToIntInst* ptii = llvm::dyn_cast<llvm::PtrToIntInst>(&instr);
+    if (!ptii)
+    {
+        throw std::runtime_error(
+            "Could not cast instruction to expected `PtrToIntInst`!");
+    }
+
+    uint8_t from_sz = instr.getModule()->getDataLayout().getPointerSize();
+    uint8_t to_sz = ptii->getDestTy()->getIntegerBitWidth();
+
+    // If we need to truncate, then we potentially lose some entropy
+    if (from_sz >= to_sz)
+    {
+        return 1.0 / (1 << (from_sz - to_sz));
+    }
+    // Otherwise, everything is retained (we do not care about the
+    // zero-extension case)
+    return 1.0;
 }
 
 /* Other Operations ***********************************************************/
 
+// TODO double check this
 double
 IF_Emulator::estimate_phi(const llvm::Instruction& instr)
 {

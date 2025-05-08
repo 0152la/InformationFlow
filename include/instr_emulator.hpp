@@ -15,8 +15,10 @@
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
 #pragma clang diagnostic pop
 
 /* A base class for an argument to be used in emulation. This allows us to pass
@@ -155,6 +157,7 @@ public:
 
     /* Conversion Operations *************************************************/
     static double estimate_trunc(const llvm::Instruction&);
+    static double estimate_ptrtoint(const llvm::Instruction&);
 
     /* Other Operations ******************************************************/
     static double estimate_phi(const llvm::Instruction&);
