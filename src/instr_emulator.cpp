@@ -1,4 +1,5 @@
 #include "instr_emulator.hpp"
+#include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
 
 std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
@@ -432,6 +433,16 @@ IF_Emulator::emulate_icmp(const IF_ArgList& args)
 
 /* Vector Operations **********************************************************/
 
+/* If the width of the index type is equal or smaller than the number of
+ * elements in the vector, then we do not lose any entropy, as each result
+ * yielded will be unique. Any index outside those bounds will yield `poison`,
+ * therefore losing entropy. Thus, the total entropy retained is the ratio
+ * between the number of elements in the vector over the bit width of the index
+ * type, if the index type is greater than the element count, or 1 (i.e. no
+ * entropy lost) otherwise.
+ *
+ * TODO double check
+ */
 double
 IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
 {
@@ -443,30 +454,77 @@ IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
             "Could not cast instruction to `ExtractElementInst`!");
     }
 
-    const llvm::VectorType* vt
-        = llvm::dyn_cast<llvm::VectorType>(eei->getType());
-    if (!vt)
+    uint64_t elem_count;
+    if (llvm::isa<llvm::FixedVectorType>(eei->getVectorOperandType()))
     {
-        throw std::runtime_error(
-            "Could not cast type to expected `VectorType`!");
+        elem_count = (llvm::dyn_cast<llvm::FixedVectorType>(
+                          eei->getVectorOperandType()))
+                         ->getNumElements();
+    }
+    else if (llvm::isa<llvm::ScalableVectorType>(eei->getVectorOperandType()))
+    {
+        // TODO is there a better way?
+        elem_count = (llvm::dyn_cast<llvm::ScalableVectorType>(
+                          eei->getVectorOperandType()))
+                         ->getMinNumElements();
+    }
+    else
+    {
+        throw std::runtime_error("Unknown vector type for `extractelement`!");
     }
 
-    // TODO finish
-    vt->print(llvm::errs());
-    // return vt->ElementCount()
-    throw std::runtime_error("unimplemented ee");
-    return 1.0;
+    uint8_t index_width
+        = eei->getIndexOperand()->getType()->getIntegerBitWidth();
+
+    return (1 << index_width) <= elem_count
+        ? 1
+        : elem_count * 1.0 / (1 << index_width);
 }
 
 /* Aggregate Operations *******************************************************/
 
+/* This operation is different than `extractelement`, in three main ways:
+ * - the indices *must* be in bounds, therefore we do not care about poison
+ * - the types to be indexed are either an array, or a struct
+ * - multiple indices are allowed, which is similar to GEP indexing - we
+ * recursively index within indexable elements
+ *
+ * The way we compute entropy is by calculating the number of bits in the
+ * indexed data element, then the number of bits in the entire aggregate data
+ * value, and computing the ratio. This is guaranteed to be less than one, as
+ * the whole is greater than the parts.
+ */
 double
 IF_Emulator::estimate_extract_value(const llvm::Instruction& instr)
 {
-    // TODO
-    auto& instr2 = instr;
-    throw std::runtime_error("unimplemented ev");
-    return 1.0;
+    const llvm::ExtractValueInst* evi
+        = llvm::dyn_cast<llvm::ExtractValueInst>(&instr);
+
+    if (llvm::isa<llvm::ArrayType>(evi->getAggregateOperand()->getType()))
+    {
+        return 1.0
+            / llvm::dyn_cast<llvm::ArrayType>(
+                evi->getAggregateOperand()->getType())
+                  ->getNumElements();
+    }
+    else if (llvm::isa<llvm::StructType>(evi->getAggregateOperand()->getType()))
+    {
+        // TODO more checks
+        const llvm::StructType* str_ty = llvm::dyn_cast<llvm::StructType>(
+            evi->getAggregateOperand()->getType());
+        std::unique_ptr<struct_sz_t> str_sz
+            = get_llvm_struct_bitsize(str_ty, instr.getModule());
+
+        uint32_t str_sz_sum = compute_total_struct_sz(str_sz.get());
+        uint32_t val_sz = get_aggregate_type_by_idx(str_sz.get(), evi);
+
+        return val_sz * 1.0 / str_sz_sum;
+    }
+    else
+    {
+        throw std::runtime_error("Unknown aggregate type for `extractvalue`!");
+    }
+    throw std::logic_error("Unrechable - extractvalue");
 }
 
 /* Conversion Operations ******************************************************/
@@ -529,4 +587,73 @@ IF_Emulator::estimate_phi(const llvm::Instruction& instr)
     }
 
     return 1.0 / phi->getNumIncomingValues();
+}
+
+/*******************************************************************************
+ * Helper functions
+ ******************************************************************************/
+
+uint32_t
+get_aggregate_type_by_idx(
+    const struct_sz_t* struct_sz, const llvm::ExtractValueInst* evi)
+{
+    auto idx_it = evi->idx_begin();
+    while (idx_it + 1 != evi->idx_end())
+    // for (const auto& idx : evi->getIndices())
+    {
+        struct_sz = std::get<struct_sz_s>(struct_sz->at(*idx_it)).t.get();
+        idx_it += 1;
+    }
+    return std::get<uint32_t>(struct_sz->at(*(idx_it + 1)));
+}
+
+uint32_t
+compute_total_struct_sz(const struct_sz_t* struct_sz)
+{
+    uint32_t sz = 0;
+    for (const auto& one_struct_sz : *struct_sz)
+    {
+        try
+        {
+            sz += std::get<uint32_t>(one_struct_sz);
+        }
+        catch (const std::bad_variant_access& e)
+        {
+            sz += compute_total_struct_sz(
+                std::get<struct_sz_s>(one_struct_sz).t.get());
+        }
+    }
+    return sz;
+}
+
+std::unique_ptr<struct_sz_t>
+get_llvm_struct_bitsize(
+    const llvm::StructType* str_ty, const llvm::Module* llvm_module)
+{
+    auto struct_sz = std::make_unique<struct_sz_t>(str_ty->getNumElements());
+    const llvm::Type* str_elem_ty;
+    for (size_t i = 0; i < str_ty->getNumElements(); ++i)
+    {
+        str_elem_ty = str_ty->getElementType(i);
+        if (str_elem_ty->isIntegerTy())
+        {
+            struct_sz->at(i) = llvm::dyn_cast<llvm::IntegerType>(str_elem_ty)
+                                   ->getIntegerBitWidth();
+        }
+        else if (str_elem_ty->isPointerTy())
+        {
+            struct_sz->at(i) = llvm_module->getDataLayout().getPointerSize();
+        }
+        else if (str_elem_ty->isStructTy())
+        {
+            struct_sz->at(i) = struct_sz_s(get_llvm_struct_bitsize(
+                llvm::dyn_cast<llvm::StructType>(str_elem_ty), llvm_module));
+        }
+        else
+        {
+            str_elem_ty->print(llvm::errs());
+            throw std::runtime_error("Unhandled struct member type!");
+        }
+    }
+    return struct_sz;
 }

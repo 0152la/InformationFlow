@@ -39,6 +39,8 @@ std::map<uint16_t, double> set_entropy {
                                          */
     { llvm::Instruction::Store, 1.0 }, { llvm::Instruction::Fence, 1.0 },
     { llvm::Instruction::AtomicCmpXchg, 1.0 }, // TODO same as Load
+    { llvm::Instruction::GetElementPtr,
+        1.0 }, // This only computes an address, does not dereference any memory
 
     // Conversion Operations
     { llvm::Instruction::ZExt, 1.0 }, { llvm::Instruction::SExt, 1.0 },
@@ -56,8 +58,8 @@ std::map<uint16_t, double> set_entropy {
     { llvm::Instruction::AddrSpaceCast, 1.0 },
 
     // Other Operations
-    { llvm::Instruction::Call, 1.0 },
     { llvm::Instruction::Select, 0.5 }, // TODO handle constant case (for all)
+    { llvm::Instruction::Call, 1.0 },
     { llvm::Instruction::LandingPad, 1.0 }, // TODO need double checking
     //{ llvm::Instruction::Freeze, 1.0 }, // XXX
 

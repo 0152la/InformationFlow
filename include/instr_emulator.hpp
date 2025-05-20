@@ -10,12 +10,15 @@
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
+#include <variant>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/Support/Casting.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -155,6 +158,9 @@ public:
     /* Aggregate Operations **************************************************/
     static double estimate_extract_value(const llvm::Instruction&);
 
+    /* Memory Operations *****************************************************/
+    static double estimate_gep(const llvm::Instruction&);
+
     /* Conversion Operations *************************************************/
     static double estimate_trunc(const llvm::Instruction&);
     static double estimate_ptrtoint(const llvm::Instruction&);
@@ -162,5 +168,19 @@ public:
     /* Other Operations ******************************************************/
     static double estimate_phi(const llvm::Instruction&);
 };
+
+struct struct_sz_s;
+using struct_sz_t = std::vector<std::variant<uint32_t, struct_sz_s>>;
+struct struct_sz_s
+{
+    std::unique_ptr<struct_sz_t> t;
+};
+
+uint32_t
+get_aggregate_type_by_idx(const struct_sz_t*, const llvm::ExtractValueInst*);
+uint32_t
+compute_total_struct_sz(const struct_sz_t*);
+std::unique_ptr<struct_sz_t>
+get_llvm_struct_bitsize(const llvm::StructType*, const llvm::Module*);
 
 #endif // _IF_INSTR_EMULATOR_HPP

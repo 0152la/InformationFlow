@@ -56,6 +56,7 @@ set(ll_srcs
     sample
     simple-arith
     simple-vector
+    simple-struct
 )
 
 foreach(ll_src_t IN LISTS ll_srcs)
