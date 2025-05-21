@@ -50,7 +50,6 @@ std::map<uint16_t, double> set_entropy {
     //{ llvm::Instruction::FPToUI, 1.0 }, // TODO might be fine to approximate
     // to 1, but I think there is quite a bit of lost entropy from rounding
 
-    //{ llvm::Instruction::FPToSI, 1.0 }, // TODO same as above
     { llvm::Instruction::UIToFP, 1.0 }, // TODO any unrepresentable integer?
     { llvm::Instruction::SIToFP, 1.0 }, // TODO same as above
     //{ llvm::Instruction::IntToPtr, 1.0 }, // TODO same as above

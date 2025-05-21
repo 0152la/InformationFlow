@@ -38,7 +38,7 @@ public:
     };
 
     // Generators
-   int64_t gen_int64_t() { return this->generator.gen_int64_t(); };
+   int64_t gen_int64_t() { return this->generator.gen_signed_int(); };
 
     // Loggers
     void log_results(int64_t in_result, int64_t out_result)

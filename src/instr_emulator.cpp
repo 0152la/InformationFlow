@@ -1,6 +1,4 @@
 #include "instr_emulator.hpp"
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Instructions.h>
 
 std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
     // Binary Operations
@@ -22,6 +20,9 @@ std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
 
     // Memory Operations
     { llvm::Instruction::AtomicRMW, IF_Emulator::emulate_atomic_rmw },
+
+    // Conversion Operations
+    { llvm::Instruction::FPToSI, IF_Emulator::emulate_fptosi },
 
     // Other Operations
     { llvm::Instruction::ICmp, IF_Emulator::emulate_icmp },
@@ -64,10 +65,44 @@ IF_Arg_Int::IF_Arg_Int(val_t _val, uint8_t _sz, bool _sgn) :
 IF_Arg_Int::IF_Arg_Int(val_t _val, uint8_t _sz) :
     IF_Arg_Int(_val, _sz, false)
 {
-    if (_val > (2 << _sz))
+    if (_val > (1 << _sz))
     {
         throw std::invalid_argument("Invalid value `" + std::to_string(val)
             + "` given for size `" + std::to_string(sz) + "`!");
+    }
+}
+
+/*******************************************************************************
+ * IF_ArgFloat
+ ******************************************************************************/
+
+IF_Arg_Float::IF_Arg_Float(double _val, const llvm::Type* ty) :
+    IF_Arg(IF_Arg_Float::get_float_sz(ty)),
+    val(_val) { };
+
+uint8_t
+IF_Arg_Float::get_float_sz(const llvm::Type* ty)
+{
+    switch (ty->getTypeID())
+    {
+        case llvm::Type::TypeID::HalfTyID:
+            return 16;
+        case llvm::Type::TypeID::BFloatTyID:
+            return 16;
+        case llvm::Type::TypeID::FloatTyID:
+            return 32;
+        case llvm::Type::TypeID::DoubleTyID:
+            return 64;
+        case llvm::Type::TypeID::X86_FP80TyID:
+            // return 80;
+            throw std::runtime_error("I wanna see what this type is.");
+        case llvm::Type::TypeID::FP128TyID:
+            return 128;
+        case llvm::Type::TypeID::PPC_FP128TyID:
+            // return 128;
+            throw std::runtime_error("I wanna see what this type is 2.");
+        default:
+            throw std::runtime_error("Invalid float type!");
     }
 }
 
@@ -84,6 +119,17 @@ IF_ArgList::get_arg(size_t idx) const
             + " of " + std::to_string(this->get_args_count()) + " total!");
     }
     return *this->get_args().at(idx);
+}
+
+const IF_Arg*
+IF_ArgList::get_arg_ptr(size_t idx) const
+{
+    if (idx > this->get_args_count())
+    {
+        throw std::logic_error("Attempt to retrieve arg `" + std::to_string(idx)
+            + " of " + std::to_string(this->get_args_count()) + " total!");
+    }
+    return this->get_args().at(idx).get();
 }
 
 std::vector<const IF_Arg_Int*>
@@ -112,6 +158,19 @@ IF_ArgList::check_all_ints(void) const
     for (const auto& check : this->args)
     {
         if (!check->is_int())
+        {
+            return false;
+        }
+    }
+    return true;
+};
+
+bool
+IF_ArgList::check_all_floats(void) const
+{
+    for (const auto& check : this->args)
+    {
+        if (!check->is_float())
         {
             return false;
         }
@@ -417,15 +476,59 @@ IF_Emulator::emulate_atomic_rmw(const IF_ArgList& args)
     return IF_Arg_Int(1, sizeof(IF_Arg_Int::val_t), false);
 }
 
+/* Conversion Operations ******************************************************/
+
+IF_Arg
+IF_Emulator::emulate_fptosi(const IF_ArgList& args)
+{
+    args.check_args(args.check_count(1) && args.check_all_floats());
+    const decltype(std::declval<IF_Arg_Float>().get_val()) fp
+        = dynamic_cast<const IF_Arg_Float*>(args.get_arg_ptr(0))->get_val();
+    return IF_Arg_Int(std::trunc(fp), 32, false); // TODO
+}
+
 /* Other Operations ***********************************************************/
 
 IF_Arg
 IF_Emulator::emulate_icmp(const IF_ArgList& args)
 {
-    // TODO
-    const IF_ArgList& args2 = args;
-    throw std::runtime_error("unimplemented icmp");
-    return IF_Arg_Int(1, sizeof(IF_Arg_Int::val_t), false);
+    // TODO check for ints at least
+    args.check_args(args.check_count(3));
+
+    IF_Arg_Int::val_t op1
+        = dynamic_cast<const IF_Arg_Int*>(args.get_arg_ptr(0))->get_val();
+    IF_Arg_Int::val_t op2
+        = dynamic_cast<const IF_Arg_Int*>(args.get_arg_ptr(1))->get_val();
+    llvm::CmpInst::Predicate pred
+        = dynamic_cast<const IF_Cmp_Pred*>(args.get_arg_ptr(2))->get_pred();
+    bool icmp_res;
+
+    switch (pred)
+    {
+        case llvm::CmpInst::Predicate::ICMP_EQ:
+            return IF_Arg_Bool(op1 == op2);
+        case llvm::CmpInst::Predicate::ICMP_NE:
+            return IF_Arg_Bool(op1 != op2);
+        // TODO what to do with signed and unsigned versions
+        case llvm::CmpInst::Predicate::ICMP_UGT:
+            return IF_Arg_Bool(op1 > op2);
+        case llvm::CmpInst::Predicate::ICMP_UGE:
+            return IF_Arg_Bool(op1 >= op2);
+        case llvm::CmpInst::Predicate::ICMP_ULT:
+            return IF_Arg_Bool(op1 < op2);
+        case llvm::CmpInst::Predicate::ICMP_ULE:
+            return IF_Arg_Bool(op1 <= op2);
+        case llvm::CmpInst::Predicate::ICMP_SGT:
+            return IF_Arg_Bool(op1 > op2);
+        case llvm::CmpInst::Predicate::ICMP_SGE:
+            return IF_Arg_Bool(op1 >= op2);
+        case llvm::CmpInst::Predicate::ICMP_SLT:
+            return IF_Arg_Bool(op1 < op2);
+        case llvm::CmpInst::Predicate::ICMP_SLE:
+            return IF_Arg_Bool(op1 <= op2);
+        default:
+            throw std::runtime_error("Invalid `ICmp_Inst` predicate!");
+    }
 }
 
 /*******************************************************************************

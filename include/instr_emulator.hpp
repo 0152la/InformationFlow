@@ -1,6 +1,7 @@
 #ifndef _IF_INSTR_EMULATOR_HPP
 #define _IF_INSTR_EMULATOR_HPP
 
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -9,19 +10,19 @@
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
-#include <vector>
 #include <variant>
+#include <vector>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
-#include "llvm/Support/Casting.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/Casting.h"
 #pragma clang diagnostic pop
 
 /* A base class for an argument to be used in emulation. This allows us to pass
@@ -43,6 +44,8 @@ public:
 
     virtual bool is_vec() const { return false; };
 
+    virtual bool is_bool() const { return false; };
+
     auto get_sz(void) const -> decltype(this->sz) { return this->sz; };
 };
 
@@ -58,14 +61,69 @@ private:
     bool sgn;
 
 public:
-    IF_Arg_Int(val_t _val, uint8_t _sz, bool _sgn);
-    IF_Arg_Int(val_t _val, uint8_t _sz);
+    IF_Arg_Int(val_t, uint8_t, bool);
+    IF_Arg_Int(val_t, uint8_t);
 
     val_t get_val(void) const { return this->val; };
 
     bool is_int(void) const { return true; };
 
     bool is_sgn(void) const { return this->sgn; };
+};
+
+class IF_Arg_Float : public IF_Arg
+{
+private:
+    double val;
+
+    static uint8_t get_float_sz(const llvm::Type*);
+
+public:
+    IF_Arg_Float(double _val, uint8_t _sz) :
+        IF_Arg(_sz),
+        val(_val) { };
+    IF_Arg_Float(double, const llvm::Type*);
+
+    auto get_val(void) const -> decltype(val) { return this->val; };
+
+    bool is_float() const { return true; };
+};
+
+/* An argument of `boolean` type. Essentially a logical wrapper around an `i1`
+ * type variable.
+ */
+class IF_Arg_Bool final : public IF_Arg
+{
+private:
+    bool val;
+
+public:
+    IF_Arg_Bool(bool _val) :
+        IF_Arg(1),
+        val(_val) { };
+
+    bool get_val(void) const { return this->val; };
+
+    bool is_bool(void) const { return true; };
+};
+
+/* A special class wrapping around the predicate for a comparison instruction
+ * (such as `ICmpInst`)
+ */
+class IF_Cmp_Pred final : public IF_Arg
+{
+private:
+    const llvm::CmpInst::Predicate llvm_pred;
+
+public:
+    IF_Cmp_Pred(const llvm::CmpInst::Predicate _llvm_pred) :
+        IF_Arg(4),
+        llvm_pred(_llvm_pred) { };
+
+    const llvm::CmpInst::Predicate& get_pred(void) const
+    {
+        return this->llvm_pred;
+    };
 };
 
 /* A collection of `IF_Arg`, to be used when passing to an emulated operation.
@@ -91,6 +149,7 @@ public:
     /* Getters ***************************************************************/
 
     const IF_Arg& get_arg(size_t) const;
+    const IF_Arg* get_arg_ptr(size_t) const;
 
     auto get_args(void) const -> const decltype(this->args)&
     {
@@ -105,6 +164,7 @@ public:
 
     static void check_args(bool);
     bool check_all_ints(void) const;
+    bool check_all_floats(void) const;
     bool check_all_same_sz(void) const;
     bool check_count(uint8_t) const;
 };
@@ -142,6 +202,9 @@ public:
     /* Memory Operations *****************************************************/
     static IF_Arg emulate_atomic_rmw(const IF_ArgList&);
 
+    /* Conversion Operations *************************************************/
+    static IF_Arg emulate_fptosi(const IF_ArgList&);
+
     /* Other Operations ******************************************************/
     static IF_Arg emulate_icmp(const IF_ArgList&);
 
@@ -171,6 +234,7 @@ public:
 
 struct struct_sz_s;
 using struct_sz_t = std::vector<std::variant<uint32_t, struct_sz_s>>;
+
 struct struct_sz_s
 {
     std::unique_ptr<struct_sz_t> t;

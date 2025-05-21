@@ -25,11 +25,7 @@ private:
     const std::unique_ptr<IF_Randgen> rng;
     uint64_t fuzz_count = 10 * 1000;
 
-    int64_t rng_int64_t(void) { return this->rng->gen_int64_t(); };
-
-    int64_t rng_int_t(unsigned int8_t);
-
-    IF_ArgList gen_args(uint8_t, uint8_t) const;
+    IF_ArgList gen_args(const llvm::Instruction&) const;
 
 public:
     IF_FuzzEngine() :

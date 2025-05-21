@@ -3,20 +3,33 @@
 extern std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>>
     emulated_fns;
 
-// TODO current unsigned
 IF_ArgList
-IF_FuzzEngine::gen_args(uint8_t to_gen, uint8_t bit_width) const
+IF_FuzzEngine::gen_args(const llvm::Instruction& instr) const
 {
     std::vector<std::unique_ptr<IF_Arg>> new_args;
-    std::uniform_int_distribution<int64_t> d(0, 2 << bit_width);
+    const uint8_t args_to_gen = instr.getNumOperands(); // TODO check
 
-    for (size_t i = 0; i < to_gen; ++i)
+    //instr.print(llvm::errs());
+    //llvm::errs() << '\n';
+
+    uint16_t bit_width;
+    for (size_t i = 0; i < args_to_gen; ++i)
     {
+        assert(instr.getOperand(i)->getType()->isIntegerTy());
+        bit_width
+            = llvm::dyn_cast<llvm::IntegerType>(instr.getOperand(i)->getType())
+                  ->getBitWidth();
         new_args.emplace_back(std::make_unique<IF_Arg_Int>(
-            this->rng->gen_int<int64_t>(d), bit_width));
+            this->rng->gen_unsigned_int(bit_width), bit_width));
     }
 
-    return IF_ArgList(std::move(new_args));
+    if (llvm::isa<llvm::CmpInst>(instr))
+    {
+        new_args.emplace_back(std::make_unique<IF_Cmp_Pred>(
+            llvm::dyn_cast<llvm::CmpInst>(&instr)->getPredicate()));
+    }
+
+    return new_args;
 }
 
 double
@@ -56,7 +69,8 @@ IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
 
     for (uint64_t i = 0; i < this->fuzz_count; ++i)
     {
-        IF_ArgList instr_args = this->gen_args(args_to_gen, bit_width);
+        IF_ArgList instr_args
+            = this->gen_args(instr); // args_to_gen, bit_width);
         auto instr_args_int = instr_args.extract_arg_int();
 
         IF_Arg out_arg = fn(instr_args);

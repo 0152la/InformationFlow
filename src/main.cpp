@@ -7,7 +7,7 @@
 static void
 gen_one(IF_Randgen& gen, IF_Histogram<uint64_t, uint64_t>& h, auto alter_fn)
 {
-    int64_t prog_in = gen.gen_int64_t() % in_scale;
+    int64_t prog_in = gen.gen_signed_int() % in_scale;
     int64_t prog_out = alter_fn(prog_in) % out_scale;
 
     h.insert(prog_in, prog_out);
@@ -119,8 +119,12 @@ entropy_dev(void)
 static int
 reader_dev(void)
 {
+    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+    //"InformationFlow/build/tests/simple-struct.ll";
+    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+    //"InformationFlow/tests/simple-struct.ll";
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/simple-vector.ll";
+                                "InformationFlow/tmp/ee-Og.ll";
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap> em

@@ -2,25 +2,26 @@
 #define _IF_RANDGEN_HPP
 
 #include <random>
+#include <memory>
 
 class IF_Randgen
 {
 private:
     std::mt19937_64 random_engine;
-    std::uniform_int_distribution<int64_t> int_dist;
+    std::vector<std::unique_ptr<std::uniform_int_distribution<int64_t>>>
+        s_int_dists;
+    std::vector<std::unique_ptr<std::uniform_int_distribution<uint64_t>>>
+        u_int_dists;
     std::uniform_real_distribution<double> real_dist;
 
 public:
     IF_Randgen();
     IF_Randgen(int);
 
-    int64_t gen_int64_t() { return this->int_dist(this->random_engine); };
-
-    template <std::integral T> T gen_int(std::uniform_int_distribution<T>&);
+    int64_t gen_signed_int(uint16_t = 64);
+    uint64_t gen_unsigned_int(uint16_t = 64);
 
     double gen_double() { return this->real_dist(this->random_engine); };
 };
-
-#include "randgen.tpp"
 
 #endif // _IF_RANDGEN_HPP
