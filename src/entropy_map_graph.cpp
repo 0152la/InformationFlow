@@ -56,7 +56,8 @@ const std::string
 IF_EM_Graph::emit_instr_node(const IF_EntropyMap_Instr& em_instr)
 {
     std::ostringstream oss;
-    oss << emit_instr_node_name(em_instr) << " [shape = record, label=\""
+    oss << emit_instr_node_name(em_instr) << " [shape = record, label=\"i"
+        << em_instr.get_idx() << " | "
         << llvm::Instruction::getOpcodeName(em_instr.get_opcode()) << " | "
         << em_instr.get_retained_entropy() << "\"];\n";
 
@@ -132,7 +133,8 @@ IF_EM_Graph::draw_callgraph(void) const
 
     for (const auto& em_fn : this->get_entropy_map().get_funcs())
     {
-        graph_ss << em_fn->get_representing_name() << "[shape = " << fn_shape << "];\n";
+        graph_ss << em_fn->get_representing_name() << "[shape = " << fn_shape
+                 << "];\n";
         for (const auto& fn_instr : em_fn->get_instrs())
         {
             // TODO

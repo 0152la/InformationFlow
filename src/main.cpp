@@ -121,10 +121,12 @@ reader_dev(void)
 {
     // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
     //"InformationFlow/build/tests/simple-struct.ll";
-    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-    //"InformationFlow/tests/simple-struct.ll";
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/tmp/ee-Og.ll";
+                                "InformationFlow/tests/for.ll";
+    //const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+                                //"InformationFlow/build/tests/sample.ll";
+    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+    //"InformationFlow/tmp/ee-Og.ll";
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap> em
@@ -132,9 +134,13 @@ reader_dev(void)
     em->set_verbose(true);
     em->print();
 
-    IF_EM_Graph g(*em, "test.dot");
-    // g.draw_callgraph();
+    IF_EM_Graph g(*em, "ll-out.dot");
+    g.draw_callgraph();
     g.draw_graph();
+
+    //IF_EM_Path_Printer p(*em);
+    //p.compute_path_entropy(em->get_first_instr());
+    //p.print_path_entropy();
 
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "entropy_map.hpp"
+#include <stdexcept>
 
 /*******************************************************************************
  * IF_EntropyMap_Instr
@@ -8,6 +9,7 @@ void
 IF_EntropyMap_Instr::add_successor(const IF_EntropyMap_Instr* to_add)
 {
     this->succs.insert(to_add->get_idx());
+    this->succs_instr.insert(to_add);
 }
 
 void
@@ -28,6 +30,12 @@ IF_EntropyMap_Instr::to_str(void) const
 /*******************************************************************************
  * IF_EntropyMap_Func
  ******************************************************************************/
+
+const IF_EntropyMap_Instr*
+IF_EntropyMap_Func::get_first_instr() const
+{
+    return this->instrs.front().get();
+}
 
 const std::string
 IF_EntropyMap_Func::set_demangled_name(const llvm::Function& _fn)
@@ -70,6 +78,19 @@ IF_EntropyMap_Func::to_str(void) const
 /*******************************************************************************
  * IF_EntropyMap
  ******************************************************************************/
+
+const IF_EntropyMap_Instr*
+IF_EntropyMap::get_first_instr() const
+{
+    for (const auto& func : this->funcs)
+    {
+        if (!func->get_demangled_name().compare("main"))
+        {
+            return func->get_first_instr();
+        }
+    }
+    throw std::runtime_error("Couldn't find `main`!");
+}
 
 void
 IF_EntropyMap::insert_external_func(std::string ex_fn)

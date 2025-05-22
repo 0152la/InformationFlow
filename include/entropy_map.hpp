@@ -7,6 +7,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -26,6 +27,7 @@ private:
     double retained_entropy;
     bool trivial = false;
     std::set<decltype(idx)> succs;
+    std::unordered_set<const IF_EntropyMap_Instr*> succs_instr;
     std::set<std::string> succs_extern;
 
 public:
@@ -43,6 +45,13 @@ public:
     {
         return this->succs;
     };
+
+    auto get_succs_inst(void) const -> const decltype(this->succs_instr)&
+    {
+        return this->succs_instr;
+    };
+
+    size_t get_succs_count(void) const { return this->succs.size(); };
 
     auto get_external_succs(void) const -> const decltype(this->succs_extern)&
     {
@@ -65,6 +74,11 @@ public:
     void add_external_succ(std::string);
 
     const std::string to_str(void) const;
+
+    bool operator==(const IF_EntropyMap_Instr& o) const
+    {
+        return this->idx == o.get_idx();
+    };
 };
 
 class IF_EntropyMap_Func
@@ -95,6 +109,8 @@ public:
 
     const std::string get_representing_name(void) const;
 
+    const IF_EntropyMap_Instr* get_first_instr() const;
+
     auto get_instrs(void) const -> const decltype(this->instrs)&
     {
         return this->instrs;
@@ -121,6 +137,8 @@ public:
         this->funcs.reserve(_module.size());
     };
 
+    const IF_EntropyMap_Instr* get_first_instr(void) const;
+
     auto get_funcs(void) const -> const decltype(funcs)&
     {
         return this->funcs;
@@ -143,5 +161,16 @@ public:
     const std::string to_str(void) const;
     void print(void) const;
 };
+
+namespace std
+{
+template <> struct hash<IF_EntropyMap_Instr>
+{
+    size_t operator()(IF_EntropyMap_Instr const& if_em_i) const noexcept
+    {
+        return std::hash<int>()(if_em_i.get_idx());
+    }
+};
+}
 
 #endif // _IF_ENTROPYMAP_HPP
