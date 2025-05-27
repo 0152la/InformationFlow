@@ -21,8 +21,10 @@
 
 class IF_EntropyMap_Instr
 {
+    public:
+        using idx_t = uint32_t;
 private:
-    uint32_t idx;
+    idx_t idx;
     unsigned int opcode;
     double retained_entropy;
     bool trivial = false;

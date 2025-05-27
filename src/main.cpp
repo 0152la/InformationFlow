@@ -121,10 +121,10 @@ reader_dev(void)
 {
     // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
     //"InformationFlow/build/tests/simple-struct.ll";
+    // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+    //"InformationFlow/tests/for.ll";
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/tests/for.ll";
-    //const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                //"InformationFlow/build/tests/sample.ll";
+                                "InformationFlow/build/tests/sample.ll";
     // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
     //"InformationFlow/tmp/ee-Og.ll";
     IF_Parser if_p;
@@ -138,9 +138,9 @@ reader_dev(void)
     g.draw_callgraph();
     g.draw_graph();
 
-    //IF_EM_Path_Printer p(*em);
-    //p.compute_path_entropy(em->get_first_instr());
-    //p.print_path_entropy();
+    IF_EM_Path_Entropy::Printer p(*em);
+    p.compute_path_entropy(em->get_first_instr());
+    p.print_path_entropy();
 
     return 0;
 }
