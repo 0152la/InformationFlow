@@ -88,10 +88,30 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 {
     uint32_t instr_idx = 0;
     auto em = std::make_unique<IF_EntropyMap::Map>(llvm_module);
+
+    // Map holding successors of Instructions, for stuff like branches and
+    // jumps; used to resolve to `IF_EntropyMap::Instruction` later
     std::map<IF_EntropyMap::Instruction*, std::vector<const llvm::Instruction*>>
         instr_succ_map;
+
+    // Map holding which `LLVM Instruction` maps to which
+    // `IF_EntropyMap::Instruction`. Used in resolving other dependencies
     std::map<const llvm::Instruction*, const IF_EntropyMap::Instruction*>
         em_instr_map;
+
+    // Map holding `llvm::Function`s and their `LLVM::ReturnInst`s (in
+    // `IF_EntropyMap::Instruction` format). When we call a function, we need to
+    // add a dependency edge between the `return`s of that function, and any
+    // caller instructions.
+    std::map<const llvm::Function*, std::vector<IF_EntropyMap::Instruction*>>
+        func_returns;
+
+    // Map holding `llvm::CallInst`s (in their `IF_EntropyMap::Instruction`
+    // format) and the `llvm::Functions` they are calling. This is used to
+    // resolve `return` dependencies.
+    std::map<const IF_EntropyMap::Instruction*, const llvm::Function*>
+        func_calls;
+
     // Iterate over functions ...
     for (const auto& fn : llvm_module.getFunctionList())
     {
@@ -152,6 +172,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                         std::vector<const llvm::Instruction*>());
                     instr_succ_map.at(em_instr.get())
                         .push_back(&(callee->getEntryBlock().front()));
+                    func_calls.emplace(em_instr.get(), callee);
                 }
             }
             else if (llvm::isa<llvm::BranchInst>(&fn_inst))
@@ -166,11 +187,21 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                         .push_back(&(succ->front()));
                 }
             }
+            else if (llvm::isa<llvm::ReturnInst>(&fn_inst))
+            {
+                if (!func_returns.contains(&fn))
+                {
+                    func_returns.emplace(
+                        &fn, std::vector<IF_EntropyMap::Instruction*>());
+                }
+                func_returns.at(&fn).push_back(em_instr.get());
+            }
 
             // If this is not the last instruction in a function, then set next
             // instruction as successor
             if (em_instr_prev)
             {
+                em_instr_prev->set_natural_successor(em_instr.get());
                 em_instr_prev->add_successor(em_instr.get());
             }
 
@@ -197,6 +228,19 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                              "instruction: ";
                 instr->print(llvm::outs());
             }
+        }
+    }
+
+    // Resolve `return` successors
+    for (const auto& [em_instr, fn] : func_calls)
+    {
+        for (IF_EntropyMap::Instruction* em_ret_instr : func_returns.at(fn))
+        {
+            if (!em_instr->get_natural_successor())
+            {
+                throw std::runtime_error("Unset natural successor!");
+            }
+            em_ret_instr->add_successor(em_instr->get_natural_successor());
         }
     }
 

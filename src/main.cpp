@@ -138,9 +138,9 @@ reader_dev(void)
     g.draw_callgraph();
     g.draw_graph();
 
-    IF_EM_Path_Entropy::Printer p(*em);
-    p.compute_path_entropy(em->get_first_instr());
-    p.print_path_entropy();
+    //IF_EM_Path_Entropy::Printer p(*em);
+    //p.compute_path_entropy(em->get_first_instr());
+    //p.print_path_entropy();
 
     return 0;
 }

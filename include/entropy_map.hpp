@@ -27,14 +27,15 @@ class Instruction
 {
 public:
     using idx_t = uint32_t;
+    using succs_t = std::unordered_set<const Instruction*>;
 
 private:
     idx_t idx;
     unsigned int opcode;
     double retained_entropy;
     bool trivial = false;
-    std::set<decltype(idx)> succs;
-    std::unordered_set<const Instruction*> succs_instr;
+    const Instruction* succ_natural = nullptr;
+    succs_t succs_instr;
     std::set<std::string> succs_extern;
 
 public:
@@ -42,28 +43,27 @@ public:
         idx(_idx),
         opcode(_instr.getOpcode()) { };
 
-    auto get_idx(void) const -> decltype(this->idx) { return this->idx; };
+    idx_t get_idx(void) const { return this->idx; };
 
     unsigned int get_opcode(void) const { return this->opcode; };
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
-    auto get_succs(void) const -> const decltype(this->succs)&
-    {
-        return this->succs;
-    };
+    succs_t get_succs_inst(void) const { return this->succs_instr; };
 
-    auto get_succs_inst(void) const -> const decltype(this->succs_instr)&
-    {
-        return this->succs_instr;
-    };
-
-    size_t get_succs_count(void) const { return this->succs.size(); };
+    size_t get_succs_count(void) const { return this->succs_instr.size(); };
 
     auto get_external_succs(void) const -> const decltype(this->succs_extern)&
     {
         return this->succs_extern;
     };
+
+    const Instruction* get_natural_successor(void) const
+    {
+        return this->succ_natural;
+    };
+
+    const succs_t& get_all_successors(void) const { return this->succs_instr; };
 
     bool is_trivial(void) const { return this->trivial; };
 
@@ -74,6 +74,11 @@ public:
         {
             this->trivial = true;
         }
+    };
+
+    void set_natural_successor(const Instruction* succ)
+    {
+        this->succ_natural = succ;
     };
 
     void add_successor(const Instruction*);

@@ -24,6 +24,8 @@ private:
         const IF_EntropyMap::Instruction&, std::string);
 
     static const std::string emit_instr_node(const IF_EntropyMap::Instruction&);
+    static const std::string emit_instr_node_succs(
+        const IF_EntropyMap::Instruction&);
     static const std::string emit_func_node(const IF_EntropyMap::Function&);
 
     static const std::string emit_external_func_nodes(

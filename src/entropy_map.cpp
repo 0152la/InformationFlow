@@ -8,7 +8,6 @@ void
 IF_EntropyMap::Instruction::add_successor(
     const IF_EntropyMap::Instruction* to_add)
 {
-    this->succs.insert(to_add->get_idx());
     this->succs_instr.insert(to_add);
 }
 

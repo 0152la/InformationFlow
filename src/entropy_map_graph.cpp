@@ -13,8 +13,8 @@ IF_EM_Graph::emit_instr_node_name(const IF_EntropyMap::Instruction& em_instr)
 }
 
 const std::string
-IF_EM_Graph::emit_instr_node_link(
-    const IF_EntropyMap::Instruction& instr_from, const IF_EntropyMap::Instruction& instr_to)
+IF_EM_Graph::emit_instr_node_link(const IF_EntropyMap::Instruction& instr_from,
+    const IF_EntropyMap::Instruction& instr_to)
 {
     return emit_instr_node_name(instr_from) + " -> "
         + emit_instr_node_name(instr_to);
@@ -60,12 +60,17 @@ IF_EM_Graph::emit_instr_node(const IF_EntropyMap::Instruction& em_instr)
         << em_instr.get_idx() << " | "
         << llvm::Instruction::getOpcodeName(em_instr.get_opcode()) << " | "
         << em_instr.get_retained_entropy() << "\"];\n";
+    return oss.str();
+}
 
-    for (const auto& succ : em_instr.get_succs())
+const std::string
+IF_EM_Graph::emit_instr_node_succs(const IF_EntropyMap::Instruction& em_instr)
+{
+    std::ostringstream oss;
+    for (const auto& succ : em_instr.get_all_successors())
     {
-        oss << emit_instr_node_link(em_instr, succ) << ";\n";
+        oss << emit_instr_node_link(em_instr, *succ) << ";\n";
     }
-
     return oss.str();
 }
 
@@ -74,11 +79,13 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
 {
     std::ostringstream oss;
     std::ostringstream oss_ex_fn;
+    std::ostringstream oss_instr_links;
     oss << "subgraph cluster_" << em_fn.get_representing_name() << " {\n";
     oss << "label=\"" << em_fn.get_representing_name() << "\";\n";
     for (const auto& instr : em_fn.get_instrs())
     {
         oss << emit_instr_node(*instr);
+        oss_instr_links << emit_instr_node_succs(*instr);
         for (const auto& succ_fn : instr->get_external_succs())
         {
             oss_ex_fn << emit_instr_node_link(*instr, succ_fn) << ";\n";
@@ -86,6 +93,8 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
     }
 
     oss << "}\n";
+
+    oss << oss_instr_links.str();
 
     // Calls to external functions (must be outside subgraph scope)
     oss << oss_ex_fn.str();

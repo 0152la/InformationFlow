@@ -38,8 +38,6 @@ IF_EM_Path_Entropy::Path::get_cycle_ends() const
         auto new_ends = std::make_pair(cycle->get_cycle().front()->get_idx(),
             cycle->get_cycle().back()->get_idx());
         cycle_ends.emplace(new_ends, false);
-        // cycle_ends.emplace_back(cycle->get_cycle().front()->get_idx(),
-        // cycle->get_cycle().back()->get_idx());
     }
     return cycle_ends;
 }
@@ -150,7 +148,8 @@ IF_EM_Path_Entropy::Printer::crawl_path(printer_t::value_type::pointer em_path)
     }
 
     size_t i = 0;
-    for (const auto& succ : last_inst->get_succs_inst())
+    //for (const auto& succ : last_inst->get_succs_inst())
+    for (const auto& succ : last_inst->get_all_successors())
     {
         if (i + 1 == succs_count)
         {
