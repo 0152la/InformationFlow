@@ -1,6 +1,10 @@
 #ifndef _IF_FUZZENGINE_HPP
 #define _IF_FUZZENGINE_HPP
 
+#include "entropy.hpp"
+#include "instr_emulator.hpp"
+#include "randgen.hpp"
+
 #include <functional>
 #include <map>
 #include <random>
@@ -14,10 +18,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Instruction.h"
 #pragma clang diagnostic pop
-
-#include "entropy.hpp"
-#include "instr_emulator.hpp"
-#include "randgen.hpp"
 
 class IF_FuzzEngine
 {

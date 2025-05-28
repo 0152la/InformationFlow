@@ -1,6 +1,11 @@
 #ifndef _IF_READER_HPP
 #define _IF_READER_HPP
 
+#include "entropy.hpp"
+#include "entropy_map.hpp"
+#include "fuzz_engine.hpp"
+#include "randgen.hpp"
+
 #include <algorithm>
 #include <memory>
 #include <sstream>
@@ -22,11 +27,6 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
-
-#include "entropy.hpp"
-#include "entropy_map.hpp"
-#include "fuzz_engine.hpp"
-#include "randgen.hpp"
 
 class IF_LLVM_Module
 {
@@ -56,7 +56,7 @@ public:
     IF_Parser();
     IF_Parser(int);
 
-    std::unique_ptr<IF_EntropyMap> make_entropy_map(const llvm::Module&);
+    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(const llvm::Module&);
 
     static std::unique_ptr<IF_LLVM_Module> parse_ll(const std::string&);
     static void print_instrs(const llvm::Module&);

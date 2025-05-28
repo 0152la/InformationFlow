@@ -6,6 +6,7 @@
 #include <memory>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -19,21 +20,25 @@
 #include "llvm/IR/Module.h"
 #pragma clang diagnostic pop
 
-class IF_EntropyMap_Instr
+namespace IF_EntropyMap
 {
-    public:
-        using idx_t = uint32_t;
+
+class Instruction
+{
+public:
+    using idx_t = uint32_t;
+
 private:
     idx_t idx;
     unsigned int opcode;
     double retained_entropy;
     bool trivial = false;
     std::set<decltype(idx)> succs;
-    std::unordered_set<const IF_EntropyMap_Instr*> succs_instr;
+    std::unordered_set<const Instruction*> succs_instr;
     std::set<std::string> succs_extern;
 
 public:
-    IF_EntropyMap_Instr(uint32_t _idx, const llvm::Instruction& _instr) :
+    Instruction(uint32_t _idx, const llvm::Instruction& _instr) :
         idx(_idx),
         opcode(_instr.getOpcode()) { };
 
@@ -71,33 +76,33 @@ public:
         }
     };
 
-    void add_successor(const IF_EntropyMap_Instr*);
+    void add_successor(const Instruction*);
 
     void add_external_succ(std::string);
 
     const std::string to_str(void) const;
 
-    bool operator==(const IF_EntropyMap_Instr& o) const
+    bool operator==(const Instruction& o) const
     {
         return this->idx == o.get_idx();
     };
 };
 
-class IF_EntropyMap_Func
+class Function
 {
 private:
     const std::string name;
     const std::string demangled_name;
-    std::vector<std::unique_ptr<IF_EntropyMap_Instr>> instrs;
+    std::vector<std::unique_ptr<Instruction>> instrs;
 
     const std::string set_demangled_name(const llvm::Function&);
 
 public:
-    IF_EntropyMap_Func() = delete;
+    Function() = delete;
 
-    IF_EntropyMap_Func(const llvm::Function& _fn) :
+    Function(const llvm::Function& _fn) :
         name(_fn.getName().str()),
-        demangled_name(IF_EntropyMap_Func::set_demangled_name(_fn))
+        demangled_name(Function::set_demangled_name(_fn))
     {
         this->instrs.reserve(_fn.getInstructionCount());
     };
@@ -111,14 +116,14 @@ public:
 
     const std::string get_representing_name(void) const;
 
-    const IF_EntropyMap_Instr* get_first_instr() const;
+    const Instruction* get_first_instr() const;
 
     auto get_instrs(void) const -> const decltype(this->instrs)&
     {
         return this->instrs;
     };
 
-    void insert(std::unique_ptr<IF_EntropyMap_Instr> _instr)
+    void insert(std::unique_ptr<Instruction> _instr)
     {
         this->instrs.push_back(std::move(_instr));
     };
@@ -126,20 +131,17 @@ public:
     const std::string to_str(void) const;
 };
 
-class IF_EntropyMap
+class Map
 {
 private:
-    std::vector<std::unique_ptr<IF_EntropyMap_Func>> funcs;
+    std::vector<std::unique_ptr<Function>> funcs;
     std::set<std::string> external_funcs;
     bool verbose = false;
 
 public:
-    IF_EntropyMap(const llvm::Module& _module)
-    {
-        this->funcs.reserve(_module.size());
-    };
+    Map(const llvm::Module& _module) { this->funcs.reserve(_module.size()); };
 
-    const IF_EntropyMap_Instr* get_first_instr(void) const;
+    const Instruction* get_first_instr(void) const;
 
     auto get_funcs(void) const -> const decltype(funcs)&
     {
@@ -151,7 +153,7 @@ public:
         return this->external_funcs;
     };
 
-    void insert(std::unique_ptr<IF_EntropyMap_Func> em_fn)
+    void insert(std::unique_ptr<Function> em_fn)
     {
         this->funcs.push_back(std::move(em_fn));
     };
@@ -164,11 +166,13 @@ public:
     void print(void) const;
 };
 
+}; // namespace IF_EntropyMap
+
 namespace std
 {
-template <> struct hash<IF_EntropyMap_Instr>
+template <> struct hash<IF_EntropyMap::Instruction>
 {
-    size_t operator()(IF_EntropyMap_Instr const& if_em_i) const noexcept
+    size_t operator()(IF_EntropyMap::Instruction const& if_em_i) const noexcept
     {
         return std::hash<int>()(if_em_i.get_idx());
     }

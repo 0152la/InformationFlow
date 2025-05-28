@@ -87,8 +87,7 @@ IF_EM_Path_Entropy::Path::has_cycle(path_t::const_reference next_inst) const
 }
 
 bool
-IF_EM_Path_Entropy::Path::has_seen(
-    decltype(std::declval<IF_EntropyMap_Instr>().get_idx()) idx) const
+IF_EM_Path_Entropy::Path::has_seen(IF_EntropyMap::Instruction::idx_t idx) const
 {
     return this->seen_idxs.contains(idx);
 }
@@ -106,7 +105,7 @@ IF_EM_Path_Entropy::Path::to_str() const
     const std::string delim = " -> ";
     const std::string instr_base = "i";
     cycle_ends_stl_t cycle_ends = this->get_cycle_ends();
-    IF_EntropyMap_Instr::idx_t idx;
+    IF_EntropyMap::Instruction::idx_t idx;
     std::string instr_repr;
     for (const auto& instr : this->get_path())
     {
@@ -142,7 +141,7 @@ IF_EM_Path_Entropy::Path::to_str() const
 void
 IF_EM_Path_Entropy::Printer::crawl_path(printer_t::value_type::pointer em_path)
 {
-    const IF_EntropyMap_Instr* last_inst = em_path->get_last_instr();
+    const IF_EntropyMap::Instruction* last_inst = em_path->get_last_instr();
     size_t succs_count = last_inst->get_succs_count();
 
     if (succs_count == 0)
@@ -185,7 +184,7 @@ IF_EM_Path_Entropy::Printer::add_path(printer_t::value_type new_path)
 
 void
 IF_EM_Path_Entropy::Printer::compute_path_entropy(
-    const IF_EntropyMap_Instr* start_instr)
+    const IF_EntropyMap::Instruction* start_instr)
 {
     this->paths.emplace_back(
         std::move(std::make_unique<IF_EM_Path_Entropy::Path>()));

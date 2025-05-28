@@ -7,22 +7,22 @@ constexpr std::string instr_node_prefix = "i";
  ******************************************************************************/
 
 const std::string
-IF_EM_Graph::emit_instr_node_name(const IF_EntropyMap_Instr& em_instr)
+IF_EM_Graph::emit_instr_node_name(const IF_EntropyMap::Instruction& em_instr)
 {
     return instr_node_prefix + std::to_string(em_instr.get_idx());
 }
 
 const std::string
 IF_EM_Graph::emit_instr_node_link(
-    const IF_EntropyMap_Instr& instr_from, const IF_EntropyMap_Instr& instr_to)
+    const IF_EntropyMap::Instruction& instr_from, const IF_EntropyMap::Instruction& instr_to)
 {
     return emit_instr_node_name(instr_from) + " -> "
         + emit_instr_node_name(instr_to);
 }
 
 const std::string
-IF_EM_Graph::emit_instr_node_link(const IF_EntropyMap_Instr& instr_from,
-    decltype(std::declval<IF_EntropyMap_Instr>().get_idx()) instr_to_idx)
+IF_EM_Graph::emit_instr_node_link(const IF_EntropyMap::Instruction& instr_from,
+    IF_EntropyMap::Instruction::idx_t instr_to_idx)
 {
     return emit_instr_node_name(instr_from) + " -> " + instr_node_prefix
         + std::to_string(instr_to_idx);
@@ -30,13 +30,13 @@ IF_EM_Graph::emit_instr_node_link(const IF_EntropyMap_Instr& instr_from,
 
 const std::string
 IF_EM_Graph::emit_instr_node_link(
-    const IF_EntropyMap_Instr& instr_from, std::string node_to)
+    const IF_EntropyMap::Instruction& instr_from, std::string node_to)
 {
     return emit_instr_node_name(instr_from) + " -> " + node_to;
 }
 
 const std::string
-IF_EM_Graph::emit_external_func_nodes(const IF_EntropyMap& em)
+IF_EM_Graph::emit_external_func_nodes(const IF_EntropyMap::Map& em)
 {
     const std::string ex_fn_shape = "box";
     std::ostringstream oss;
@@ -53,7 +53,7 @@ IF_EM_Graph::emit_external_func_nodes(const IF_EntropyMap& em)
  ******************************************************************************/
 
 const std::string
-IF_EM_Graph::emit_instr_node(const IF_EntropyMap_Instr& em_instr)
+IF_EM_Graph::emit_instr_node(const IF_EntropyMap::Instruction& em_instr)
 {
     std::ostringstream oss;
     oss << emit_instr_node_name(em_instr) << " [shape = record, label=\"i"
@@ -70,7 +70,7 @@ IF_EM_Graph::emit_instr_node(const IF_EntropyMap_Instr& em_instr)
 }
 
 const std::string
-IF_EM_Graph::emit_func_node(const IF_EntropyMap_Func& em_fn)
+IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
 {
     std::ostringstream oss;
     std::ostringstream oss_ex_fn;

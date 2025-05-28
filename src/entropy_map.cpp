@@ -1,25 +1,25 @@
 #include "entropy_map.hpp"
-#include <stdexcept>
 
 /*******************************************************************************
- * IF_EntropyMap_Instr
+ * IF_EntropyMap::Instruction
  ******************************************************************************/
 
 void
-IF_EntropyMap_Instr::add_successor(const IF_EntropyMap_Instr* to_add)
+IF_EntropyMap::Instruction::add_successor(
+    const IF_EntropyMap::Instruction* to_add)
 {
     this->succs.insert(to_add->get_idx());
     this->succs_instr.insert(to_add);
 }
 
 void
-IF_EntropyMap_Instr::add_external_succ(std::string ex_fn)
+IF_EntropyMap::Instruction::add_external_succ(std::string ex_fn)
 {
     this->succs_extern.insert(ex_fn);
 }
 
 const std::string
-IF_EntropyMap_Instr::to_str(void) const
+IF_EntropyMap::Instruction::to_str(void) const
 {
     std::ostringstream oss;
     oss << llvm::Instruction::getOpcodeName(this->get_opcode());
@@ -28,17 +28,17 @@ IF_EntropyMap_Instr::to_str(void) const
 }
 
 /*******************************************************************************
- * IF_EntropyMap_Func
+ * IF_EntropyMap::Function
  ******************************************************************************/
 
-const IF_EntropyMap_Instr*
-IF_EntropyMap_Func::get_first_instr() const
+const IF_EntropyMap::Instruction*
+IF_EntropyMap::Function::get_first_instr() const
 {
     return this->instrs.front().get();
 }
 
 const std::string
-IF_EntropyMap_Func::set_demangled_name(const llvm::Function& _fn)
+IF_EntropyMap::Function::set_demangled_name(const llvm::Function& _fn)
 {
     const llvm::DISubprogram* dis = _fn.getSubprogram();
     if (!dis)
@@ -49,7 +49,7 @@ IF_EntropyMap_Func::set_demangled_name(const llvm::Function& _fn)
 }
 
 const std::string
-IF_EntropyMap_Func::get_representing_name(void) const
+IF_EntropyMap::Function::get_representing_name(void) const
 {
     if (this->get_demangled_name().empty())
     {
@@ -59,7 +59,7 @@ IF_EntropyMap_Func::get_representing_name(void) const
 }
 
 const std::string
-IF_EntropyMap_Func::to_str(void) const
+IF_EntropyMap::Function::to_str(void) const
 {
     std::ostringstream oss;
     oss << this->get_name();
@@ -76,11 +76,11 @@ IF_EntropyMap_Func::to_str(void) const
 }
 
 /*******************************************************************************
- * IF_EntropyMap
+ * IF_EntropyMap::Map
  ******************************************************************************/
 
-const IF_EntropyMap_Instr*
-IF_EntropyMap::get_first_instr() const
+const IF_EntropyMap::Instruction*
+IF_EntropyMap::Map::get_first_instr() const
 {
     for (const auto& func : this->funcs)
     {
@@ -93,13 +93,13 @@ IF_EntropyMap::get_first_instr() const
 }
 
 void
-IF_EntropyMap::insert_external_func(std::string ex_fn)
+IF_EntropyMap::Map::insert_external_func(std::string ex_fn)
 {
     this->external_funcs.insert(ex_fn);
 }
 
 const std::string
-IF_EntropyMap::to_str(void) const
+IF_EntropyMap::Map::to_str(void) const
 {
     std::ostringstream oss;
     for (const auto& em_fn : this->get_funcs())
@@ -110,7 +110,7 @@ IF_EntropyMap::to_str(void) const
 }
 
 void
-IF_EntropyMap::print(void) const
+IF_EntropyMap::Map::print(void) const
 {
     for (const auto& em_fn : this->get_funcs())
     {

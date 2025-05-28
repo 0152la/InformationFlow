@@ -83,14 +83,15 @@ IF_Parser::IF_Parser(int seed)
     this->in_gen = IF_Randgen(seed);
 }
 
-std::unique_ptr<IF_EntropyMap>
+std::unique_ptr<IF_EntropyMap::Map>
 IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 {
     uint32_t instr_idx = 0;
-    auto em = std::make_unique<IF_EntropyMap>(llvm_module);
-    std::map<IF_EntropyMap_Instr*, std::vector<const llvm::Instruction*>>
+    auto em = std::make_unique<IF_EntropyMap::Map>(llvm_module);
+    std::map<IF_EntropyMap::Instruction*, std::vector<const llvm::Instruction*>>
         instr_succ_map;
-    std::map<const llvm::Instruction*, const IF_EntropyMap_Instr*> em_instr_map;
+    std::map<const llvm::Instruction*, const IF_EntropyMap::Instruction*>
+        em_instr_map;
     // Iterate over functions ...
     for (const auto& fn : llvm_module.getFunctionList())
     {
@@ -99,14 +100,14 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             continue;
         }
 
-        auto em_fn = std::make_unique<IF_EntropyMap_Func>(fn);
-        IF_EntropyMap_Instr* em_instr_prev = nullptr;
+        auto em_fn = std::make_unique<IF_EntropyMap::Function>(fn);
+        IF_EntropyMap::Instruction* em_instr_prev = nullptr;
 
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            auto em_instr
-                = std::make_unique<IF_EntropyMap_Instr>(instr_idx, fn_inst);
+            auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
+                instr_idx, fn_inst);
             double retained_entropy;
             em_instr_map.emplace(&fn_inst, em_instr.get());
 
@@ -181,7 +182,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         em->insert(std::move(em_fn));
     }
 
-    // Resolve instruction successors to `IF_EntropyMap_Instr`s
+    // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)
     {
         for (const llvm::Instruction* instr : llvm_instrs)
