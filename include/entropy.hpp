@@ -7,58 +7,47 @@
 #include <deque>
 #include <iostream>
 #include <iterator>
-#include <map>
 #include <memory>
 #include <numeric>
 #include <sstream>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 
-typedef uint64_t if_in_t;
-typedef uint64_t if_out_t;
-
 using obs_t = std::deque<uint64_t>;
-using in_out_obs_t = std::map<uint64_t, obs_t>;
+using in_out_obs_t = std::unordered_map<uint64_t, obs_t>;
 
 /* Class representing an entry in the histogram, recording all outputs for a
  * given input.
  */
 template <typename I, typename O> class IF_Histogram_Entry
 {
+public:
+    using outs_t = std::unordered_map<const O*, uint64_t>;
+
 private:
-    const I input;
-    std::map<O, uint64_t> outputs = std::map<O, uint64_t>();
+    const I* input;
+    outs_t outputs = outs_t();
     size_t out_count = 0;
 
 public:
-    IF_Histogram_Entry(I _input) :
+    IF_Histogram_Entry(const I* _input) :
         input(_input) { };
 
     /* Getters ***************************************************************/
 
-    I get_in(void) const { return this->input; };
+    const I* get_in(void) const { return this->input; };
 
-    auto get_outs(void) const -> decltype(this->outputs)
-    {
-        return this->outputs;
-    };
+    const outs_t& get_outs(void) const { return this->outputs; };
 
     size_t get_total_out_count(void) const { return this->out_count; };
 
-    double get_out_count(if_out_t _out) const
-    {
-        const auto& found = this->outputs.find(_out);
-        return found == this->outputs.end() ? 0 : found->second;
-    };
+    IF_Histogram_Entry<I, O>::outs_t::mapped_type get_out_count(const O*) const;
 
     /* Modifiers *************************************************************/
 
-    void insert(O);
-    void insert_many(O, uint64_t);
-
-    /* Utility ***************************************************************/
-
-    void print(void);
+    void insert(const O*);
+    void insert_many(const O*, uint64_t);
 };
 
 /* Class representing an evaluation of some underlying function, gathering all
@@ -85,8 +74,10 @@ private:
     template <typename U> in_out_obs_t count_observations(const U&) const;
 
 public:
-    void insert(I, O);
-    IF_Histogram_Entry<I, O>* find(I);
+    IF_Histogram() = default;
+
+    void insert(const I*, const O*);
+    IF_Histogram_Entry<I, O>* find(const I*) const;
 
     /* Calculators  **********************************************************/
 

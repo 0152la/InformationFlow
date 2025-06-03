@@ -3,17 +3,26 @@
  ******************************************************************************/
 
 template <typename I, typename O>
+IF_Histogram_Entry<I, O>::outs_t::mapped_type
+IF_Histogram_Entry<I, O>::get_out_count(const O* _out) const
+{
+    typename outs_t::const_iterator found = this->outputs.find(_out);
+    return found == this->outputs.end() ? 0 : found->second;
+}
+
+template <typename I, typename O>
 void
-IF_Histogram_Entry<I, O>::insert(O _output)
+IF_Histogram_Entry<I, O>::insert(const O* _output)
 {
     this->insert_many(_output, 1);
 }
 
 template <typename I, typename O>
 void
-IF_Histogram_Entry<I, O>::insert_many(O _output, uint64_t _out_count)
+IF_Histogram_Entry<I, O>::insert_many(const O* _output, uint64_t _out_count)
 {
-    if (auto entry = this->outputs.find(_output); entry != this->outputs.end())
+    if (typename outs_t::iterator entry = this->outputs.find(_output);
+        entry != this->outputs.end())
     {
         entry->second += _out_count;
     }
@@ -24,57 +33,9 @@ IF_Histogram_Entry<I, O>::insert_many(O _output, uint64_t _out_count)
     this->out_count += _out_count;
 }
 
-template <typename I, typename O>
-void
-IF_Histogram_Entry<I, O>::print(void)
-{
-    std::cout << "== INPUT " << this->input << " -- OUTPUTS [";
-    std::ostringstream vals(
-        this->outputs.empty() ? "" : std::to_string(this->outputs.at(0)),
-        std::ios_base::ate);
-
-    auto outs = this->outputs.begin();
-    std::advance(outs, 1);
-    for (; outs != this->outputs.end(); ++outs)
-    {
-        vals << ", <" << outs->first << ", " << outs->second << ">";
-    }
-    std::cout << vals.str() << "]" << std::endl;
-}
-
 /*******************************************************************************
  * IF_Histogram
  ******************************************************************************/
-
-template <typename I, typename O>
-void
-IF_Histogram<I, O>::insert(I key, O val)
-{
-    IF_Histogram_Entry<I, O>* entry = this->find(key);
-    if (!entry)
-    {
-        entry
-            = this->data
-                  .emplace_back(std::make_unique<IF_Histogram_Entry<I, O>>(key))
-                  .get();
-    }
-    entry->insert(val);
-    this->obs_count += 1;
-}
-
-template <typename I, typename O>
-IF_Histogram_Entry<I, O>*
-IF_Histogram<I, O>::find(I key)
-{
-    for (const auto& entry : this->data)
-    {
-        if (entry->get_in() == key)
-        {
-            return entry.get();
-        }
-    }
-    return nullptr;
-}
 
 template <typename I, typename O>
 obs_t
@@ -94,14 +55,16 @@ template <typename I, typename O>
 obs_t
 IF_Histogram<I, O>::get_output_observations(void) const
 {
-    std::map<O, size_t> parsed_obs;
+    typename IF_Histogram_Entry<I, O>::outs_t parsed_obs;
 
     // Parse output observations
     for (const auto& entry : this->data)
     {
-        for (const std::pair<O, uint64_t>& entry_out : entry->get_outs())
+        for (typename IF_Histogram_Entry<I, O>::outs_t::const_reference
+                 entry_out : entry->get_outs())
         {
-            if (auto entry = parsed_obs.find(entry_out.first);
+            if (typename IF_Histogram_Entry<I, O>::outs_t::iterator entry
+                = parsed_obs.find(entry_out.first);
                 entry != parsed_obs.end())
             {
                 entry->second += entry_out.second;
@@ -115,7 +78,8 @@ IF_Histogram<I, O>::get_output_observations(void) const
 
     // Flatten observations
     obs_t flatten_obs;
-    for (const auto& entry : parsed_obs)
+    for (typename IF_Histogram_Entry<I, O>::outs_t::const_reference entry :
+        parsed_obs)
     {
         flatten_obs.push_back(entry.second);
     }
@@ -130,17 +94,18 @@ IF_Histogram<I, O>::invert_obs(void) const
     data_inv_t inverted_obs;
 
     // Iterate over all observations
-    for (const auto& obs : this->data)
+    for (typename data_t::const_reference obs : this->data)
     {
         // Iterate over the observed outputs for a recorded input
-        for (const auto& out_obs : obs->get_outs())
+        for (typename IF_Histogram_Entry<I, O>::obs_t::const_reference out_obs :
+            obs->get_outs())
         {
             // Check if the output is already logged
-            for (auto& inv_obs : inverted_obs)
+            for (typename data_inv_t::reference inv_obs : inverted_obs)
             {
                 // If we found the logged observation, add the number of times
                 // we saw this pair
-                if (inv_obs->get_in() == out_obs.first)
+                if (inv_obs->get_in() == out_obs->first)
                 {
                     inv_obs->insert_many(obs->get_in(), out_obs.second);
                     goto done;
@@ -148,8 +113,10 @@ IF_Histogram<I, O>::invert_obs(void) const
             }
             // We didn't see this observation yet, so we must insert it
             {
-                auto& inv_ref = inverted_obs.emplace_back(
-                    std::make_unique<IF_Histogram_Entry<O, I>>(out_obs.first));
+                typename data_inv_t::reference inv_ref
+                    = inverted_obs.emplace_back(
+                        std::make_unique<IF_Histogram_Entry<O, I>>(
+                            out_obs.first));
                 inv_ref->insert_many(obs->get_in(), out_obs.second);
             }
         done:
@@ -171,7 +138,8 @@ IF_Histogram<I, O>::count_observations(const U& obs_data) const
     for (const auto& entry : obs_data)
     {
         one_obs.clear();
-        for (const auto& entry_out : entry->get_outs())
+        for (typename IF_Histogram_Entry<I, O>::obs_t::const_reference
+                 entry_out : entry->get_outs())
         {
             one_obs.emplace_back(entry_out.second);
         }
@@ -179,6 +147,36 @@ IF_Histogram<I, O>::count_observations(const U& obs_data) const
     }
 
     return obs_count;
+}
+
+template <typename I, typename O>
+void
+IF_Histogram<I, O>::insert(const I* key, const O* val)
+{
+    IF_Histogram_Entry<I, O>* entry = this->find(key);
+    if (!entry)
+    {
+        entry
+            = this->data
+                  .emplace_back(std::make_unique<IF_Histogram_Entry<I, O>>(key))
+                  .get();
+    }
+    entry->insert(val);
+    this->obs_count += 1;
+}
+
+template <typename I, typename O>
+IF_Histogram_Entry<I, O>*
+IF_Histogram<I, O>::find(const I* key) const
+{
+    for (typename data_t::const_reference entry : this->data)
+    {
+        if (entry->get_in() == key)
+        {
+            return entry.get();
+        }
+    }
+    return nullptr;
 }
 
 template <typename I, typename O>
@@ -234,7 +232,7 @@ template <typename I, typename O>
 void
 IF_Histogram<I, O>::print_measures(void)
 {
-    std::cout << "=== Histogram measures\n";
+    std::cout << "=== Histogram measures (" << this->obs_count << " samples)\n";
     std::cout << "\t Entropy(I) = " << this->calculate_entropy_inputs() << "\n";
     std::cout << "\t Entropy(O) = " << this->calculate_entropy_outputs()
               << "\n";

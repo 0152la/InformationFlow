@@ -41,9 +41,9 @@ public:
    int64_t gen_int64_t() { return this->generator.gen_signed_int(); };
 
     // Loggers
-    void log_results(int64_t in_result, int64_t out_result)
+    void log_results(uint64_t in_result, uint64_t out_result)
     {
-        this->results.insert(in_result, out_result);
+        this->results.insert(&in_result, &out_result);
     };
 
     // Computations
