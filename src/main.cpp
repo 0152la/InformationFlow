@@ -7,8 +7,8 @@
 static void
 gen_one(IF_Randgen& gen, IF_Histogram<uint64_t, uint64_t>& h, auto alter_fn)
 {
-    int64_t prog_in = gen.gen_signed_int() % in_scale;
-    int64_t prog_out = alter_fn(prog_in) % out_scale;
+    uint64_t prog_in = gen.gen_unsigned_int() % in_scale;
+    uint64_t prog_out = alter_fn(prog_in) % out_scale;
 
     h.insert(prog_in, prog_out);
 }
@@ -37,19 +37,16 @@ test_entropies(void)
     int64_t prog_in;
     int64_t prog_out;
 
-    auto fn_id = [](int64_t _in) { return _in; };
-
     static int _add_counter = 0;
-    auto fn_add = [](int64_t _in)
+    auto fn_add = [](uint64_t _in)
     {
         _add_counter += 1;
         return _in + _add_counter;
     };
 
-    auto fn_out = fn_add;
     for (size_t i = 0; i < initial_tests; ++i)
     {
-        gen_one(generator, h, fn_out);
+        gen_one(generator, h, fn_add);
     }
 
     std::cout << "CONDITIONAL ENTROPY (O|I) == "
