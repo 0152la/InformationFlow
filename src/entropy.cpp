@@ -7,7 +7,7 @@ compute_entropy(const obs_t& observations, const size_t obs_count)
     double prob;
 
     // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
-    for (const auto& entry : observations)
+    for (obs_t::const_reference entry : observations)
     {
         prob = entry / static_cast<double>(obs_count);
         entropy += prob * log2(prob);
@@ -32,14 +32,14 @@ compute_conditional_entropy(
     double in_prob;
     double obs_count_d = static_cast<double>(obs_count);
 
-    for (const auto& obs : observations)
+    for (in_out_obs_t::const_reference obs : observations)
     {
         // Compute the probability of a specific `given` observation
         //
         // p(x) = no of a specific `x` / total no of observations
         in_prob = obs.first / obs_count_d;
 
-        for (const auto& no_obs_outs : obs.second)
+        for (obs_t::const_reference no_obs_outs : obs.second)
         {
             // Compute the probabilty of a specific pair of `(given, for)`
             // observations. Since we are iterating over observed `for`s for a

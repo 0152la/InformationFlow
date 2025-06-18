@@ -1,8 +1,8 @@
 #ifndef _IF_RANDGEN_HPP
 #define _IF_RANDGEN_HPP
 
-#include <random>
 #include <memory>
+#include <random>
 
 constexpr uint8_t max_bit_width = 64;
 
@@ -22,6 +22,8 @@ public:
 
     int64_t gen_signed_int(uint16_t = max_bit_width);
     uint64_t gen_unsigned_int(uint16_t = max_bit_width);
+
+    template <typename T> T gen(void);
 
     double gen_double() { return this->real_dist(this->random_engine); };
 };

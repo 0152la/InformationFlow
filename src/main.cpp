@@ -66,6 +66,8 @@ test_entropies(void)
     std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out
               << std::endl;
 
+    return 0;
+
     size_t fixed_point_it = 0;
     float diff;
     double e_in_old = entropy_in;
@@ -76,7 +78,7 @@ test_entropies(void)
         std::cout << "Iteration " << fixed_point_it << " - ";
         for (size_t j = 0; j < extra_step; ++j)
         {
-            gen_one(generator, h, fn_out);
+            gen_one(generator, h, fn_add);
         }
 
         entropy_in = h.calculate_entropy_inputs();
@@ -105,6 +107,106 @@ test_entropies(void)
  *
  ******************************************************************************/
 
+template <typename T>
+static void
+do_snippet_entropy(std::function<T(T, T)> fn)
+{
+    IF_Randgen gen(42);
+    IF_Histogram<std::pair<T, T>, T> h;
+
+    for (size_t i = 0; i < initial_tests; ++i)
+    {
+        T in1 = gen.gen<T>();
+        T in2 = gen.gen<T>();
+        T out = fn(in1, in2);
+
+        h.insert(std::make_pair(in1, in2), out);
+    }
+
+    std::cout << "CONDITIONAL ENTROPY (O|I) == "
+              << h.calculate_conditional_entropy_out_given_in() << std::endl;
+    std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
+              << h.calculate_uncertainty_coefficient_out_given_in()
+              << std::endl;
+    std::cout << "CONDITIONAL ENTROPY (I|O) == "
+              << h.calculate_conditional_entropy_in_given_out() << std::endl;
+    std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
+              << h.calculate_uncertainty_coefficient_in_given_out()
+              << std::endl;
+
+    std::cout << "Initial computations - ";
+    double entropy_in = h.calculate_entropy_inputs();
+    double entropy_out = h.calculate_entropy_outputs();
+    std::cout << " H(I) = " << entropy_in << "; H(O) = " << entropy_out
+              << std::endl;
+
+    return;
+}
+
+static int
+test_snippet()
+{
+    void* dl_handler = dlopen(snippets_lib_path.c_str(), RTLD_NOW);
+    if (!dl_handler)
+    {
+        throw std::runtime_error(
+            "Error `dlopen` :: " + std::string { dlerror() });
+    }
+    dlerror();
+
+    {
+        std::cout << "===== add_i64\n";
+        std::function<uint64_t(uint64_t, uint64_t)> add_64 { (uint64_t (*)(
+            uint64_t, uint64_t)) dlsym(dl_handler, "llvm_impl_add_i64") };
+        if (const char* err = dlerror())
+        {
+            throw std::runtime_error(
+                "> dlsym i64 :: " + std::string { err } + "\n");
+        }
+        do_snippet_entropy(add_64);
+    }
+
+    {
+        std::cout << "===== add_i64_nuw\n";
+        std::function<uint64_t(uint64_t, uint64_t)> add_64_nuw { (uint64_t (*)(
+            uint64_t, uint64_t)) dlsym(dl_handler, "llvm_impl_add_i64_nuw") };
+        if (const char* err = dlerror())
+        {
+            throw std::runtime_error(
+                "> dlsym i64 :: " + std::string { err } + "\n");
+        }
+        uint64_t p = add_64_nuw(std::numeric_limits<uint64_t>::max(), 2222);
+        std::cout << "POISON :: " << p << '\n';
+        do_snippet_entropy(add_64_nuw);
+    }
+
+    {
+        std::cout << "===== add_i64_nsw\n";
+        std::function<int64_t(int64_t, int64_t)> add_64_nsw { (int64_t (*)(
+            int64_t, int64_t)) dlsym(dl_handler, "llvm_impl_add_i64_nsw") };
+        if (const char* err = dlerror())
+        {
+            throw std::runtime_error(
+                "> dlsym i64 :: " + std::string { err } + "\n");
+        }
+        do_snippet_entropy(add_64_nsw);
+    }
+
+    {
+        std::cout << "===== add_i8\n";
+        std::function<uint8_t(uint8_t, uint8_t)> add_8 { (uint8_t (*)(uint8_t, uint8_t)) dlsym(dl_handler, "llvm_impl_add_i8")};
+        if (const char* err = dlerror())
+        {
+            throw std::runtime_error("> dlsym i8 :: " + std::string { err } + "\n");
+        }
+        do_snippet_entropy(add_8);
+    }
+
+    dlclose(dl_handler);
+
+    return 0;
+}
+
 // Need to test that the calculated entropy values are right
 static int
 entropy_dev(void)
@@ -120,10 +222,10 @@ reader_dev(void)
     //"InformationFlow/build/tests/simple-struct.ll";
     // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
     //"InformationFlow/tests/for.ll";
-    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/sample.ll";
     // const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-    //"InformationFlow/tmp/ee-Og.ll";
+    //"InformationFlow/build/tests/sample.ll";
+    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
+                                "InformationFlow/tmp/snip_add.ll";
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap::Map> em
@@ -131,13 +233,13 @@ reader_dev(void)
     em->set_verbose(true);
     em->print();
 
-    IF_EM_Graph g(*em, "ll-out.dot");
-    g.draw_callgraph();
-    g.draw_graph();
+    // IF_EM_Graph g(*em, "ll-out.dot");
+    // g.draw_callgraph();
+    // g.draw_graph();
 
-    //IF_EM_Path_Entropy::Printer p(*em);
-    //p.compute_path_entropy(em->get_first_instr());
-    //p.print_path_entropy();
+    // IF_EM_Path_Entropy::Printer p(*em);
+    // p.compute_path_entropy(em->get_first_instr());
+    // p.print_path_entropy();
 
     return 0;
 }
@@ -149,9 +251,10 @@ reader_dev(void)
 int
 main()
 {
+    return test_snippet();
     // return test_printer();
     // return test_entropies();
     // return test_emulator();
 
-    return reader_dev();
+    // return reader_dev();
 }

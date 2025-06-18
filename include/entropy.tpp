@@ -4,7 +4,8 @@
 
 template <typename I, typename O>
 IF_Histogram_Entry<I, O>::outs_t::mapped_type
-IF_Histogram_Entry<I, O>::get_out_count(const O* _out) const
+IF_Histogram_Entry<I, O>::get_out_count(
+    IF_Histogram_Entry<I, O>::outs_t::key_type& _out) const
 {
     typename outs_t::const_iterator found = this->outputs.find(_out);
     return found == this->outputs.end() ? 0 : found->second;
@@ -12,14 +13,15 @@ IF_Histogram_Entry<I, O>::get_out_count(const O* _out) const
 
 template <typename I, typename O>
 void
-IF_Histogram_Entry<I, O>::insert(const O* _output)
+IF_Histogram_Entry<I, O>::insert(const outs_t::key_type& _output)
 {
     this->insert_many(_output, 1);
 }
 
 template <typename I, typename O>
 void
-IF_Histogram_Entry<I, O>::insert_many(const O* _output, uint64_t _out_count)
+IF_Histogram_Entry<I, O>::insert_many(
+    const outs_t::key_type& _output, uint64_t _out_count)
 {
     if (typename outs_t::iterator entry = this->outputs.find(_output);
         entry != this->outputs.end())
@@ -97,15 +99,15 @@ IF_Histogram<I, O>::invert_obs(void) const
     for (typename data_t::const_reference obs : this->data)
     {
         // Iterate over the observed outputs for a recorded input
-        for (typename IF_Histogram_Entry<I, O>::obs_t::const_reference out_obs :
-            obs->get_outs())
+        for (typename IF_Histogram_Entry<I, O>::outs_t::const_reference
+                 out_obs : obs->get_outs())
         {
             // Check if the output is already logged
             for (typename data_inv_t::reference inv_obs : inverted_obs)
             {
                 // If we found the logged observation, add the number of times
                 // we saw this pair
-                if (inv_obs->get_in() == out_obs->first)
+                if (inv_obs->get_in() == out_obs.first)
                 {
                     inv_obs->insert_many(obs->get_in(), out_obs.second);
                     goto done;
@@ -138,8 +140,7 @@ IF_Histogram<I, O>::count_observations(const U& obs_data) const
     for (const auto& entry : obs_data)
     {
         one_obs.clear();
-        for (typename IF_Histogram_Entry<I, O>::obs_t::const_reference
-                 entry_out : entry->get_outs())
+        for (const auto& entry_out : entry->get_outs())
         {
             one_obs.emplace_back(entry_out.second);
         }
@@ -151,7 +152,7 @@ IF_Histogram<I, O>::count_observations(const U& obs_data) const
 
 template <typename I, typename O>
 void
-IF_Histogram<I, O>::insert(const I* key, const O* val)
+IF_Histogram<I, O>::insert(const I& key, O& val)
 {
     IF_Histogram_Entry<I, O>* entry = this->find(key);
     if (!entry)
@@ -167,7 +168,7 @@ IF_Histogram<I, O>::insert(const I* key, const O* val)
 
 template <typename I, typename O>
 IF_Histogram_Entry<I, O>*
-IF_Histogram<I, O>::find(const I* key) const
+IF_Histogram<I, O>::find(const I& key) const
 {
     for (typename data_t::const_reference entry : this->data)
     {

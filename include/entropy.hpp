@@ -11,11 +11,11 @@
 #include <numeric>
 #include <sstream>
 #include <type_traits>
-#include <unordered_map>
+#include <map>
 #include <utility>
 
 using obs_t = std::deque<uint64_t>;
-using in_out_obs_t = std::unordered_map<uint64_t, obs_t>;
+using in_out_obs_t = std::map<uint64_t, obs_t>;
 
 /* Class representing an entry in the histogram, recording all outputs for a
  * given input.
@@ -23,31 +23,32 @@ using in_out_obs_t = std::unordered_map<uint64_t, obs_t>;
 template <typename I, typename O> class IF_Histogram_Entry
 {
 public:
-    using outs_t = std::unordered_map<const O*, uint64_t>;
+    using outs_t = std::map<O, uint64_t>;
 
 private:
-    const I* input;
+    const I input;
     outs_t outputs = outs_t();
     size_t out_count = 0;
 
 public:
-    IF_Histogram_Entry(const I* _input) :
+    IF_Histogram_Entry(const I _input) :
         input(_input) { };
 
     /* Getters ***************************************************************/
 
-    const I* get_in(void) const { return this->input; };
+    const I& get_in(void) const { return this->input; };
 
     const outs_t& get_outs(void) const { return this->outputs; };
 
     size_t get_total_out_count(void) const { return this->out_count; };
 
-    IF_Histogram_Entry<I, O>::outs_t::mapped_type get_out_count(const O*) const;
+    IF_Histogram_Entry<I, O>::outs_t::mapped_type get_out_count(
+        outs_t::key_type&) const;
 
     /* Modifiers *************************************************************/
 
-    void insert(const O*);
-    void insert_many(const O*, uint64_t);
+    void insert(const outs_t::key_type&);
+    void insert_many(const outs_t::key_type&, uint64_t);
 };
 
 /* Class representing an evaluation of some underlying function, gathering all
@@ -76,8 +77,8 @@ private:
 public:
     IF_Histogram() = default;
 
-    void insert(const I*, const O*);
-    IF_Histogram_Entry<I, O>* find(const I*) const;
+    void insert(const I&, O&);
+    IF_Histogram_Entry<I, O>* find(const I&) const;
 
     /* Calculators  **********************************************************/
 

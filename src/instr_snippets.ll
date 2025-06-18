@@ -13,9 +13,21 @@ define noundef double @llvm_impl_fneg(double noundef %a)
 
 ; Binary Operations - Integer
 
-define noundef i64 @llvm_impl_add(i64 noundef %a, i64 noundef %b)
+define noundef i64 @llvm_impl_add_i64(i64 noundef %a, i64 noundef %b)
 {
     %x = add i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_add_i64_nuw(i64 noundef %a, i64 noundef %b)
+{
+    %x = add nuw i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_add_i64_nsw(i64 noundef %a, i64 noundef %b)
+{
+    %x = add nsw i64 %a, %b
     ret i64 %x
 }
 

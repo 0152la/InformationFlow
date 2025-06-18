@@ -73,13 +73,11 @@ extern std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
 
 IF_Parser::IF_Parser()
 {
-    this->data = IF_Histogram<if_in_t, if_out_t>();
     this->in_gen = IF_Randgen();
 }
 
 IF_Parser::IF_Parser(int seed)
 {
-    this->data = IF_Histogram<if_in_t, if_out_t>();
     this->in_gen = IF_Randgen(seed);
 }
 
@@ -141,6 +139,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             }
             // Then we check whether we can estimate the entropy, without having
             // to fuzz
+            // TODO decltype?
             else if (auto fn_est_entropy
                 = estimate_entropy.find(fn_inst.getOpcode());
                 fn_est_entropy != estimate_entropy.end())

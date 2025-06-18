@@ -48,7 +48,6 @@ public:
 class IF_Parser
 {
 private:
-    IF_Histogram<if_in_t, if_out_t> data;
     IF_Randgen in_gen;
     // IF_EntropyMap H_map; // H cause H = entropy :>
 
