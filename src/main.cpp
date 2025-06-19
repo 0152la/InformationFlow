@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 static void
-gen_one(IF_Randgen& gen, IF_Histogram<uint64_t, uint64_t>& h, auto alter_fn)
+gen_one(IF_Randgen& gen, IF_Histogram& h, auto alter_fn)
 {
     uint64_t prog_in = gen.gen_unsigned_int() % in_scale;
     uint64_t prog_out = alter_fn(prog_in) % out_scale;
@@ -32,7 +32,7 @@ static int
 test_entropies(void)
 {
     IF_Randgen generator(42);
-    IF_Histogram<uint64_t, uint64_t> h;
+    IF_Histogram h;
 
     int64_t prog_in;
     int64_t prog_out;
@@ -49,16 +49,16 @@ test_entropies(void)
         gen_one(generator, h, fn_add);
     }
 
-    std::cout << "CONDITIONAL ENTROPY (O|I) == "
-              << h.calculate_conditional_entropy_out_given_in() << std::endl;
-    std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
-              << h.calculate_uncertainty_coefficient_out_given_in()
-              << std::endl;
-    std::cout << "CONDITIONAL ENTROPY (I|O) == "
-              << h.calculate_conditional_entropy_in_given_out() << std::endl;
-    std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
-              << h.calculate_uncertainty_coefficient_in_given_out()
-              << std::endl;
+    //std::cout << "CONDITIONAL ENTROPY (O|I) == "
+              //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
+    //std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
+              //<< h.calculate_uncertainty_coefficient_out_given_in()
+              //<< std::endl;
+    //std::cout << "CONDITIONAL ENTROPY (I|O) == "
+              //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
+    //std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
+              //<< h.calculate_uncertainty_coefficient_in_given_out()
+              //<< std::endl;
 
     std::cout << "Initial computations - ";
     double entropy_in = h.calculate_entropy_inputs();
@@ -112,7 +112,7 @@ static void
 do_snippet_entropy(std::function<T(T, T)> fn)
 {
     IF_Randgen gen(42);
-    IF_Histogram<std::pair<T, T>, T> h;
+    IF_Histogram h;
 
     for (size_t i = 0; i < initial_tests; ++i)
     {
@@ -120,19 +120,19 @@ do_snippet_entropy(std::function<T(T, T)> fn)
         T in2 = gen.gen<T>();
         T out = fn(in1, in2);
 
-        h.insert(std::make_pair(in1, in2), out);
+        h.insert(std::hash<std::pair<T, T>>{}(std::make_pair(in1, in2)), out);
     }
 
-    std::cout << "CONDITIONAL ENTROPY (O|I) == "
-              << h.calculate_conditional_entropy_out_given_in() << std::endl;
-    std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
-              << h.calculate_uncertainty_coefficient_out_given_in()
-              << std::endl;
-    std::cout << "CONDITIONAL ENTROPY (I|O) == "
-              << h.calculate_conditional_entropy_in_given_out() << std::endl;
-    std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
-              << h.calculate_uncertainty_coefficient_in_given_out()
-              << std::endl;
+    //std::cout << "CONDITIONAL ENTROPY (O|I) == "
+              //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
+    //std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
+              //<< h.calculate_uncertainty_coefficient_out_given_in()
+              //<< std::endl;
+    //std::cout << "CONDITIONAL ENTROPY (I|O) == "
+              //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
+    //std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
+              //<< h.calculate_uncertainty_coefficient_in_given_out()
+              //<< std::endl;
 
     std::cout << "Initial computations - ";
     double entropy_in = h.calculate_entropy_inputs();
@@ -194,10 +194,12 @@ test_snippet()
 
     {
         std::cout << "===== add_i8\n";
-        std::function<uint8_t(uint8_t, uint8_t)> add_8 { (uint8_t (*)(uint8_t, uint8_t)) dlsym(dl_handler, "llvm_impl_add_i8")};
+        std::function<uint8_t(uint8_t, uint8_t)> add_8 { (uint8_t (*)(
+            uint8_t, uint8_t)) dlsym(dl_handler, "llvm_impl_add_i8") };
         if (const char* err = dlerror())
         {
-            throw std::runtime_error("> dlsym i8 :: " + std::string { err } + "\n");
+            throw std::runtime_error(
+                "> dlsym i8 :: " + std::string { err } + "\n");
         }
         do_snippet_entropy(add_8);
     }
@@ -226,6 +228,9 @@ reader_dev(void)
     //"InformationFlow/build/tests/sample.ll";
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
                                 "InformationFlow/tmp/snip_add.ll";
+
+    IF_Emulator emu {snippets_lib_path};
+
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap::Map> em
@@ -251,10 +256,10 @@ reader_dev(void)
 int
 main()
 {
-    return test_snippet();
-    // return test_printer();
-    // return test_entropies();
-    // return test_emulator();
+    // return test_snippet();
+    //  return test_printer();
+      return test_entropies();
+    //  return test_emulator();
 
-    // return reader_dev();
+    //return reader_dev();
 }

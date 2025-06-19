@@ -22,8 +22,9 @@ function(add_entropy_test test_name)
 endfunction()
 
 set(entropy_tests
-    entropy-coin_flip
-    entropy-dice_roll
+    #entropy-coin_flip
+    #entropy-dice_roll
+    simple-entropies
 )
 
 foreach(entropy_t IN LISTS entropy_tests)

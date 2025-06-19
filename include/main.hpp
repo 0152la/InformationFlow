@@ -12,6 +12,7 @@
 #include "entropy.hpp"
 #include "entropy_map_graph.hpp"
 #include "entropy_map_path_printer.hpp"
+#include "hashing.hpp"
 #include "instr_emulator.hpp"
 #include "randgen.hpp"
 #include "reader.hpp"

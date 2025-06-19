@@ -1,27 +1,11 @@
-#include <randgen.hpp>
-#include <random>
+#include "randgen.hpp"
 
 IF_Randgen::IF_Randgen() :
     random_engine(),
     real_dist(
         std::numeric_limits<double>::min(), std::numeric_limits<double>::max()),
-    s_int_dists(
-        std::vector<std::unique_ptr<std::uniform_int_distribution<int64_t>>>(
-            max_bit_width)),
-    u_int_dists(
-        std::vector<std::unique_ptr<std::uniform_int_distribution<uint64_t>>>(
-            max_bit_width))
-{
-    for (uint8_t i = 0; i < max_bit_width; ++i)
-    {
-        this->s_int_dists.at(i)
-            = std::make_unique<std::uniform_int_distribution<int64_t>>(
-                1 - (1 << i), 1 << i);
-        this->u_int_dists.at(i)
-            = std::make_unique<std::uniform_int_distribution<uint64_t>>(
-                0, 1 << (i + 1));
-    }
-};
+    int_dist(std::numeric_limits<int64_t>::min(),
+        std::numeric_limits<int64_t>::max()) { };
 
 IF_Randgen::IF_Randgen(int seed) :
     IF_Randgen()
@@ -30,23 +14,30 @@ IF_Randgen::IF_Randgen(int seed) :
 }
 
 int64_t
-IF_Randgen::gen_signed_int(uint16_t bit_width)
+IF_Randgen::gen_signed_int(uint8_t bit_width)
 {
     if (bit_width > max_bit_width)
     {
         throw std::runtime_error("Requested bit width larger than max set!");
     }
-    return this->s_int_dists.at(bit_width - 1)->operator()(this->random_engine);
+
+    decltype(this->int_dist)::param_type p;
+    if (bit_width == max_bit_width)
+    {
+        p = this->int_dist.param();
+    }
+    else
+    {
+        p = decltype(this->int_dist)::param_type { -(1 << bit_width),
+            (1 << bit_width) - 1 };
+    }
+    return this->int_dist(this->random_engine, p);
 }
 
 uint64_t
-IF_Randgen::gen_unsigned_int(uint16_t bit_width)
+IF_Randgen::gen_unsigned_int(uint8_t bit_width)
 {
-    if (bit_width > max_bit_width)
-    {
-        throw std::runtime_error("Requested bit width larger than max set!");
-    }
-    return this->u_int_dists.at(bit_width - 1)->operator()(this->random_engine);
+    return (uint64_t) this->gen_signed_int(bit_width);
 }
 
 template <>

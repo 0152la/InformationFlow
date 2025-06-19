@@ -15,6 +15,7 @@ add_executable(iflow
     entropy_map_graph.cpp
     entropy_map_path_printer.cpp
     fuzz_engine.cpp
+    hashing.cpp
     instr_emulator.cpp
     main.cpp
     randgen.cpp
