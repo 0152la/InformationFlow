@@ -18,17 +18,6 @@ gen_one(IF_Randgen& gen, IF_Histogram& h, auto alter_fn)
  ******************************************************************************/
 
 static int
-test_printer(void)
-{
-    const std::string ll_path = "/home/andreilascu/Documents/Repos/"
-                                "InformationFlow/build/tests/sample.ll";
-    IF_Parser if_p;
-    std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
-    IF_Parser::print_instrs(*if_module->get_module());
-    return 0;
-}
-
-static int
 test_entropies(void)
 {
     IF_Randgen generator(42);
@@ -49,16 +38,16 @@ test_entropies(void)
         gen_one(generator, h, fn_add);
     }
 
-    //std::cout << "CONDITIONAL ENTROPY (O|I) == "
-              //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
-    //std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
-              //<< h.calculate_uncertainty_coefficient_out_given_in()
-              //<< std::endl;
-    //std::cout << "CONDITIONAL ENTROPY (I|O) == "
-              //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
-    //std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
-              //<< h.calculate_uncertainty_coefficient_in_given_out()
-              //<< std::endl;
+    // std::cout << "CONDITIONAL ENTROPY (O|I) == "
+    //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
+    // std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
+    //<< h.calculate_uncertainty_coefficient_out_given_in()
+    //<< std::endl;
+    // std::cout << "CONDITIONAL ENTROPY (I|O) == "
+    //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
+    // std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
+    //<< h.calculate_uncertainty_coefficient_in_given_out()
+    //<< std::endl;
 
     std::cout << "Initial computations - ";
     double entropy_in = h.calculate_entropy_inputs();
@@ -120,19 +109,19 @@ do_snippet_entropy(std::function<T(T, T)> fn)
         T in2 = gen.gen<T>();
         T out = fn(in1, in2);
 
-        h.insert(std::hash<std::pair<T, T>>{}(std::make_pair(in1, in2)), out);
+        h.insert(std::hash<std::pair<T, T>> {}(std::make_pair(in1, in2)), out);
     }
 
-    //std::cout << "CONDITIONAL ENTROPY (O|I) == "
-              //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
-    //std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
-              //<< h.calculate_uncertainty_coefficient_out_given_in()
-              //<< std::endl;
-    //std::cout << "CONDITIONAL ENTROPY (I|O) == "
-              //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
-    //std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
-              //<< h.calculate_uncertainty_coefficient_in_given_out()
-              //<< std::endl;
+    // std::cout << "CONDITIONAL ENTROPY (O|I) == "
+    //<< h.calculate_conditional_entropy_out_given_in() << std::endl;
+    // std::cout << "UNCERTAINTY COEFFICIENT (O|I) == "
+    //<< h.calculate_uncertainty_coefficient_out_given_in()
+    //<< std::endl;
+    // std::cout << "CONDITIONAL ENTROPY (I|O) == "
+    //<< h.calculate_conditional_entropy_in_given_out() << std::endl;
+    // std::cout << "UNCERTAINTY COEFFICIENT (I|O) == "
+    //<< h.calculate_uncertainty_coefficient_in_given_out()
+    //<< std::endl;
 
     std::cout << "Initial computations - ";
     double entropy_in = h.calculate_entropy_inputs();
@@ -229,7 +218,7 @@ reader_dev(void)
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
                                 "InformationFlow/tmp/snip_add.ll";
 
-    IF_Emulator emu {snippets_lib_path};
+    IF_Emulator emu { snippets_lib_path };
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
@@ -257,9 +246,8 @@ int
 main()
 {
     // return test_snippet();
-    //  return test_printer();
-      return test_entropies();
+    return test_entropies();
     //  return test_emulator();
 
-    //return reader_dev();
+    // return reader_dev();
 }

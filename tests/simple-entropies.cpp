@@ -1,37 +1,31 @@
-#include "entropy.hpp"
-#include "randgen.hpp"
-
-#include <iostream>
+#include "test_harness.hpp"
 
 int
 main()
 {
-    const size_t samples = 3000;
-    const uint16_t in_scale = 1 << 8;
-    const uint16_t out_scale = 1 << 6;
+    constexpr uint16_t in_entropy = 8;
+    constexpr uint16_t out_entropy = 6;
+    constexpr uint64_t samples = 10000;
+    constexpr double error = 0.005;
+    static_assert(in_entropy >= out_entropy);
 
-    IF_Randgen gen(42);
-    IF_Histogram hist;
+    constexpr uint16_t in_scale = 1 << in_entropy;
+    constexpr uint16_t out_scale = 1 << out_entropy;
+    EntropyHarness harness(samples, error);
 
     uint64_t test_in;
     uint64_t test_out;
 
     static int64_t _counter = 0;
-    auto test_fn = [](uint64_t _in)
-    {
-        _counter += 1;
-        return (_in + _counter);
-    };
+    auto test_fn = [](uint64_t _in) { return (_in + _counter); };
 
     for (size_t i = 0; i < samples; ++i)
     {
-        test_in = gen.gen_unsigned_int(64); // % in_scale;
-        test_in %= in_scale;
+        test_in = harness.gen<uint64_t>() % in_scale;
         test_out = test_fn(test_in) % out_scale;
-        hist.insert(test_in, test_out);
+        harness.log_results(test_in, test_out);
     }
 
-    hist.print_measures();
-
-    return 0;
+    return !(harness.validate_entropy_in(in_entropy)
+        | harness.validate_entropy_out(out_entropy));
 }

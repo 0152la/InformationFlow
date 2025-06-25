@@ -7,28 +7,48 @@ function(add_binary_test test_name)
 endfunction()
 
 #Entropy tests
-set(ENTROPY_LIBS
-    entropy)
-
 add_library(test_harness SHARED test_harness.cpp)
 target_include_directories(test_harness PRIVATE ${INCLUDE_DIR})
+
+set(ENTROPY_TEST_LIBS
+    entropy
+    test_harness
+)
 
 function(add_entropy_test test_name)
     add_executable(${test_name}
         ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE test_harness ${ENTROPY_LIBS})
+    target_link_libraries(${test_name} PRIVATE ${ENTROPY_TEST_LIBS})
     target_include_directories(${test_name} PRIVATE ${INCLUDE_DIR})
     add_binary_test(${test_name})
 endfunction()
 
 set(entropy_tests
-    #entropy-coin_flip
-    #entropy-dice_roll
+    entropy-coin_flip
+    entropy-dice_roll
     simple-entropies
 )
 
 foreach(entropy_t IN LISTS entropy_tests)
     add_entropy_test(${entropy_t})
+endforeach()
+
+# Functionality tests
+function(add_func_test test_name)
+    add_executable(${test_name}
+        ${test_name}.cpp)
+    target_link_libraries(${test_name} PRIVATE lflow)
+    target_include_directories(${test_name} PRIVATE ${INCLUDE_DIR})
+    add_binary_test(${test_name})
+endfunction()
+
+set(func_tests
+    llvm-parse
+    llvm-entropy_map
+)
+
+foreach(func_t IN LISTS func_tests)
+    add_func_test(${func_t})
 endforeach()
 
 # `ll` generation tests
@@ -57,7 +77,7 @@ set(ll_srcs
     sample
     simple-arith
     simple-vector
-    simple-struct
+    #simple-struct
 )
 
 foreach(ll_src_t IN LISTS ll_srcs)

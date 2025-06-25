@@ -71,15 +71,9 @@ extern std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
  * IF_Parser
  ******************************************************************************/
 
-IF_Parser::IF_Parser()
-{
-    this->in_gen = IF_Randgen();
-}
+IF_Parser::IF_Parser() { this->in_gen = IF_Randgen(); }
 
-IF_Parser::IF_Parser(int seed)
-{
-    this->in_gen = IF_Randgen(seed);
-}
+IF_Parser::IF_Parser(int seed) { this->in_gen = IF_Randgen(seed); }
 
 std::unique_ptr<IF_EntropyMap::Map>
 IF_Parser::make_entropy_map(const llvm::Module& llvm_module)

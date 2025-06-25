@@ -3,25 +3,17 @@
 int
 main()
 {
-    EntropyHarness harness(1000, 0.0001, 1);
+    constexpr int8_t entropy = 1;
+    EntropyHarness harness(1000, 0.0001);
 
-    int64_t test_in;
-    int64_t test_out;
+    uint64_t test_in;
+    uint64_t test_out;
     for (size_t i = 0; i < harness.get_sample_count(); ++i)
     {
-        test_in = harness.gen_int64_t();
-        test_out = test_in % 2;
+        test_in = harness.gen<uint64_t>();
+        test_out = test_in % (1 << 1);
         harness.log_results(test_in, test_out);
     }
 
-    double test_out_entropy = harness.compute_entropy_out();
-    if (!harness.check_entropy(test_out_entropy))
-    {
-        std::cerr << "Got entropy " << test_out_entropy
-                  << "; expected entropy within [" << harness.get_expected_low()
-                  << ", " << harness.get_expected_high() << "]! " << std::endl;
-        return 1;
-    }
-
-    return 0;
+    return !harness.validate_entropy_out(entropy);
 }
