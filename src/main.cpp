@@ -218,12 +218,14 @@ reader_dev(void)
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
                                 "InformationFlow/tmp/snip_add.ll";
 
+    IF_Randgen rng { 42 };
     IF_Emulator emu { snippets_lib_path };
+    IF_FuzzEngine fe { rng, emu };
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
     std::unique_ptr<IF_EntropyMap::Map> em
-        = if_p.make_entropy_map(*if_module->get_module());
+        = if_p.make_entropy_map(*if_module->get_module(), fe);
     em->set_verbose(true);
     em->print();
 

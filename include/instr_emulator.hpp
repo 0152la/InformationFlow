@@ -2,6 +2,7 @@
 #define _IF_INSTR_EMULATOR_HPP
 
 #include <cmath>
+#include <dlfcn.h>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -10,6 +11,7 @@
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -25,15 +27,25 @@
 #include "llvm/Support/Casting.h"
 #pragma clang diagnostic pop
 
-extern std::map<uint16_t, std::function<double(double)>> emulated_fns_unary;
-extern std::map<uint16_t, std::function<int64_t(int64_t, int64_t)>> emulated_fns;
-
 using unops_d_t = std::function<double(double)>;
 using binops_i64_t = std::function<int64_t(int64_t, int64_t)>;
+using binops_i64_ct = int64_t (*)(int64_t, int64_t);
+using emulated_fns_t = std::unordered_map<uint16_t, binops_i64_t>; // TODO
+//
+// extern std::map<uint16_t, std::function<double(double)>> emulated_fns_unary;
+extern emulated_fns_t emulated_fns;
 
 class IF_Emulator
 {
+private:
+    void* ll_snippet_handler;
+
 public:
+    IF_Emulator(const std::string&);
+    ~IF_Emulator();
+
+    binops_i64_t get_emulated_fn(uint16_t) const;
+
     /* Estimated operations
      * These operations do not need to be fuzzed to compute their entropy, but
      * certain dynamic elements need to be inspected in order to estimate it.

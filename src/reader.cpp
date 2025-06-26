@@ -71,12 +71,9 @@ extern std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
  * IF_Parser
  ******************************************************************************/
 
-IF_Parser::IF_Parser() { this->in_gen = IF_Randgen(); }
-
-IF_Parser::IF_Parser(int seed) { this->in_gen = IF_Randgen(seed); }
-
 std::unique_ptr<IF_EntropyMap::Map>
-IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
+IF_Parser::make_entropy_map(
+    const llvm::Module& llvm_module, IF_FuzzEngine& if_fe)
 {
     uint32_t instr_idx = 0;
     auto em = std::make_unique<IF_EntropyMap::Map>(llvm_module);
@@ -143,7 +140,6 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
             // Otherwise, we perform fuzzing, via emulated instructions.
             else
             {
-                IF_FuzzEngine if_fe;
                 retained_entropy = if_fe.fuzz_retained_entropy(fn_inst);
             }
 

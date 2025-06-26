@@ -48,14 +48,13 @@ public:
 class IF_Parser
 {
 private:
-    IF_Randgen in_gen;
     // IF_EntropyMap H_map; // H cause H = entropy :>
 
 public:
-    IF_Parser();
-    IF_Parser(int);
+    IF_Parser() = default;
 
-    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(const llvm::Module&);
+    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(
+        const llvm::Module&, IF_FuzzEngine&);
 
     static std::unique_ptr<IF_LLVM_Module> parse_ll(const std::string&);
     static void print_instrs(const llvm::Module&);

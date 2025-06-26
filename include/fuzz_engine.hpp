@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -21,17 +22,20 @@
 
 class IF_FuzzEngine
 {
+public:
+    using args_t = std::pair<int64_t, int64_t>;
+
 private:
-    const std::unique_ptr<IF_Randgen> rng;
+    IF_Randgen& rng;
+    const IF_Emulator& emu;
     uint64_t fuzz_count = 10 * 1000;
 
-    IF_ArgList gen_args(const llvm::Instruction&) const;
+    args_t gen_args(const llvm::Instruction&) const;
 
 public:
-    IF_FuzzEngine() :
-        rng(std::make_unique<IF_Randgen>()) { };
-    IF_FuzzEngine(int seed) :
-        rng(std::make_unique<IF_Randgen>(seed)) { };
+    IF_FuzzEngine(IF_Randgen& _rng, const IF_Emulator& _emu) :
+        rng(_rng),
+        emu(_emu) { };
 
     double fuzz_retained_entropy(const llvm::Instruction&);
 };

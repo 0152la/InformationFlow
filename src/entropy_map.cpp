@@ -133,4 +133,3 @@ IF_EntropyMap::Map::print(void) const
         }
     }
 }
-

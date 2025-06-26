@@ -13,28 +13,10 @@ define noundef double @llvm_impl_fneg(double noundef %a)
 
 ; Binary Operations - Integer
 
-define noundef i64 @llvm_impl_add_i64(i64 noundef %a, i64 noundef %b)
+define noundef i64 @llvm_impl_add(i64 noundef %a, i64 noundef %b)
 {
     %x = add i64 %a, %b
     ret i64 %x
-}
-
-define noundef i64 @llvm_impl_add_i64_nuw(i64 noundef %a, i64 noundef %b)
-{
-    %x = add nuw i64 %a, %b
-    ret i64 %x
-}
-
-define noundef i64 @llvm_impl_add_i64_nsw(i64 noundef %a, i64 noundef %b)
-{
-    %x = add nsw i64 %a, %b
-    ret i64 %x
-}
-
-define noundef i8 @llvm_impl_add_i8(i8 noundef %a, i8 noundef %b)
-{
-    %x = add i8 %a, %b
-    ret i8 %x
 }
 
 define noundef i64 @llvm_impl_sub(i64 noundef %a, i64 noundef %b)
@@ -72,3 +54,46 @@ define noundef i64 @llvm_impl_srem(i64 noundef %a, i64 noundef %b)
     %x = srem i64 %a, %b
     ret i64 %x
 }
+
+; Binary Operations - Bitwise
+define noundef i64 @llvm_impl_shl(i64 noundef %a, i64 noundef %b)
+{
+    %x = shl i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_lshr(i64 noundef %a, i64 noundef %b)
+{
+    %x = lshr i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_ashr(i64 noundef %a, i64 noundef %b)
+{
+    %x = ashr i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_and(i64 noundef %a, i64 noundef %b)
+{
+    %x = and i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_or(i64 noundef %a, i64 noundef %b)
+{
+    %x = or i64 %a, %b
+    ret i64 %x
+}
+
+define noundef i64 @llvm_impl_xor(i64 noundef %a, i64 noundef %b)
+{
+    %x = xor i64 %a, %b
+    ret i64 %x
+}
+
+; Memory Operations
+
+; Conversion Operations
+
+; Other Operations

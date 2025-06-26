@@ -1,57 +1,41 @@
 #include "instr_emulator.hpp"
 #include <llvm/IR/Instruction.h>
 
-//std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
-    //// Binary Operations
-    //{ llvm::Instruction::Add, IF_Emulator::emulate_add },
-    //{ llvm::Instruction::Sub, IF_Emulator::emulate_sub },
-    //{ llvm::Instruction::Mul, IF_Emulator::emulate_mul },
-    //{ llvm::Instruction::UDiv, IF_Emulator::emulate_udiv },
-    //{ llvm::Instruction::SDiv, IF_Emulator::emulate_sdiv },
-    //{ llvm::Instruction::URem, IF_Emulator::emulate_urem },
-    //{ llvm::Instruction::SRem, IF_Emulator::emulate_srem },
+// std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
+//// Binary Operations
+//{ llvm::Instruction::Add, IF_Emulator::emulate_add },
+//{ llvm::Instruction::Sub, IF_Emulator::emulate_sub },
+//{ llvm::Instruction::Mul, IF_Emulator::emulate_mul },
+//{ llvm::Instruction::UDiv, IF_Emulator::emulate_udiv },
+//{ llvm::Instruction::SDiv, IF_Emulator::emulate_sdiv },
+//{ llvm::Instruction::URem, IF_Emulator::emulate_urem },
+//{ llvm::Instruction::SRem, IF_Emulator::emulate_srem },
 
-    //// Bitwise Binary Operations
-    //{ llvm::Instruction::Shl, IF_Emulator::emulate_shl },
-    //{ llvm::Instruction::LShr, IF_Emulator::emulate_lshr },
-    //{ llvm::Instruction::AShr, IF_Emulator::emulate_ashr },
-    //{ llvm::Instruction::And, IF_Emulator::emulate_and },
-    //{ llvm::Instruction::Or, IF_Emulator::emulate_or },
-    //{ llvm::Instruction::Xor, IF_Emulator::emulate_xor },
+//// Bitwise Binary Operations
+//{ llvm::Instruction::Shl, IF_Emulator::emulate_shl },
+//{ llvm::Instruction::LShr, IF_Emulator::emulate_lshr },
+//{ llvm::Instruction::AShr, IF_Emulator::emulate_ashr },
+//{ llvm::Instruction::And, IF_Emulator::emulate_and },
+//{ llvm::Instruction::Or, IF_Emulator::emulate_or },
+//{ llvm::Instruction::Xor, IF_Emulator::emulate_xor },
 
-    //// Memory Operations
-    //{ llvm::Instruction::AtomicRMW, IF_Emulator::emulate_atomic_rmw },
+//// Memory Operations
+//{ llvm::Instruction::AtomicRMW, IF_Emulator::emulate_atomic_rmw },
 
-    //// Conversion Operations
-    //{ llvm::Instruction::FPToSI, IF_Emulator::emulate_fptosi },
+//// Conversion Operations
+//{ llvm::Instruction::FPToSI, IF_Emulator::emulate_fptosi },
 
-    //// Other Operations
-    //{ llvm::Instruction::ICmp, IF_Emulator::emulate_icmp },
+//// Other Operations
+//{ llvm::Instruction::ICmp, IF_Emulator::emulate_icmp },
 //};
 
 // Unary Operations
-//std::map<uint16_t, std::function<double(double)>> emulated_fns_unary
+// std::map<uint16_t, std::function<double(double)>> emulated_fns_unary
 //{
-    //{ llvm::Instruction::FNeg, llvm_impl_fneg },
+//{ llvm::Instruction::FNeg, llvm_impl_fneg },
 //};
 //
-int64_t
-llvm_impl_add2(int64_t x, int64_t y)
-{
-    return x + y;
-}
-
-//// Binary Operations - Integer
-std::map<uint16_t, std::function<int64_t(int64_t, int64_t)>> emulated_fns
-{
-    { llvm::Instruction::Add, llvm_impl_add2 },
-    //{ llvm::Instruction::Sub, llvm_impl_sub },
-    //{ llvm::Instruction::Mul, llvm_impl_mul },
-    //{ llvm::Instruction::UDiv, llvm_impl_udiv },
-    //{ llvm::Instruction::SDiv, llvm_impl_sdiv },
-    //{ llvm::Instruction::URem, llvm_impl_urem },
-    //{ llvm::Instruction::SRem, llvm_impl_srem },
-};
+emulated_fns_t emulated_fns;
 
 std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
     estimate_entropy {
@@ -72,7 +56,60 @@ std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
     };
 
 /*******************************************************************************
- * Estimated operations */
+ * Initialisation functions
+ ******************************************************************************/
+
+IF_Emulator::IF_Emulator(const std::string& lib_path)
+{
+    this->ll_snippet_handler = dlopen(lib_path.c_str(), RTLD_NOW);
+    if (!this->ll_snippet_handler)
+    {
+        throw std::runtime_error(
+            "Error `dlopen` :: " + std::string { dlerror() });
+    }
+
+    // Clear `dlerror`
+    dlerror();
+
+    const std::string fn_prefix = "llvm_impl_";
+    binops_i64_t fn;
+
+    for (unsigned int llvm_op = llvm::Instruction::BinaryOpsBegin;
+        llvm_op < llvm::Instruction::BinaryOpsEnd; ++llvm_op)
+    {
+        const std::string fn_name = fn_prefix
+            + std::string { llvm::Instruction::getOpcodeName(llvm_op) };
+        fn = (binops_i64_ct) dlsym(this->ll_snippet_handler, fn_name.c_str());
+        if (const char* err = dlerror())
+        {
+            // throw std::runtime_error("Error in `dlsym` for " + fn_name
+            //+ "\n\t >> " + std::string { err } + "\n");
+            std::cerr << "Ignoring unimplemented `" << fn_name << "`\n";
+        }
+        emulated_fns.insert(std::make_pair(llvm_op, fn));
+    }
+}
+
+IF_Emulator::~IF_Emulator() { dlclose(this->ll_snippet_handler); }
+
+binops_i64_t
+IF_Emulator::get_emulated_fn(uint16_t opcode) const
+{
+    try
+    {
+        return emulated_fns.at(opcode);
+    }
+    catch (const std::out_of_range& e)
+    {
+        std::cerr << "Error looking up function for `"
+                  << llvm::Instruction::getOpcodeName(opcode) << "`!\n";
+        std::exit(1);
+    }
+}
+
+/*******************************************************************************
+ * Estimated operations
+ */
 
 /* Vector Operations **********************************************************/
 
