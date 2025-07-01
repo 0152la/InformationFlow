@@ -1,61 +1,5 @@
 #include "entropy.hpp"
 
-double
-compute_entropy(const obs_t& observations, const size_t obs_count)
-{
-    double entropy = 0.0;
-    double prob;
-
-    // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
-    for (obs_t::const_reference entry : observations)
-    {
-        prob = entry / static_cast<double>(obs_count);
-        entropy += prob * log2(prob);
-    }
-
-    // Return the negation of the sum
-    return -entropy;
-}
-
-/* This computes the conditional entropy, given a structure of observations, of
- * the form `<given, <for:count>>`, where count is the number of times a `for`
- * was observed for the respective `given`. We also take the total number of
- * observations (equal to the total number of `count`s), for performance
- * reasons.
- */
-double
-compute_conditional_entropy(
-    const in_out_obs_t& observations, uint64_t obs_count)
-{
-    double entropy = 0.0;
-    double prob;
-    double in_prob;
-    double obs_count_d = static_cast<double>(obs_count);
-
-    for (in_out_obs_t::const_reference obs : observations)
-    {
-        // Compute the probability of a specific `given` observation
-        //
-        // p(x) = no of a specific `x` / total no of observations
-        in_prob = obs.first / obs_count_d;
-
-        for (obs_t::const_reference no_obs_outs : obs.second)
-        {
-            // Compute the probabilty of a specific pair of `(given, for)`
-            // observations. Since we are iterating over observed `for`s for a
-            // `given`, this is just the number of observed `for`s
-            //
-            // p(x, y) = no of (x, y) / total no of observations
-            prob = no_obs_outs / obs_count_d;
-
-            // Plug in entropy formula
-            entropy += prob * log2(prob / in_prob);
-        }
-    }
-
-    return -entropy;
-}
-
 /*******************************************************************************
  * IF_Histogram
  ******************************************************************************/
@@ -122,7 +66,7 @@ IF_Histogram::compute_input_count(
     return input_count;
 }
 
-obs_t
+IF_Histogram::obs_t
 IF_Histogram::get_input_observations(void) const
 {
     obs_t input_obs(this->data.size());
@@ -136,7 +80,7 @@ IF_Histogram::get_input_observations(void) const
     return input_obs;
 }
 
-obs_t
+IF_Histogram::obs_t
 IF_Histogram::get_output_observations(void) const
 {
     using out_count_t = std::unordered_map<output_hash_t, count_t>;
@@ -197,35 +141,80 @@ IF_Histogram::invert_obs(void) const
                     throw std::runtime_error(err.str());
                 }
             }
-            extract_outputs_t(inverted_obs_it)
-                .emplace(extract_input_hash(entry), extract_count(curr_out));
+            (*inverted_obs_it)
+                .second.emplace(
+                    extract_input_hash(entry), extract_count(curr_out));
         }
     }
     return inverted_obs;
 }
 
-in_out_obs_t
-IF_Histogram::count_observations(const data_t& obs_data) const
+double
+IF_Histogram::compute_entropy(const obs_t& observations, const size_t obs_count)
 {
-    in_out_obs_t io_obs;
-    obs_t one_obs;
-    count_t one_obs_total_count;
-    count_t one_obs_count;
+    double entropy = 0.0;
+    double prob;
 
-    for (IF_Histogram::data_t::const_reference entry : obs_data)
+    // Compute `sum(p(X) * log p(x))`, by computing it for each observed value
+    for (obs_t::const_reference entry : observations)
     {
-        one_obs.clear();
-        one_obs_total_count = 0;
-        for (IF_Histogram::outputs_t::const_reference entry_out : entry.second)
-        {
-            one_obs_count = extract_count(entry_out);
-            one_obs.emplace_back(one_obs_count);
-            one_obs_total_count += one_obs_count;
-        }
-        io_obs.emplace(one_obs_total_count, one_obs);
+        prob = entry / static_cast<double>(obs_count);
+        entropy += prob * log2(prob);
     }
 
-    return io_obs;
+    // Return the negation of the sum
+    return -entropy;
+}
+
+/* This computes the conditional entropy, given a structure of observations, of
+ * the form `<given, <for:count>>`, where count is the number of times a `for`
+ * was observed for the respective `given`. We also take the total number of
+ * observations (equal to the total number of `count`s), for performance
+ * reasons.
+ */
+double
+IF_Histogram::compute_conditional_entropy(
+    const data_t& observations, const size_t obs_count)
+{
+    double entropy = 0.0;
+    double prob;
+    double given_prob;
+    double obs_count_d = static_cast<double>(obs_count);
+    size_t given_obs_count;
+
+    for (data_t::const_reference given_obs : observations)
+    {
+        // Compute the probability of a specific `given` observation
+        //
+        // p(x) = no of a specific `x` / total no of observations
+        given_obs_count = 0;
+
+        // First, we add up all the `for` observation counts for a `given`
+        for (outputs_t::const_reference given_obs_one :
+            extract_outputs_t(given_obs))
+        {
+            given_obs_count += extract_count(given_obs_one);
+        }
+        // Compute the probability for one `given`
+        given_prob = given_obs_count / obs_count_d;
+
+        // Then compute individual sum members for all `for`s
+        for (outputs_t::const_reference given_obs_one :
+            extract_outputs_t(given_obs))
+        {
+            // Compute the probabilty of a specific pair of `(given, for)`
+            // observations. Since we are iterating over observed `for`s for a
+            // `given`, this is just the number of observed `for`s
+            //
+            // p(x, y) = no of (x, y) / total no of observations
+            prob = extract_count(given_obs_one) / obs_count_d;
+
+            // Plug in entropy formula
+            entropy += prob * log2(prob / given_prob);
+        }
+    }
+
+    return -entropy;
 }
 
 /* Public *********************************************************************/
@@ -293,16 +282,14 @@ IF_Histogram::calculate_entropy_outputs(void) const
 double
 IF_Histogram::calculate_conditional_entropy_out_given_in(void) const
 {
-    in_out_obs_t inputs_obs_count = this->count_observations(this->data);
-    return compute_conditional_entropy(inputs_obs_count, this->obs_count);
+    return compute_conditional_entropy(this->data, this->obs_count);
 }
 
 double
 IF_Histogram::calculate_conditional_entropy_in_given_out(void) const
 {
     data_t inverted_obs = this->invert_obs();
-    in_out_obs_t output_obs_count = this->count_observations(inverted_obs);
-    return compute_conditional_entropy(output_obs_count, this->obs_count);
+    return compute_conditional_entropy(inverted_obs, this->obs_count);
 }
 
 double

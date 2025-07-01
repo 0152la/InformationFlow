@@ -42,7 +42,7 @@ target_link_libraries(lflow PRIVATE ${llvm_libs})
 add_dependencies(lflow llvm_snippets)
 
 # Entropy library for entropy tests
-add_library(entropy
+add_library(entropy STATIC
     entropy.cpp
     randgen.cpp
 )

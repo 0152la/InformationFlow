@@ -15,24 +15,6 @@
 #include <unordered_map>
 #include <utility>
 
-/* This type represents the number of observed instances for a single value,
- * derived from actual experimental data. We abstract away the actual observed
- * values, since we don't need them to perform entropy computations
- */
-using obs_t = std::deque<uint64_t>;
-
-/* This type represents inputs, with the number of observed output instances.
- * Similar to `obs_t`, we additionally abstract the number of observed inputs,
- * and match them to observed outputs. Required to perform conditional entropy
- * calculations.
- */
-using in_out_obs_t = std::unordered_map<uint64_t, obs_t>;
-
-double
-compute_entropy(const obs_t&, const size_t);
-double
-compute_conditional_entropy(const in_out_obs_t&, const uint64_t);
-
 /* Class representing an evaluation of some underlying function, gathering all
  * observed inputs and outputs, and allowing us to perform some computations
  * over it. Most interestingly, we can compute the entropies, and uncertainty
@@ -40,6 +22,13 @@ compute_conditional_entropy(const in_out_obs_t&, const uint64_t);
  */
 class IF_Histogram
 {
+private:
+    /* This type represents the number of observed instances for a single value,
+     * derived from actual experimental data. We abstract away the actual
+     * observed values, since we don't need them to perform entropy computations
+     */
+    using obs_t = std::deque<uint64_t>;
+
 public:
     using input_hash_t = size_t;
     using output_hash_t = size_t;
@@ -66,7 +55,8 @@ private:
     obs_t get_output_observations(void) const;
     data_t invert_obs(void) const;
 
-    in_out_obs_t count_observations(const data_t&) const;
+    static double compute_entropy(const obs_t&, const size_t);
+    static double compute_conditional_entropy(const data_t&, const size_t);
 
 public:
     IF_Histogram() = default;
