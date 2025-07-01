@@ -7,7 +7,7 @@ function(add_binary_test test_name)
 endfunction()
 
 #Entropy tests
-add_library(test_harness SHARED test_harness.cpp)
+add_library(test_harness STATIC test_harness.cpp)
 target_include_directories(test_harness PRIVATE ${INCLUDE_DIR})
 
 set(ENTROPY_TEST_LIBS
@@ -26,12 +26,17 @@ endfunction()
 set(entropy_tests
     entropy-coin_flip
     entropy-dice_roll
+    entropy-func_loss
     simple-entropies
 )
 
 foreach(entropy_t IN LISTS entropy_tests)
     add_entropy_test(${entropy_t})
 endforeach()
+
+target_sources(entropy-func_loss PUBLIC entropy-func_loss-exec.ll-src)
+set_source_files_properties(entropy-func_loss-exec.ll-src PROPERTIES LANGUAGE CXX)
+target_link_libraries(entropy-func_loss PRIVATE lflow)
 
 # Functionality tests
 function(add_func_test test_name)
@@ -77,7 +82,7 @@ set(ll_srcs
     sample
     simple-arith
     simple-vector
-    #simple-struct
+    entropy-func_loss-exec
 )
 
 foreach(ll_src_t IN LISTS ll_srcs)

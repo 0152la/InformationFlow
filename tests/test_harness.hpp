@@ -97,4 +97,7 @@ public:
         std::cout << msg.str();
         return check_entropy(to_check, ref_val);
     }
+
+    /* Printing ***************************************************************/
+    void print_measures(void) const { this->results.print_measures(); }
 };
