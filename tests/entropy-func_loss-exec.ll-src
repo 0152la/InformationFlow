@@ -4,5 +4,6 @@
 int
 do_some(uint64_t x)
 {
-    return x % 3 + 2;
+    int y = 3;
+    return x % y + 2;
 }

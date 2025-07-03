@@ -49,7 +49,6 @@ do_if_entropy(std::string file_path)
 int
 main()
 {
-    // constexpr double entropy = 1 / 3;
     std::cout << "# Function-based computed entropy\n";
     EntropyHarness func_harness(std::pow(10, 5), 0.01);
 

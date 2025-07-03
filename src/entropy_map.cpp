@@ -118,6 +118,7 @@ IF_EntropyMap::Map::print(void) const
         {
             std::cout << " -- " << em_fn->get_demangled_name();
         }
+        std::cout << '\n';
 
         for (const auto& em_fn_instr : em_fn->get_instrs())
         {

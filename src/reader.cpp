@@ -283,7 +283,7 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                     v->printAsOperand(llvm::errs());
                     llvm::errs() << " --- ";
                     v->printAsOperand(llvm::errs(), false, &llvm_module);
-                    llvm::errs() << " ]";
+                    llvm::errs() << " ] ";
                 }
                 else
                 {

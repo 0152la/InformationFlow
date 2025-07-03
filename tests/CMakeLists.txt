@@ -88,3 +88,23 @@ set(ll_srcs
 foreach(ll_src_t IN LISTS ll_srcs)
     add_ll_gen_test(${ll_src_t})
 endforeach()
+
+# Special `ll` tests for `entropy-func_loss
+function(add_special_ll_test target_name out_name src_path extra_flags)
+    cmake_path(ABSOLUTE_PATH out_name
+               BASE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+               OUTPUT_VARIABLE out_path)
+    add_custom_command(
+        OUTPUT ${out_path}
+        COMMAND ${CMAKE_CXX_COMPILER} ${extra_flags} -x c++ -S -emit-llvm -g
+                -o ${out_path} ${src_path}
+        DEPENDS ${src_path}
+        WORKING_DIRECTORY ${TEST_DIR}
+    )
+    add_custom_target(${target_name}
+        DEPENDS ${out_path})
+    add_dependencies(gen-lls ${target_name})
+endfunction()
+
+add_special_ll_test(efo0 entropy-func_loss-exec-O0.ll entropy-func_loss-exec.ll-src -O0)
+add_special_ll_test(efo2 entropy-func_loss-exec-O2.ll entropy-func_loss-exec.ll-src -O2)
