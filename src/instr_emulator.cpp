@@ -1,5 +1,4 @@
 #include "instr_emulator.hpp"
-#include <llvm/IR/Instruction.h>
 
 // std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
 //// Binary Operations
@@ -59,6 +58,75 @@ std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
  * Initialisation functions
  ******************************************************************************/
 
+void
+IF_Emulator::dllink_snippet(const std::string& fn_name) const
+{
+    binops_i64_t fn
+        = (binops_i64_ct) dlsym(this->ll_snippet_handler, fn_name.c_str());
+    if (const char* err = dlerror())
+    {
+        // throw std::runtime_error("Error in `dlsym` for " + fn_name
+        //+ "\n\t >> " + std::string { err } + "\n");
+        std::cerr << "Ignoring unimplemented `" << fn_name << "`\n";
+    }
+    emulated_fns.insert(std::make_pair(fn_name, fn));
+}
+
+void
+IF_Emulator::populate_all_bin_ops(void) const
+{
+    binops_i64_t fn;
+    for (unsigned int llvm_op = llvm::Instruction::BinaryOpsBegin;
+        llvm_op < llvm::Instruction::BinaryOpsEnd; ++llvm_op)
+    {
+        std::string fn_name = this->snippet_prefix
+            + std::string(llvm::Instruction::getOpcodeName(llvm_op));
+        this->dllink_snippet(fn_name);
+    }
+}
+
+void
+IF_Emulator::populate_all_other_ops(void) const
+{
+    binops_i64_t fn; // TODO
+    for (unsigned int llvm_op = llvm::Instruction::OtherOpsBegin;
+        llvm_op < llvm::Instruction::OtherOpsEnd; ++llvm_op)
+    {
+        const std::string fn_name = this->snippet_prefix
+            + std::string { llvm::Instruction::getOpcodeName(llvm_op) };
+        // TODO
+        if (llvm_op == llvm::Instruction::ICmp)
+        {
+            for (unsigned int icmp_pred = llvm::CmpInst::FIRST_ICMP_PREDICATE;
+                icmp_pred < llvm::CmpInst::LAST_ICMP_PREDICATE; ++icmp_pred)
+            {
+                this->dllink_snippet(fn_name + "_"
+                    + llvm::ICmpInst::getPredicateName(
+                        llvm::ICmpInst::Predicate(icmp_pred))
+                        .str());
+            }
+        }
+        else
+        {
+            this->dllink_snippet(fn_name);
+        }
+    }
+}
+
+const std::string
+IF_Emulator::make_emulated_fn_name(const llvm::Instruction& instr) const
+{
+    std::string fn_name = this->snippet_prefix + instr.getOpcodeName();
+    if (const llvm::ICmpInst* icmp_instr
+        = llvm::dyn_cast<llvm::ICmpInst>(&instr))
+    {
+        fn_name += "_"
+            + llvm::ICmpInst::getPredicateName(icmp_instr->getPredicate())
+                  .str();
+    }
+    return fn_name;
+}
+
 IF_Emulator::IF_Emulator(const std::string& lib_path)
 {
     this->ll_snippet_handler = dlopen(lib_path.c_str(), RTLD_NOW);
@@ -71,38 +139,23 @@ IF_Emulator::IF_Emulator(const std::string& lib_path)
     // Clear `dlerror`
     dlerror();
 
-    const std::string fn_prefix = "llvm_impl_";
-    binops_i64_t fn;
-
-    for (unsigned int llvm_op = llvm::Instruction::BinaryOpsBegin;
-        llvm_op < llvm::Instruction::BinaryOpsEnd; ++llvm_op)
-    {
-        const std::string fn_name = fn_prefix
-            + std::string { llvm::Instruction::getOpcodeName(llvm_op) };
-        fn = (binops_i64_ct) dlsym(this->ll_snippet_handler, fn_name.c_str());
-        if (const char* err = dlerror())
-        {
-            // throw std::runtime_error("Error in `dlsym` for " + fn_name
-            //+ "\n\t >> " + std::string { err } + "\n");
-            std::cerr << "Ignoring unimplemented `" << fn_name << "`\n";
-        }
-        emulated_fns.insert(std::make_pair(llvm_op, fn));
-    }
+    this->populate_all_bin_ops();
+    this->populate_all_other_ops();
 }
 
 IF_Emulator::~IF_Emulator() { dlclose(this->ll_snippet_handler); }
 
 binops_i64_t
-IF_Emulator::get_emulated_fn(uint16_t opcode) const
+IF_Emulator::get_emulated_fn(const llvm::Instruction& instr) const
 {
+    const std::string lookup_name = this->make_emulated_fn_name(instr);
     try
     {
-        return emulated_fns.at(opcode);
+        return emulated_fns.at(lookup_name);
     }
     catch (const std::out_of_range& e)
     {
-        std::cerr << "Error looking up function for `"
-                  << llvm::Instruction::getOpcodeName(opcode) << "`!\n";
+        std::cerr << "Error looking up function for `" << lookup_name << "`!\n";
         std::exit(1);
     }
 }
