@@ -74,6 +74,10 @@ IF_Histogram::get_input_observations(void) const
     for (size_t i = 0; data_t::const_reference entry : this->data)
     {
         input_obs.at(i) = compute_input_count(entry);
+        if (input_obs.at(i) == 0)
+        {
+            throw std::runtime_error("Found input observation with count 0!");
+        }
         i += 1;
     }
 
@@ -109,6 +113,10 @@ IF_Histogram::get_output_observations(void) const
     obs_t out_obs;
     for (out_count_t::const_reference out : out_counts)
     {
+        if (out.second == 0)
+        {
+            throw std::runtime_error("Found output observation with count 0!");
+        }
         out_obs.emplace_back(out.second);
     }
 

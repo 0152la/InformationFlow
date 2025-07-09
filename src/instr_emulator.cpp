@@ -155,8 +155,8 @@ IF_Emulator::get_emulated_fn(const llvm::Instruction& instr) const
     }
     catch (const std::out_of_range& e)
     {
-        std::cerr << "Error looking up function for `" << lookup_name << "`!\n";
-        std::exit(1);
+        throw std::runtime_error(
+            "Error looking up function for `" + lookup_name + "`!");
     }
 }
 

@@ -34,16 +34,31 @@ IF_FuzzEngine::gen_args(const llvm::Instruction& instr) const
 double
 IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
 {
-    // std::vector<bool> arg_fuzz_mask(instr.getNumOperands());
-    // for (unsigned short i = 0; i < arg_fuzz_mask.size(); ++i)
-    //{
-    // arg_fuzz_mask.at(i)
-    //= !llvm::isa<llvm::ConstantInt>(instr.getOperand(i));
-    //}
-    //
+    //const unsigned int args_count = instr.getNumOperands();
+    constexpr unsigned short args_count = 2;
+    //if (args_count != 2)
+    if (args_count != instr.getNumOperands())
+    {
+        std::ostringstream err;
+        err << "Found instruction `" << instr.getOpcodeName() << "` with "
+            << instr.getNumOperands() << " operands help";
+        throw std::runtime_error(err.str());
+    }
 
-    // std::function<IF_Arg(const IF_ArgList&)> fn;
-    binops_i64_t fn = this->emu.get_emulated_fn(instr.getOpcode());
+    //std::vector<int64_t> args(args_count);
+    std::array<int64_t, args_count> args;
+    std::bitset<args_count> args_mask;
+    for (unsigned short i = 0; i < args_count; ++i)
+    {
+        if (llvm::ConstantInt* ci
+            = llvm::dyn_cast<llvm::ConstantInt>(instr.getOperand(i)))
+        {
+            args.at(i) = ci->getZExtValue();
+            args_mask.set(i);
+        }
+    }
+
+    binops_i64_t fn = this->emu.get_emulated_fn(instr);
 
     if (!instr.getType()->isIntegerTy())
     {
@@ -52,16 +67,27 @@ IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
     }
 
     const uint8_t bit_width = instr.getType()->getIntegerBitWidth();
-    uint8_t args_to_gen = 2; // TODO
 
     IF_Histogram fuzz_hist;
 
     for (uint64_t i = 0; i < this->fuzz_count; ++i)
     {
-        args_t instr_args = this->gen_args(instr);
-        int64_t out_arg = fn(instr_args.first, instr_args.second);
-        fuzz_hist.insert(instr_args.to_hash(), out_arg.to_hash());
+        for (uint8_t j = 0; j < args_count; ++j)
+        {
+            if (!args_mask.test(j))
+            {
+                args.at(j) = this->rng.gen_signed_int(64);
+            }
+        }
+        int64_t out_arg = fn(args.at(0), args.at(1));
+        fuzz_hist.insert(std::hash<std::array<int64_t, args_count>> {}(args),
+            std::hash<int64_t> {}(out_arg));
     }
 
-     return fuzz_hist.calculate_uncertainty_coefficient_in_given_out();
+    if (instr.getOpcode() == llvm::Instruction::ICmp)
+    {
+        fuzz_hist.print_measures();
+    }
+
+    return fuzz_hist.calculate_uncertainty_coefficient_in_given_out();
 }

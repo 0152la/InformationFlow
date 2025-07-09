@@ -2,13 +2,17 @@
 #define _IF_FUZZENGINE_HPP
 
 #include "entropy.hpp"
+#include "hashing.hpp"
 #include "instr_emulator.hpp"
 #include "randgen.hpp"
 
+#include <array>
+#include <bitset>
 #include <functional>
 #include <map>
 #include <memory>
 #include <random>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>

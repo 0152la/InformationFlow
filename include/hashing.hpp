@@ -1,6 +1,7 @@
 #ifndef _IF_HASHING_HPP
 #define _IF_HASHING_HPP
 
+#include <array>
 #include <cstdlib>
 #include <functional>
 #include <utility>
@@ -21,6 +22,20 @@ template <typename T1, typename T2> struct hash<pair<T1, T2>>
         return seed;
     }
 };
+
+template <typename T, size_t N> struct hash<array<T, N>>
+{
+    size_t operator()(array<T, N> const& _arr) const
+    {
+        size_t seed = 0;
+        for (size_t i = 0; i < _arr.size(); ++i)
+        {
+            ::hash_combine(seed, _arr.at(i));
+        }
+        return seed;
+    }
+};
+
 }
 
 #include "hashing.tpp"
