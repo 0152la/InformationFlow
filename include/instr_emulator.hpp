@@ -6,7 +6,6 @@
 #include <functional>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <memory>
 #include <ranges>
 #include <stdexcept>
@@ -32,27 +31,35 @@ using unops_d_t = std::function<double(double)>;
 using binops_i64_t = std::function<int64_t(int64_t, int64_t)>;
 using binops_i64_ct = int64_t (*)(int64_t, int64_t);
 using emulated_fns_t = std::unordered_map<std::string, binops_i64_t>; // TODO
-//
-// extern std::map<uint16_t, std::function<double(double)>> emulated_fns_unary;
+
+using entropy_map_key_t = std::string;
+using set_entropy_t = std::unordered_map<entropy_map_key_t, double>;
+using estimate_entropy_t = std::unordered_map<entropy_map_key_t,
+    std::function<double(const llvm::Instruction&)>>;
+// extern std::map<uint16_t, std::function<double(double)>>
+// emulated_fns_unary;
 extern emulated_fns_t emulated_fns;
 
 class IF_Emulator
 {
 private:
+    static constexpr std::string snippet_prefix = "llvm_impl_";
+
     void* ll_snippet_handler;
-    const std::string snippet_prefix = "llvm_impl_";
 
     void dllink_snippet(const std::string&) const;
     void populate_all_bin_ops(void) const;
     void populate_all_other_ops(void) const;
-
-    const std::string make_emulated_fn_name(const llvm::Instruction&) const;
 
 public:
     IF_Emulator(const std::string&);
     ~IF_Emulator();
 
     binops_i64_t get_emulated_fn(const llvm::Instruction&) const;
+
+    static std::string complete_fn_name(const std::string&);
+    static std::string make_fn_name_from_opcode(unsigned int llvm_ir_opcode);
+    static std::string make_emulated_fn_name(const llvm::Instruction&);
 
     /* Estimated operations
      * These operations do not need to be fuzzed to compute their entropy, but
@@ -75,6 +82,8 @@ public:
     static double estimate_ptrtoint(const llvm::Instruction&);
 
     /* Other Operations ******************************************************/
+    static double estimate_icmp_eq(const llvm::Instruction&);
+    static double estimate_icmp_ne(const llvm::Instruction&);
     static double estimate_phi(const llvm::Instruction&);
 };
 

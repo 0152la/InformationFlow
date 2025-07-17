@@ -4,6 +4,7 @@
 #include "entropy.hpp"
 #include "entropy_map.hpp"
 #include "fuzz_engine.hpp"
+#include "instr_emulator.hpp"
 #include "randgen.hpp"
 
 #include <algorithm>
@@ -49,6 +50,9 @@ class IF_Parser
 {
 private:
     // IF_EntropyMap H_map; // H cause H = entropy :>
+
+    double compute_instr_entropy(
+        const llvm::Instruction&, IF_FuzzEngine&) const;
 
 public:
     IF_Parser() = default;

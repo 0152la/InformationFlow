@@ -36,23 +36,104 @@
 //
 emulated_fns_t emulated_fns;
 
-std::map<uint16_t, std::function<double(const llvm::Instruction&)>>
-    estimate_entropy {
-        // Vector Operations
-        { llvm::Instruction::ExtractElement,
-            IF_Emulator::estimate_extract_element },
+/* For certain instructions, we can estimate the amount of retained entropy by
+ * looking at just the data contained within the instructions themselves, rather
+ * than having to perform fuzzing
+ */
+estimate_entropy_t estimate_entropy {
+    // Vector Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::ExtractElement),
+        IF_Emulator::estimate_extract_element },
 
-        // Aggregate Operations
-        { llvm::Instruction::ExtractValue,
-            IF_Emulator::estimate_extract_value },
+    // Aggregate Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::ExtractValue),
+        IF_Emulator::estimate_extract_value },
 
-        // Converstion Operations
-        { llvm::Instruction::Trunc, IF_Emulator::estimate_trunc },
-        { llvm::Instruction::PtrToInt, IF_Emulator::estimate_ptrtoint },
+    // Converstion Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Trunc),
+        IF_Emulator::estimate_trunc },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::PtrToInt),
+        IF_Emulator::estimate_ptrtoint },
 
-        // Other Operations
-        { llvm::Instruction::PHI, IF_Emulator::estimate_phi },
-    };
+    // Other Operations
+    { IF_Emulator::complete_fn_name("icmp_eq"), IF_Emulator::estimate_icmp_eq },
+    { IF_Emulator::complete_fn_name("icmp_ne"), IF_Emulator::estimate_icmp_ne },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::PHI),
+        IF_Emulator::estimate_phi },
+};
+
+/* For certain instructions, we can directly calculate the entropy, as they
+ * either affect only control flow, or move data around.
+ */
+set_entropy_t set_entropy {
+    // Terminator Instructions
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Ret), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Br), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::IndirectBr),
+        1.0 },
+    /* This seems like a `Call` instruction in most cases, but consider
+       edge cases */
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Invoke), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Resume), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Unreachable),
+        0.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::CleanupRet),
+        1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::CatchRet), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::CallBr), 1.0 },
+
+    // Unary Instructions
+    /* The entropy here is actually off by one sample, due to two's
+       complement and negating the maximum representable value; however, we
+       estimate it to 1.0 */
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::FNeg), 1.0 },
+
+    // Vector Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::InsertElement),
+        1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::ShuffleVector),
+        0.5 },
+
+    // Aggregate Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::InsertValue),
+        1.0 },
+
+    // Memory Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Alloca), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Load), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Store), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Fence), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::AtomicCmpXchg),
+        1.0 },
+    /* Only computes an address, doesn't dereference any memory */
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::GetElementPtr),
+        1.0 },
+
+    // Conversion Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::ZExt), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::SExt), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::FPExt), 1.0 },
+    /* TODO might be fine to approximate
+       to 1, but I think there is quite a bit of lost entropy from rounding
+       */
+    // { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::fptoui), 1.0
+    // },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::UIToFP), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::SIToFP), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::IntToPtr), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::BitCast), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::AddrSpaceCast),
+        1.0 },
+
+    // Other Operations
+    // TODO handle constant case?
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Select), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Call), 1.0 },
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::LandingPad),
+        1.0 },
+    /* TODO */
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Freeze), 1.0 },
+};
 
 /*******************************************************************************
  * Initialisation functions
@@ -113,20 +194,6 @@ IF_Emulator::populate_all_other_ops(void) const
     }
 }
 
-const std::string
-IF_Emulator::make_emulated_fn_name(const llvm::Instruction& instr) const
-{
-    std::string fn_name = this->snippet_prefix + instr.getOpcodeName();
-    if (const llvm::ICmpInst* icmp_instr
-        = llvm::dyn_cast<llvm::ICmpInst>(&instr))
-    {
-        fn_name += "_"
-            + llvm::ICmpInst::getPredicateName(icmp_instr->getPredicate())
-                  .str();
-    }
-    return fn_name;
-}
-
 IF_Emulator::IF_Emulator(const std::string& lib_path)
 {
     this->ll_snippet_handler = dlopen(lib_path.c_str(), RTLD_NOW);
@@ -158,6 +225,33 @@ IF_Emulator::get_emulated_fn(const llvm::Instruction& instr) const
         throw std::runtime_error(
             "Error looking up function for `" + lookup_name + "`!");
     }
+}
+
+std::string
+IF_Emulator::complete_fn_name(const std::string& base)
+{
+    return IF_Emulator::snippet_prefix + base;
+}
+
+std::string
+IF_Emulator::make_fn_name_from_opcode(unsigned int opcode)
+{
+    return IF_Emulator::snippet_prefix
+        + llvm::Instruction::getOpcodeName(opcode);
+}
+
+std::string
+IF_Emulator::make_emulated_fn_name(const llvm::Instruction& instr)
+{
+    std::string fn_name = IF_Emulator::snippet_prefix + instr.getOpcodeName();
+    if (const llvm::ICmpInst* icmp_instr
+        = llvm::dyn_cast<llvm::ICmpInst>(&instr))
+    {
+        fn_name += "_"
+            + llvm::ICmpInst::getPredicateName(icmp_instr->getPredicate())
+                  .str();
+    }
+    return fn_name;
 }
 
 /*******************************************************************************
@@ -307,6 +401,27 @@ IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
 }
 
 /* Other Operations ***********************************************************/
+
+double
+IF_Emulator::estimate_icmp_eq(const llvm::Instruction& instr)
+{
+    uint8_t bit_width = instr.getOperand(0)->getType()->getIntegerBitWidth();
+    if (bit_width < 1 || bit_width > 64)
+    {
+        std::ostringstream err;
+        err << "Invalid `icmp` bit width of " << bit_width << "!";
+        throw std::runtime_error(err.str());
+    }
+    return 1.0 / std::pow(2, bit_width);
+}
+
+double
+IF_Emulator::estimate_icmp_ne(const llvm::Instruction& instr)
+{
+    // Both of these comparisons have a single value which will be different
+    // than the rest, so we can use the same entropy computation process
+    return estimate_icmp_eq(instr);
+}
 
 // TODO double check this
 double
