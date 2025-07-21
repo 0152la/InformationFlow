@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <vector>

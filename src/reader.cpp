@@ -11,8 +11,7 @@ double
 IF_Parser::compute_instr_entropy(
     const llvm::Instruction& instr, IF_FuzzEngine& if_fe) const
 {
-    const std::string fn_snip_name
-        = IF_Emulator::complete_fn_name(instr.getOpcodeName());
+    const std::string fn_snip_name = IF_Emulator::make_emulated_fn_name(instr);
 
     // We first search whether this instruction is one we have a
     // default entropy for. If we do, then we simply set the entropy to
@@ -83,6 +82,13 @@ IF_Parser::make_entropy_map(
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
             double retained_entropy = compute_instr_entropy(fn_inst, if_fe);
+            if (retained_entropy < std::numeric_limits<double>::epsilon())
+            {
+                std::ostringstream err;
+                err << "Seen entropy under ulp: " << retained_entropy << " < "
+                    << std::numeric_limits<double>::epsilon();
+                throw std::runtime_error(err.str());
+            }
             em_instr_map.emplace(&fn_inst, em_instr.get());
 
             // Record special instruction successors, such as from calls or
