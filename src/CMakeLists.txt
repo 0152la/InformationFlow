@@ -1,11 +1,31 @@
-# Library for llvm snippets, used for fuzzing
+# Abstract required LLVM components
+llvm_map_components_to_libnames(llvm_libs support core irreader)
+
+# Executable for `llvm_snippet.ll` generation
+add_executable(lgen
+    llvm_gen.cpp
+)
+target_include_directories(lgen PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_link_libraries(lgen PRIVATE ${llvm_libs})
+
+# Custom targets to generate `llvm_snippets.ll` and the corresponding dynamic
+# library
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
+    COMMAND lgen
+)
+add_custom_target(lgen_make_snippets
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
+)
+
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libllvm_snippets.so
     COMMAND clang++ -shared -O2
             -o ${CMAKE_CURRENT_BINARY_DIR}/libllvm_snippets.so
-            ${CMAKE_CURRENT_SOURCE_DIR}/instr_snippets.ll
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/instr_snippets.ll
+            ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
 )
+
 add_custom_target(llvm_snippets
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libllvm_snippets.so
 )
@@ -29,7 +49,6 @@ add_executable(iflow
     main.cpp
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
-llvm_map_components_to_libnames(llvm_libs support core irreader)
 target_link_libraries(iflow PRIVATE ${llvm_libs})
 add_dependencies(iflow llvm_snippets)
 
