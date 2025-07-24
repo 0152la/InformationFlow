@@ -27,6 +27,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
 
 using unops_d_t = std::function<double(double)>;
@@ -104,5 +105,7 @@ uint32_t
 compute_total_struct_sz(const struct_sz_t*);
 std::unique_ptr<struct_sz_t>
 get_llvm_struct_bitsize(const llvm::StructType*, const llvm::Module*);
+uint8_t
+get_operand_bit_width(const llvm::Type*, const llvm::Module*);
 
 #endif // _IF_INSTR_EMULATOR_HPP

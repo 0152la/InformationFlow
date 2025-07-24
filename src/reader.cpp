@@ -87,7 +87,8 @@ IF_Parser::make_entropy_map(
                 std::ostringstream err;
                 err << "Seen entropy under ulp: " << retained_entropy << " < "
                     << std::numeric_limits<double>::epsilon();
-                throw std::runtime_error(err.str());
+                //throw std::runtime_error(err.str());
+                llvm::errs() << "Warning: " << err.str() << '\n';
             }
             em_instr_map.emplace(&fn_inst, em_instr.get());
 

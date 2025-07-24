@@ -389,7 +389,8 @@ IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
 double
 IF_Emulator::estimate_icmp_eq(const llvm::Instruction& instr)
 {
-    uint8_t bit_width = instr.getOperand(0)->getType()->getIntegerBitWidth();
+    uint8_t bit_width = get_operand_bit_width(
+        instr.getOperand(0)->getType(), instr.getModule());
     if (bit_width < 1 || bit_width > 64)
     {
         std::ostringstream err;
@@ -493,4 +494,24 @@ get_llvm_struct_bitsize(
         }
     }
     return struct_sz;
+}
+
+uint8_t
+get_operand_bit_width(const llvm::Type* ty, const llvm::Module* llvm_module)
+{
+    if (ty->isPointerTy())
+    {
+        return llvm_module->getDataLayout().getPointerSize() * CHAR_BIT;
+    }
+
+    if (ty->isIntegerTy())
+    {
+        return ty->getIntegerBitWidth();
+    }
+
+    std::string err;
+    llvm::raw_string_ostream err_os(err);
+    err_os << "Unhandled type for bit_width computation : ";
+    ty->print(err_os);
+    throw std::runtime_error(err);
 }
