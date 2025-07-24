@@ -1,22 +1,6 @@
 #include "instr_emulator.hpp"
 
 // std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
-//// Binary Operations
-//{ llvm::Instruction::Add, IF_Emulator::emulate_add },
-//{ llvm::Instruction::Sub, IF_Emulator::emulate_sub },
-//{ llvm::Instruction::Mul, IF_Emulator::emulate_mul },
-//{ llvm::Instruction::UDiv, IF_Emulator::emulate_udiv },
-//{ llvm::Instruction::SDiv, IF_Emulator::emulate_sdiv },
-//{ llvm::Instruction::URem, IF_Emulator::emulate_urem },
-//{ llvm::Instruction::SRem, IF_Emulator::emulate_srem },
-
-//// Bitwise Binary Operations
-//{ llvm::Instruction::Shl, IF_Emulator::emulate_shl },
-//{ llvm::Instruction::LShr, IF_Emulator::emulate_lshr },
-//{ llvm::Instruction::AShr, IF_Emulator::emulate_ashr },
-//{ llvm::Instruction::And, IF_Emulator::emulate_and },
-//{ llvm::Instruction::Or, IF_Emulator::emulate_or },
-//{ llvm::Instruction::Xor, IF_Emulator::emulate_xor },
 
 //// Memory Operations
 //{ llvm::Instruction::AtomicRMW, IF_Emulator::emulate_atomic_rmw },

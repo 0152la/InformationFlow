@@ -256,6 +256,14 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                     {
                         cfp->getValue().print(llvm::errs());
                     }
+                    else if (llvm::isa<llvm::UndefValue>(fn_inst_arg))
+                    {
+                        llvm::errs() << "undef";
+                    }
+                    else if (llvm::isa<llvm::ConstantPointerNull>(fn_inst_arg))
+                    {
+                        llvm::errs() << "nullptr";
+                    }
                     else
                     {
                         throw std::runtime_error("Unhandled ConstantData type");
@@ -269,5 +277,7 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
             }
             llvm::errs() << '\n';
         }
+
+        llvm::errs() << "=== DONE Function " << fn.getName() << '\n';
     }
 }
