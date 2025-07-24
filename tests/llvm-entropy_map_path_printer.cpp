@@ -1,8 +1,11 @@
-#include <cstdlib>
+#include <algorithm>
 #include <iostream>
 #include <memory>
 
-#include "entropy_map.hpp"
+#include "entropy_map_graph.hpp"
+#include "entropy_map_path_printer.hpp"
+#include "instr_emulator.hpp"
+#include "randgen.hpp"
 #include "reader.hpp"
 
 const char*
@@ -25,18 +28,21 @@ int
 main()
 {
     const char* input_file_path = get_env_var("IF_LLVM_TEST_FILE");
-    const char* llvm_snippet_lib_path = get_env_var("IF_LLVM_SNIP_LIB");
+    const char* snippets_lib_path = get_env_var("IF_LLVM_SNIP_LIB");
+
+    IF_Randgen rng(42);
+    IF_Emulator emu(snippets_lib_path);
+    IF_FuzzEngine fe(rng, emu);
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_m = if_p.parse_ll(input_file_path);
-
-    IF_Randgen if_rng(42);
-    IF_Emulator if_emu(llvm_snippet_lib_path);
-    IF_FuzzEngine if_fe(if_rng, if_emu);
     std::unique_ptr<IF_EntropyMap::Map> if_em
-        = if_p.make_entropy_map(*if_m->get_module(), if_fe);
-    if_em->set_verbose(true);
-    if_em->print();
+        = if_p.make_entropy_map(*if_m->get_module(), fe);
+
+    IF_EM_Path_Entropy::Printer em_pr(*if_em);
+    em_pr.compute_path_entropy(if_em->get_first_instr());
+    em_pr.print_path_entropy();
 
     return 0;
 }
+

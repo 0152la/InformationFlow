@@ -1,6 +1,7 @@
 #ifndef _IF_INSTR_EMULATOR_HPP
 #define _IF_INSTR_EMULATOR_HPP
 
+#include <climits>
 #include <cmath>
 #include <dlfcn.h>
 #include <functional>
@@ -8,9 +9,9 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <sstream>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
@@ -26,6 +27,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
 
 using unops_d_t = std::function<double(double)>;
@@ -89,7 +91,8 @@ public:
 };
 
 struct struct_sz_s;
-using struct_sz_t = std::vector<std::variant<uint32_t, struct_sz_s>>;
+using struct_sz_width_t = uint32_t;
+using struct_sz_t = std::vector<std::variant<struct_sz_width_t, struct_sz_s>>;
 
 struct struct_sz_s
 {
@@ -102,5 +105,7 @@ uint32_t
 compute_total_struct_sz(const struct_sz_t*);
 std::unique_ptr<struct_sz_t>
 get_llvm_struct_bitsize(const llvm::StructType*, const llvm::Module*);
+uint8_t
+get_operand_bit_width(const llvm::Type*, const llvm::Module*);
 
 #endif // _IF_INSTR_EMULATOR_HPP

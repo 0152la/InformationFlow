@@ -83,7 +83,8 @@ IF_EntropyMap::Map::get_first_instr() const
 {
     for (const auto& func : this->funcs)
     {
-        if (!func->get_demangled_name().compare("main"))
+        if (!func->get_demangled_name().compare("main")
+            || !func->get_name().compare("main"))
         {
             return func->get_first_instr();
         }

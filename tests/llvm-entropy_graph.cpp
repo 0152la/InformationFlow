@@ -1,9 +1,6 @@
-#include <cstdlib>
-#include <iostream>
-#include <memory>
-
 #include "entropy_map.hpp"
 #include "reader.hpp"
+#include "entropy_map_graph.hpp"
 
 const char*
 get_env_var(const char* env_var_name)
@@ -26,6 +23,7 @@ main()
 {
     const char* input_file_path = get_env_var("IF_LLVM_TEST_FILE");
     const char* llvm_snippet_lib_path = get_env_var("IF_LLVM_SNIP_LIB");
+    const char* dest_dir = get_env_var("IF_BUILD_DIR");
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_m = if_p.parse_ll(input_file_path);
@@ -33,10 +31,16 @@ main()
     IF_Randgen if_rng(42);
     IF_Emulator if_emu(llvm_snippet_lib_path);
     IF_FuzzEngine if_fe(if_rng, if_emu);
+
     std::unique_ptr<IF_EntropyMap::Map> if_em
         = if_p.make_entropy_map(*if_m->get_module(), if_fe);
-    if_em->set_verbose(true);
-    if_em->print();
+
+    char* dest_file;
+    strcpy(dest_file, dest_dir);
+    strcat(dest_file, "/ll-out.dot");
+    IF_EM_Graph if_g(*if_em, dest_file);
+    if_g.draw_graph();
+    std::cout << "Written `dot` graph to " << dest_file << '\n';
 
     return 0;
 }

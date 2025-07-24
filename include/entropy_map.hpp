@@ -142,21 +142,28 @@ private:
     std::vector<std::unique_ptr<Function>> funcs;
     std::set<std::string> external_funcs;
     bool verbose = false;
+    uint32_t instr_count;
 
 public:
     Map(const llvm::Module& _module) { this->funcs.reserve(_module.size()); };
 
     const Instruction* get_first_instr(void) const;
 
-    auto get_funcs(void) const -> const decltype(funcs)&
+    inline auto get_funcs(void) const -> const decltype(funcs)&
     {
         return this->funcs;
     };
 
-    auto get_external_funcs(void) const -> const decltype(external_funcs)&
+    inline auto get_external_funcs(void) const -> const
+        decltype(external_funcs)&
     {
         return this->external_funcs;
     };
+
+    inline auto get_instruction_count(void) const -> decltype(instr_count)
+    {
+        return this->instr_count;
+    }
 
     void insert(std::unique_ptr<Function> em_fn)
     {
@@ -165,7 +172,12 @@ public:
 
     void insert_external_func(std::string);
 
-    void set_verbose(bool _verbose) { this->verbose = _verbose; };
+    inline void set_verbose(bool _verbose) { this->verbose = _verbose; };
+
+    inline void set_instruction_count(uint32_t instr_count)
+    {
+        this->instr_count = instr_count;
+    };
 
     const std::string to_str(void) const;
     void print(void) const;

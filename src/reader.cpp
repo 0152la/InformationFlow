@@ -87,7 +87,8 @@ IF_Parser::make_entropy_map(
                 std::ostringstream err;
                 err << "Seen entropy under ulp: " << retained_entropy << " < "
                     << std::numeric_limits<double>::epsilon();
-                throw std::runtime_error(err.str());
+                // throw std::runtime_error(err.str());
+                llvm::errs() << "Warning: " << err.str() << '\n';
             }
             em_instr_map.emplace(&fn_inst, em_instr.get());
 
@@ -148,6 +149,7 @@ IF_Parser::make_entropy_map(
             instr_idx += 1;
         }
         em->insert(std::move(em_fn));
+        em->set_instruction_count(instr_idx);
     }
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
@@ -171,13 +173,19 @@ IF_Parser::make_entropy_map(
     // Resolve `return` successors
     for (const auto& [em_instr, fn] : func_calls)
     {
-        for (IF_EntropyMap::Instruction* em_ret_instr : func_returns.at(fn))
+        decltype(func_returns)::const_iterator fn_ret_insts
+            = func_returns.find(fn);
+        if (fn_ret_insts != func_returns.end())
         {
-            if (!em_instr->get_natural_successor())
+            for (IF_EntropyMap::Instruction* em_ret_instr :
+                (*fn_ret_insts).second)
             {
-                throw std::runtime_error("Unset natural successor!");
+                if (!em_instr->get_natural_successor())
+                {
+                    throw std::runtime_error("Unset natural successor!");
+                }
+                em_ret_instr->add_successor(em_instr->get_natural_successor());
             }
-            em_ret_instr->add_successor(em_instr->get_natural_successor());
         }
     }
 
@@ -256,6 +264,14 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                     {
                         cfp->getValue().print(llvm::errs());
                     }
+                    else if (llvm::isa<llvm::UndefValue>(fn_inst_arg))
+                    {
+                        llvm::errs() << "undef";
+                    }
+                    else if (llvm::isa<llvm::ConstantPointerNull>(fn_inst_arg))
+                    {
+                        llvm::errs() << "nullptr";
+                    }
                     else
                     {
                         throw std::runtime_error("Unhandled ConstantData type");
@@ -269,5 +285,7 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
             }
             llvm::errs() << '\n';
         }
+
+        llvm::errs() << "=== DONE Function " << fn.getName() << '\n';
     }
 }

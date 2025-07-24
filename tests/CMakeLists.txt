@@ -50,6 +50,8 @@ endfunction()
 set(func_tests
     llvm-parse
     llvm-entropy_map
+    llvm-entropy_graph
+    llvm-entropy_map_path_printer
 )
 
 foreach(func_t IN LISTS func_tests)

@@ -1,22 +1,6 @@
 #include "instr_emulator.hpp"
 
 // std::map<uint16_t, std::function<IF_Arg(const IF_ArgList&)>> emulated_fns {
-//// Binary Operations
-//{ llvm::Instruction::Add, IF_Emulator::emulate_add },
-//{ llvm::Instruction::Sub, IF_Emulator::emulate_sub },
-//{ llvm::Instruction::Mul, IF_Emulator::emulate_mul },
-//{ llvm::Instruction::UDiv, IF_Emulator::emulate_udiv },
-//{ llvm::Instruction::SDiv, IF_Emulator::emulate_sdiv },
-//{ llvm::Instruction::URem, IF_Emulator::emulate_urem },
-//{ llvm::Instruction::SRem, IF_Emulator::emulate_srem },
-
-//// Bitwise Binary Operations
-//{ llvm::Instruction::Shl, IF_Emulator::emulate_shl },
-//{ llvm::Instruction::LShr, IF_Emulator::emulate_lshr },
-//{ llvm::Instruction::AShr, IF_Emulator::emulate_ashr },
-//{ llvm::Instruction::And, IF_Emulator::emulate_and },
-//{ llvm::Instruction::Or, IF_Emulator::emulate_or },
-//{ llvm::Instruction::Xor, IF_Emulator::emulate_xor },
 
 //// Memory Operations
 //{ llvm::Instruction::AtomicRMW, IF_Emulator::emulate_atomic_rmw },
@@ -405,7 +389,8 @@ IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
 double
 IF_Emulator::estimate_icmp_eq(const llvm::Instruction& instr)
 {
-    uint8_t bit_width = instr.getOperand(0)->getType()->getIntegerBitWidth();
+    uint8_t bit_width = get_operand_bit_width(
+        instr.getOperand(0)->getType(), instr.getModule());
     if (bit_width < 1 || bit_width > 64)
     {
         std::ostringstream err;
@@ -447,12 +432,16 @@ get_aggregate_type_by_idx(
 {
     auto idx_it = evi->idx_begin();
     while (idx_it + 1 != evi->idx_end())
-    // for (const auto& idx : evi->getIndices())
     {
         struct_sz = std::get<struct_sz_s>(struct_sz->at(*idx_it)).t.get();
         idx_it += 1;
     }
-    return std::get<uint32_t>(struct_sz->at(*(idx_it + 1)));
+    if (std::holds_alternative<struct_sz_width_t>(struct_sz->at(*idx_it)))
+    {
+        return std::get<struct_sz_width_t>(struct_sz->at(*idx_it));
+    }
+    return compute_total_struct_sz(
+        std::get<struct_sz_s>(struct_sz->at(*idx_it)).t.get());
 }
 
 uint32_t
@@ -461,11 +450,11 @@ compute_total_struct_sz(const struct_sz_t* struct_sz)
     uint32_t sz = 0;
     for (const auto& one_struct_sz : *struct_sz)
     {
-        try
+        if (std::holds_alternative<struct_sz_width_t>(one_struct_sz))
         {
-            sz += std::get<uint32_t>(one_struct_sz);
+            sz += std::get<struct_sz_width_t>(one_struct_sz);
         }
-        catch (const std::bad_variant_access& e)
+        else
         {
             sz += compute_total_struct_sz(
                 std::get<struct_sz_s>(one_struct_sz).t.get());
@@ -490,7 +479,8 @@ get_llvm_struct_bitsize(
         }
         else if (str_elem_ty->isPointerTy())
         {
-            struct_sz->at(i) = llvm_module->getDataLayout().getPointerSize();
+            struct_sz->at(i)
+                = llvm_module->getDataLayout().getPointerSize() * CHAR_BIT;
         }
         else if (str_elem_ty->isStructTy())
         {
@@ -504,4 +494,24 @@ get_llvm_struct_bitsize(
         }
     }
     return struct_sz;
+}
+
+uint8_t
+get_operand_bit_width(const llvm::Type* ty, const llvm::Module* llvm_module)
+{
+    if (ty->isPointerTy())
+    {
+        return llvm_module->getDataLayout().getPointerSize() * CHAR_BIT;
+    }
+
+    if (ty->isIntegerTy())
+    {
+        return ty->getIntegerBitWidth();
+    }
+
+    std::string err;
+    llvm::raw_string_ostream err_os(err);
+    err_os << "Unhandled type for bit_width computation : ";
+    ty->print(err_os);
+    throw std::runtime_error(err);
 }
