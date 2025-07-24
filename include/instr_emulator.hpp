@@ -1,6 +1,7 @@
 #ifndef _IF_INSTR_EMULATOR_HPP
 #define _IF_INSTR_EMULATOR_HPP
 
+#include <climits>
 #include <cmath>
 #include <dlfcn.h>
 #include <functional>
@@ -8,9 +9,9 @@
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <sstream>
 #include <type_traits>
 #include <unordered_map>
 #include <variant>
@@ -89,7 +90,8 @@ public:
 };
 
 struct struct_sz_s;
-using struct_sz_t = std::vector<std::variant<uint32_t, struct_sz_s>>;
+using struct_sz_width_t = uint32_t;
+using struct_sz_t = std::vector<std::variant<struct_sz_width_t, struct_sz_s>>;
 
 struct struct_sz_s
 {

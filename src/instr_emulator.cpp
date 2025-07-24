@@ -431,12 +431,16 @@ get_aggregate_type_by_idx(
 {
     auto idx_it = evi->idx_begin();
     while (idx_it + 1 != evi->idx_end())
-    // for (const auto& idx : evi->getIndices())
     {
         struct_sz = std::get<struct_sz_s>(struct_sz->at(*idx_it)).t.get();
         idx_it += 1;
     }
-    return std::get<uint32_t>(struct_sz->at(*(idx_it + 1)));
+    if (std::holds_alternative<struct_sz_width_t>(struct_sz->at(*idx_it)))
+    {
+        return std::get<struct_sz_width_t>(struct_sz->at(*idx_it));
+    }
+    return compute_total_struct_sz(
+        std::get<struct_sz_s>(struct_sz->at(*idx_it)).t.get());
 }
 
 uint32_t
@@ -445,11 +449,11 @@ compute_total_struct_sz(const struct_sz_t* struct_sz)
     uint32_t sz = 0;
     for (const auto& one_struct_sz : *struct_sz)
     {
-        try
+        if (std::holds_alternative<struct_sz_width_t>(one_struct_sz))
         {
-            sz += std::get<uint32_t>(one_struct_sz);
+            sz += std::get<struct_sz_width_t>(one_struct_sz);
         }
-        catch (const std::bad_variant_access& e)
+        else
         {
             sz += compute_total_struct_sz(
                 std::get<struct_sz_s>(one_struct_sz).t.get());
@@ -474,7 +478,8 @@ get_llvm_struct_bitsize(
         }
         else if (str_elem_ty->isPointerTy())
         {
-            struct_sz->at(i) = llvm_module->getDataLayout().getPointerSize();
+            struct_sz->at(i)
+                = llvm_module->getDataLayout().getPointerSize() * CHAR_BIT;
         }
         else if (str_elem_ty->isStructTy())
         {
