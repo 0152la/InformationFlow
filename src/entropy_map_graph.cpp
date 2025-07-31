@@ -109,7 +109,6 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
 void
 IF_EM_Graph::draw_graph(void) const
 {
-
     std::ostringstream graph_ss;
     graph_ss << "digraph G {\n";
     graph_ss << "label=\"Entropy graph for `<file>`\";\n";

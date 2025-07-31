@@ -8,29 +8,35 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <queue>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 
 namespace IF_EM_Path_Entropy
 {
+using path_t = std::vector<const IF_EntropyMap::Instruction*>;
 
 class Cycle
 {
-public:
-    using cycle_t = std::vector<const IF_EntropyMap::Instruction*>;
-
 private:
+    const path_t cycle;
     const double entropy;
-    const cycle_t cycle;
 
-    double compute_cycle_entropy(const cycle_t&);
+    double compute_cycle_entropy(const path_t&) const;
 
 public:
     Cycle(void) = delete;
-    Cycle(const cycle_t&);
+    Cycle(const path_t&);
+    Cycle(const path_t&, const IF_EntropyMap::Instruction*);
 
-    const cycle_t& get_cycle(void) const { return this->cycle; };
+    const path_t& get_cycle(void) const { return this->cycle; };
+
+    path_t::const_reference get_first_instr(void) const
+    {
+        return this->cycle.front();
+    };
 
     double get_entropy(void) const { return this->entropy; };
 
@@ -39,14 +45,14 @@ public:
         return pow(this->entropy, bound);
     };
 
-    bool is_between(cycle_t::const_reference, cycle_t::const_reference) const;
+    std::string to_str(void) const;
+    std::string to_str_entropy(void) const;
 };
 
 class Path
 {
 public:
-    using path_t = std::vector<const IF_EntropyMap::Instruction*>;
-    using path_cycle_t = std::vector<std::shared_ptr<Cycle>>;
+    using path_cycles_t = std::vector<Cycle*>;
     using cycle_ends_t = std::pair<IF_EntropyMap::Instruction::idx_t,
         IF_EntropyMap::Instruction::idx_t>;
     using cycle_ends_stl_t = std::map<cycle_ends_t, bool>;
@@ -54,11 +60,10 @@ public:
 private:
     double entropy;
     path_t instr_path;
-    path_cycle_t cycles;
+    path_cycles_t cycles;
     std::set<IF_EntropyMap::Instruction::idx_t> seen_idxs;
 
     cycle_ends_stl_t get_cycle_ends(void) const;
-    path_t::const_reverse_iterator rfind_inst(path_t::value_type);
 
 public:
     Path(void) :
@@ -74,20 +79,19 @@ public:
 
     const path_t& get_path(void) const { return this->instr_path; };
 
+    path_cycles_t::const_reference get_last_cycle(void) const
+    {
+        return this->cycles.back();
+    };
+
     path_t::const_reference get_last_instr(void) const
     {
         return this->instr_path.back();
     };
 
-    void add_inst(path_t::value_type);
+    void add_instr(path_t::value_type);
 
-    void add_cycle_to(path_t::value_type);
-
-    bool has_cycle(path_t::const_reference) const;
-
-    bool has_seen(IF_EntropyMap::Instruction::idx_t) const;
-
-    std::unique_ptr<IF_EM_Path_Entropy::Path> split_path(void);
+    IF_EM_Path_Entropy::Path* split_path(void) const;
 
     std::string to_str(void) const;
 };
@@ -95,14 +99,19 @@ public:
 class Printer
 {
 protected:
-    using printer_t = std::vector<std::unique_ptr<IF_EM_Path_Entropy::Path>>;
+    using paths_t = std::vector<IF_EM_Path_Entropy::Path*>;
+    using crawls_t = std::queue<paths_t::value_type>;
+    using cycles_t = std::vector<IF_EM_Path_Entropy::Cycle*>;
 
 private:
     const std::string out_file;
     const IF_EntropyMap::Map& em;
-    printer_t paths;
+    paths_t paths;
+    crawls_t to_crawl;
+    cycles_t graph_cycles;
 
-    void crawl_path(printer_t::value_type::pointer);
+    void find_cycles(IF_EM_Path_Entropy::path_t, std::vector<bool>);
+    // void crawl_path(paths_t::value_type);
 
 public:
     Printer(const IF_EntropyMap::Map& _em, std::string _out) :
@@ -110,16 +119,37 @@ public:
         out_file(_out) { };
     Printer(const IF_EntropyMap::Map& _em) :
         Printer(_em, "") { };
+    ~Printer();
 
-    const std::string get_output_file(void) const { return this->out_file; };
+    inline const std::string get_output_file(void) const
+    {
+        return this->out_file;
+    };
 
-    const IF_EntropyMap::Map& get_entropy_map(void) const { return this->em; };
+    inline const IF_EntropyMap::Map& get_entropy_map(void) const
+    {
+        return this->em;
+    };
 
-    const printer_t& get_paths(void) const { return this->paths; };
+    inline auto get_paths(void) const -> const decltype(this->paths)&
+    {
+        return this->paths;
+    };
 
-    void add_path(printer_t::value_type);
+    inline void add_path(paths_t::value_type);
+
+    inline void add_path_to_crawl(crawls_t::value_type);
+
+    inline void add_cycle(
+        const IF_EM_Path_Entropy::path_t&, const IF_EntropyMap::Instruction*);
+
+    // inline void add_cycle(IF_EM_Path_Entropy::Cycle* cyc)
+    //{
+    // this->graph_cycles.push_back(cyc);
+    //};
 
     void compute_path_entropy(const IF_EntropyMap::Instruction*);
+    void print_cycles(void) const;
     void print_path_entropy(void) const;
 };
 
