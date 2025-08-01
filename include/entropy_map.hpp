@@ -49,7 +49,7 @@ public:
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
-    succs_t get_succs_inst(void) const { return this->succs_instr; };
+    const succs_t& get_succs_inst(void) const { return this->succs_instr; };
 
     size_t get_succs_count(void) const { return this->succs_instr.size(); };
 
@@ -86,6 +86,8 @@ public:
     void add_external_succ(std::string);
 
     const std::string to_str(void) const;
+
+    const std::string to_str_simple(void) const;
 
     bool operator==(const Instruction& o) const
     {

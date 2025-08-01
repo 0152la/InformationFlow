@@ -81,9 +81,10 @@ endfunction()
 
 set(ll_srcs
     simple-add
-    sample
     simple-arith
+    simple-cycle
     simple-vector
+    sample
     entropy-func_loss-exec
 )
 

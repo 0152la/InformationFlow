@@ -1,5 +1,7 @@
 #include "entropy_map.hpp"
 
+const std::string instr_simple_prefix = "i";
+
 /*******************************************************************************
  * IF_EntropyMap::Instruction
  ******************************************************************************/
@@ -24,6 +26,12 @@ IF_EntropyMap::Instruction::to_str(void) const
     oss << llvm::Instruction::getOpcodeName(this->get_opcode());
     oss << " -- Entropy " << this->get_retained_entropy() << '\n';
     return oss.str();
+}
+
+const std::string
+IF_EntropyMap::Instruction::to_str_simple(void) const
+{
+    return instr_simple_prefix + std::to_string(this->get_idx());
 }
 
 /*******************************************************************************

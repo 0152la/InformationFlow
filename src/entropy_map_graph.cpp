@@ -42,7 +42,7 @@ IF_EM_Graph::emit_external_func_nodes(const IF_EntropyMap::Map& em)
     std::ostringstream oss;
     for (const auto& ex_fn_name : em.get_external_funcs())
     {
-        oss << ex_fn_name << " [shape = " << ex_fn_shape << "];\n";
+        oss << "\"" << ex_fn_name << "\" [shape = " << ex_fn_shape << "];\n";
     }
 
     return oss.str();
@@ -88,7 +88,9 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
         oss_instr_links << emit_instr_node_succs(*instr);
         for (const auto& succ_fn : instr->get_external_succs())
         {
-            oss_ex_fn << emit_instr_node_link(*instr, succ_fn) << ";\n";
+            oss_ex_fn << emit_instr_node_link(
+                *instr, std::string("\"" + succ_fn + "\""))
+                      << ";\n";
         }
     }
 
