@@ -137,13 +137,7 @@ IF_EM_Path_Entropy::Printer::find_cycles(IF_EM_Path_Entropy::path_t curr_path,
 
     IF_EntropyMap::Instruction::succs_t::const_iterator succ_it
         = get_curr_path_back_succs().begin();
-
-    if (succ_it == get_curr_path_back_succs().end())
-    {
-        return;
-    }
-
-    IF_EntropyMap::Instruction::succs_t::value_type succ = *succ_it;
+    IF_EntropyMap::Instruction::succs_t::value_type succ;
 
     while (succ_it != get_curr_path_back_succs().end())
     {
@@ -178,117 +172,74 @@ IF_EM_Path_Entropy::Printer::find_cycles(IF_EM_Path_Entropy::path_t curr_path,
 
         std::advance(succ_it, 1);
     }
-
-    /*
-    // As long as we're on a straight path in the graph, we keep on doing the
-    // cycle checks, without recursing
-    // while (curr_path.back()->get_succs_count() == 1)
-    while (std::next(succ_it) == curr_path.back()->get_succs_inst().end())
-    {
-        succ = *succ_it;
-        const IF_EntropyMap::Instruction* succ
-            = *(curr_path.back()->get_succs_inst().begin());
-        if (seen_instrs.at(succ->get_idx()))
-        {
-            this->add_cycle(curr_path, succ, split_nodes);
-            return;
-        }
-
-        curr_path.push_back(succ);
-        seen_instrs.at(succ->get_idx()) = true;
-        succ_it = curr_path.back()->get_succs_inst().begin();
-        if (succ_it == curr_path.back()->get_succs_inst().end())
-        {
-            return;
-        }
-    }
-
-    // Once we hit a split, we first check each child for a cycle, then recurse
-    // over them
-    split_nodes.push_back(curr_path.back());
-    while (succ_it != curr_path.back()->get_succs_inst().end())
-    // for (IF_EntropyMap::Instruction::succs_t::const_reference succ :
-    // curr_path.back()->get_succs_inst())
-    {
-        succ = *succ_it;
-        // TODO collapse
-        if (seen_instrs.at(succ->get_idx()))
-        {
-            this->add_cycle(curr_path, succ, split_nodes);
-            return;
-        }
-
-        decltype(seen_instrs) split_seen(seen_instrs);
-        split_seen.at(succ->get_idx()) = true;
-        decltype(curr_path) split_path(curr_path);
-        split_path.push_back(succ);
-        this->find_cycles(split_path, split_seen, split_nodes);
-
-        std::advance(succ_it, 1);
-    }
-    */
 }
 
 void
 IF_EM_Path_Entropy::Printer::crawl_path(
     IF_EM_Path_Entropy::Path* curr_path, std::vector<bool> seen_instrs)
 {
-    // IF_EntropyMap::Instruction::succs_t::const_iterator succ_it
-    //= curr_path->get_last_instr()->get_succs_inst().begin();
-    // IF_EntropyMap::Instruction::succ_t::value_type succ = *succ_it;
-    //
+
     auto get_curr_path_back_succs
         = [&curr_path]() -> const IF_EntropyMap::Instruction::succs_t&
     { return curr_path->get_last_instr()->get_succs_inst(); };
 
-    while (curr_path->get_last_instr()->get_succs_count() == 1)
+    IF_EntropyMap::Instruction::succs_t::const_iterator succ_it
+        = get_curr_path_back_succs().begin();
+    IF_EntropyMap::Instruction::succs_t::value_type succ;
+
+    bool first_it = true;
+    while (succ_it != get_curr_path_back_succs().end())
     {
-        const IF_EntropyMap::Instruction* succ
-            = *(get_curr_path_back_succs().begin());
+        succ = *succ_it;
 
         // We followed a cycle, so we terminate crawling this path, without
         // adding it as a new path
         if (seen_instrs.at(succ->get_idx()))
         {
-            return;
-        }
-
-        seen_instrs.at(succ->get_idx()) = true;
-        curr_path->add_instr(succ);
-    }
-
-    if (curr_path->get_last_instr()->get_succs_count() == 0)
-    {
-        this->add_path(curr_path);
-        return;
-    }
-
-    // We know this is a split, so add any cycles
-    // if (this->graph_cycles_splits.contains(curr_path->get_last_instr()))
-    if (cycles_splits_t::const_iterator cyc_it
-        = this->graph_cycles_splits.find(curr_path->get_last_instr());
-        cyc_it != this->graph_cycles_splits.end())
-    {
-        for (cycles_t::const_reference cyc : (*cyc_it).second)
-        {
-            curr_path->add_cycle(cyc);
-        }
-    }
-
-    for (IF_EntropyMap::Instruction::succs_t::const_reference succ :
-        curr_path->get_last_instr()->get_succs_inst())
-    {
-        if (seen_instrs.at(succ->get_idx()))
-        {
+            std::advance(succ_it, 1);
             continue;
         }
 
+        // We are on a straight path; iteratively continue analysis
+        if (get_curr_path_back_succs().size() == 1)
+        {
+            seen_instrs.at(succ->get_idx()) = true;
+            curr_path->add_instr(succ);
+            succ_it = get_curr_path_back_succs().begin();
+            continue;
+        }
+
+        // We hit a split; first time we find a split node, we check for any
+        // cycles to add to our path
+        if (first_it)
+        {
+            if (cycles_splits_t::const_iterator cyc_it
+                = this->graph_cycles_splits.find(curr_path->get_last_instr());
+                cyc_it != this->graph_cycles_splits.end())
+            {
+                for (cycles_t::const_reference cyc : (*cyc_it).second)
+                {
+                    curr_path->add_cycle(cyc);
+                }
+            }
+            first_it = false;
+        }
+
+        // Recursively split the analysis for all successor nodes
         decltype(seen_instrs) split_seen(seen_instrs);
         split_seen.at(succ->get_idx()) = true;
         paths_t::value_type split_path
             = new IF_EM_Path_Entropy::Path(*curr_path);
         split_path->add_instr(succ);
         this->crawl_path(split_path, split_seen);
+
+        std::advance(succ_it, 1);
+    }
+
+    // If we reach the end of a path, we add that to our collection of paths
+    if (curr_path->get_last_instr()->get_succs_count() == 0)
+    {
+        this->add_path(curr_path);
     }
 }
 

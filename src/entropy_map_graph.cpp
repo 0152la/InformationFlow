@@ -80,7 +80,7 @@ IF_EM_Graph::emit_func_node(const IF_EntropyMap::Function& em_fn)
     std::ostringstream oss;
     std::ostringstream oss_ex_fn;
     std::ostringstream oss_instr_links;
-    oss << "subgraph cluster_" << em_fn.get_representing_name() << " {\n";
+    oss << "subgraph \"cluster_" << em_fn.get_representing_name() << "\" {\n";
     oss << "label=\"" << em_fn.get_representing_name() << "\";\n";
     for (const auto& instr : em_fn.get_instrs())
     {
@@ -113,7 +113,7 @@ IF_EM_Graph::draw_graph(void) const
 {
     std::ostringstream graph_ss;
     graph_ss << "digraph G {\n";
-    graph_ss << "label=\"Entropy graph for `<file>`\";\n";
+    graph_ss << "label=\"Entropy graph for `<file>`\";\n"; // TODO
 
     graph_ss << emit_external_func_nodes(this->get_entropy_map());
 
