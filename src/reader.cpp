@@ -135,9 +135,11 @@ IF_Parser::make_entropy_map(
                 func_returns.at(&fn).push_back(em_instr.get());
             }
 
-            // If this is not the last instruction in a function, then set next
-            // instruction as successor
-            if (em_instr_prev)
+            // If this is not the last instruction in a function, nor is it an
+            // `unreachable` instruction, then set next instruction as successor
+            if (em_instr_prev
+                && em_instr_prev->get_opcode()
+                    != llvm::Instruction::Unreachable)
             {
                 em_instr_prev->set_natural_successor(em_instr.get());
                 em_instr_prev->add_successor(em_instr.get());
@@ -166,6 +168,7 @@ IF_Parser::make_entropy_map(
                 std::cout << "Could not find entropy map entry for LLVM "
                              "instruction: ";
                 instr->print(llvm::outs());
+                throw std::runtime_error("Error adding successor!");
             }
         }
     }
