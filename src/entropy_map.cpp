@@ -106,6 +106,40 @@ IF_EntropyMap::Map::insert_external_func(std::string ex_fn)
     this->external_funcs.insert(ex_fn);
 }
 
+std::tuple<size_t, size_t, size_t>
+IF_EntropyMap::Map::compute_cyclomatic_complexity(void) const
+{
+    std::vector<bool> seen_idxs(this->instr_count, false);
+    seen_idxs.at(this->get_first_instr()->get_idx()) = true;
+
+    std::queue<const Instruction*> to_follow;
+    to_follow.push(this->get_first_instr());
+
+    const Instruction* curr_inst;
+    size_t edges = 0;
+    size_t nodes = 0;
+
+    while (!to_follow.empty())
+    {
+        curr_inst = to_follow.front();
+        to_follow.pop();
+        seen_idxs.at(curr_inst->get_idx()) = true;
+        nodes += 1;
+
+        for (IF_EntropyMap::Instruction::succs_t::const_reference succ :
+            curr_inst->get_succs_inst())
+        {
+            edges += 1;
+            if (!seen_idxs.at(succ->get_idx()))
+            {
+                to_follow.push(succ);
+            }
+        }
+    }
+
+    return std::tuple(edges, nodes, edges - nodes + 2);
+}
+
 const std::string
 IF_EntropyMap::Map::to_str(void) const
 {

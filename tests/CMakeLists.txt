@@ -83,6 +83,7 @@ set(ll_srcs
     simple-add
     simple-arith
     simple-cycle
+    simple-cycle-double
     simple-vector
     sample
     entropy-func_loss-exec

@@ -4,11 +4,13 @@
 // #include <format>
 #include <iostream>
 #include <memory>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <tuple>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -180,6 +182,9 @@ public:
     {
         this->instr_count = instr_count;
     };
+
+    std::tuple<size_t, size_t, size_t> compute_cyclomatic_complexity(
+        void) const;
 
     const std::string to_str(void) const;
     void print(void) const;

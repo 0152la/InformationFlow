@@ -22,7 +22,7 @@ class Cycle;
 
 using path_t = std::vector<const IF_EntropyMap::Instruction*>;
 using cycle_split_nodes_t = std::unordered_set<path_t::value_type>;
-using cycles_t = std::vector<IF_EM_Path_Entropy::Cycle*>;
+using cycles_t = std::unordered_set<IF_EM_Path_Entropy::Cycle*>;
 using cycles_splits_t
     = std::unordered_map<const IF_EntropyMap::Instruction*, cycles_t>;
 
@@ -110,13 +110,13 @@ private:
     cycles_t graph_cycles;
     cycles_splits_t graph_cycles_splits;
     uint16_t bound = 2; // TODO
+    //bool handle_cycles = false;
+    bool handle_cycles = true;
 
     void find_cycles(IF_EM_Path_Entropy::path_t, std::vector<bool>,
         IF_EM_Path_Entropy::cycle_split_nodes_t);
     void crawl_path(IF_EM_Path_Entropy::Path*, std::vector<bool>);
 
-    IF_EM_Path_Entropy::cycles_t find_cycles_with(
-        IF_EM_Path_Entropy::path_t::const_reference) const;
     bool check_is_new_cycle(const Cycle&) const;
 
 public:
@@ -126,6 +126,10 @@ public:
     Printer(const IF_EntropyMap::Map& _em) :
         Printer(_em, "") { };
     ~Printer();
+
+    void compute_path_entropy(const IF_EntropyMap::Instruction*);
+
+    /* Getters ****************************************************************/
 
     inline const std::string get_output_file(void) const
     {
@@ -142,16 +146,38 @@ public:
         return this->paths;
     };
 
+    inline size_t get_paths_count(void) const { return this->paths.size(); };
+
+    inline size_t get_cycles_count(void) const
+    {
+        return this->graph_cycles.size();
+    };
+
+    inline size_t get_cycle_splits_count(void) const
+    {
+        return this->graph_cycles_splits.size();
+    };
+
+    size_t get_min_path_length(void) const;
+    size_t get_max_path_length(void) const;
+    size_t get_min_path_cycle_count(void) const;
+    size_t get_max_path_cycle_count(void) const;
+
+    /* Adders *****************************************************************/
+
     inline void add_path(paths_t::value_type);
 
     inline void add_cycle(const IF_EM_Path_Entropy::path_t&,
         const IF_EntropyMap::Instruction*,
         const IF_EM_Path_Entropy::cycle_split_nodes_t&);
 
-    void compute_path_entropy(const IF_EntropyMap::Instruction*);
+    /* Printers ***************************************************************/
+
     void print_cycles(void) const;
     void print_cycles_with_splits(void) const;
     void print_path_entropy(void) const;
+    void print_path_entropy_summary(void) const;
+    void print_stats(void) const;
 };
 
 }; // namespace IF_EM_Path_Entropy

@@ -29,6 +29,7 @@ main()
 {
     const char* input_file_path = get_env_var("IF_LLVM_TEST_FILE");
     const char* snippets_lib_path = get_env_var("IF_LLVM_SNIP_LIB");
+    size_t threshold = 1000;
 
     IF_Randgen rng(42);
     IF_Emulator emu(snippets_lib_path);
@@ -41,8 +42,15 @@ main()
 
     IF_EM_Path_Entropy::Printer em_pr(*if_em);
     em_pr.compute_path_entropy(if_em->get_first_instr());
-    em_pr.print_path_entropy();
+    if (em_pr.get_paths_count() > threshold)
+    {
+        em_pr.print_path_entropy_summary();
+    }
+    else
+    {
+        em_pr.print_path_entropy();
+    }
+    em_pr.print_stats();
 
     return 0;
 }
-

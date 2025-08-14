@@ -218,31 +218,31 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
 {
     for (const auto& fn : llvm_module.getFunctionList())
     {
-        llvm::errs() << "Function " << fn.getName() << " -- "
+        llvm::outs() << "Function " << fn.getName() << " -- "
                      << fn.getValueName() << '\n';
 
         for (const auto& fn_arg : fn.args())
         {
-            llvm::errs() << "\t Arg " << fn_arg.getArgNo() << " : "
+            llvm::outs() << "\t Arg " << fn_arg.getArgNo() << " : "
                          << fn_arg.getName() << " : " << fn_arg.getType()
                          << '\n';
         }
 
-        llvm::errs() << "\t======\n";
+        llvm::outs() << "\t======\n";
 
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            llvm::errs() << "\t Instruction " << fn_inst.getOpcodeName() << " ";
+            llvm::outs() << "\t Instruction " << fn_inst.getOpcodeName() << " ";
             for (const auto& fn_inst_arg : fn_inst.operand_values())
             {
                 if (const llvm::Value* v
                     = llvm::dyn_cast<llvm::Value>(fn_inst_arg))
                 {
-                    llvm::errs() << "[ ";
-                    v->printAsOperand(llvm::errs());
-                    llvm::errs() << " --- ";
-                    v->printAsOperand(llvm::errs(), false, &llvm_module);
-                    llvm::errs() << " ] ";
+                    llvm::outs() << "[ ";
+                    v->printAsOperand(llvm::outs());
+                    llvm::outs() << " --- ";
+                    v->printAsOperand(llvm::outs(), false, &llvm_module);
+                    llvm::outs() << " ] ";
                 }
                 else
                 {
@@ -251,7 +251,7 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                 // This is a function (TODO check)
                 if (fn_inst_arg->hasName())
                 {
-                    llvm::errs() << fn_inst_arg->getName();
+                    llvm::outs() << fn_inst_arg->getName();
                 }
                 // This is a constant
                 else if (const llvm::ConstantData* cd
@@ -260,20 +260,20 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                     if (const llvm::ConstantInt* ci
                         = llvm::dyn_cast<llvm::ConstantInt>(fn_inst_arg))
                     {
-                        ci->getValue().print(llvm::errs(), true);
+                        ci->getValue().print(llvm::outs(), true);
                     }
                     else if (const llvm::ConstantFP* cfp
                         = llvm::dyn_cast<llvm::ConstantFP>(fn_inst_arg))
                     {
-                        cfp->getValue().print(llvm::errs());
+                        cfp->getValue().print(llvm::outs());
                     }
                     else if (llvm::isa<llvm::UndefValue>(fn_inst_arg))
                     {
-                        llvm::errs() << "undef";
+                        llvm::outs() << "undef";
                     }
                     else if (llvm::isa<llvm::ConstantPointerNull>(fn_inst_arg))
                     {
-                        llvm::errs() << "nullptr";
+                        llvm::outs() << "nullptr";
                     }
                     else
                     {
@@ -282,13 +282,13 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                 }
                 else
                 {
-                    llvm::errs() << fn_inst_arg;
+                    llvm::outs() << fn_inst_arg;
                 }
-                llvm::errs() << " ";
+                llvm::outs() << " ";
             }
-            llvm::errs() << '\n';
+            llvm::outs() << '\n';
         }
 
-        llvm::errs() << "=== DONE Function " << fn.getName() << '\n';
+        llvm::outs() << "=== DONE Function " << fn.getName() << '\n';
     }
 }

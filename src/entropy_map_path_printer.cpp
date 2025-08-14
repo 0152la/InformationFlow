@@ -96,7 +96,7 @@ inline void
 IF_EM_Path_Entropy::Path::add_cycle(
     IF_EM_Path_Entropy::cycles_t::value_type to_add_cycle)
 {
-    this->path_cycles.push_back(to_add_cycle);
+    this->path_cycles.insert(to_add_cycle);
 }
 
 std::string
@@ -211,7 +211,7 @@ IF_EM_Path_Entropy::Printer::crawl_path(
 
         // We hit a split; first time we find a split node, we check for any
         // cycles to add to our path
-        if (first_it)
+        if (handle_cycles && first_it)
         {
             if (cycles_splits_t::const_iterator cyc_it
                 = this->graph_cycles_splits.find(curr_path->get_last_instr());
@@ -243,21 +243,6 @@ IF_EM_Path_Entropy::Printer::crawl_path(
     }
 }
 
-IF_EM_Path_Entropy::cycles_t
-IF_EM_Path_Entropy::Printer::find_cycles_with(
-    IF_EM_Path_Entropy::path_t::const_reference from_instr) const
-{
-    IF_EM_Path_Entropy::cycles_t found_cycles;
-    for (IF_EM_Path_Entropy::cycles_t::const_reference cyc : this->graph_cycles)
-    {
-        if (cyc->get_last_instr() == from_instr)
-        {
-            found_cycles.push_back(cyc);
-        }
-    }
-    return found_cycles;
-}
-
 bool
 IF_EM_Path_Entropy::Printer::check_is_new_cycle(const Cycle& to_check) const
 {
@@ -278,16 +263,89 @@ IF_EM_Path_Entropy::Printer::~Printer()
         delete (em_path);
     }
 
-    for (IF_EM_Path_Entropy::cycles_t::reference em_cyc : this->graph_cycles)
+    for (IF_EM_Path_Entropy::cycles_t::const_reference em_cyc :
+        this->graph_cycles)
     {
         delete (em_cyc);
     }
+}
+
+void
+IF_EM_Path_Entropy::Printer::compute_path_entropy(
+    const IF_EntropyMap::Instruction* start_instr)
+{
+    // First, we find all the cycles from the given start node
+    IF_EM_Path_Entropy::path_t start_path { start_instr };
+    std::vector<bool> seen_instrs(
+        this->get_entropy_map().get_instruction_count(), false);
+    seen_instrs.at(start_instr->get_idx()) = true;
+    if (this->handle_cycles)
+    {
+        std::cout << "START find cycles";
+        std::cout << std::endl;
+        this->find_cycles(
+            start_path, seen_instrs, IF_EM_Path_Entropy::cycle_split_nodes_t());
+        // this->print_cycles_with_splits();
+        std::cout << "END find cycles" << std::endl;
+    }
+
+    // Now crawl all paths form the `start_instr`
+    IF_EM_Path_Entropy::Path* new_path
+        = new IF_EM_Path_Entropy::Path(start_path);
+    this->crawl_path(new_path, seen_instrs);
+    std::cout << "END crawl path\n";
+}
+
+size_t
+IF_EM_Path_Entropy::Printer::get_min_path_length(void) const
+{
+    size_t min_cycs = -1;
+    for (paths_t::const_reference path : this->paths)
+    {
+        min_cycs = std::min(min_cycs, path->get_path().size());
+    }
+    return min_cycs;
+}
+
+size_t
+IF_EM_Path_Entropy::Printer::get_max_path_length(void) const
+{
+    size_t max_cycs = 0;
+    for (paths_t::const_reference path : this->paths)
+    {
+        max_cycs = std::max(max_cycs, path->get_path().size());
+    }
+    return max_cycs;
+}
+
+size_t
+IF_EM_Path_Entropy::Printer::get_min_path_cycle_count(void) const
+{
+    size_t min_cycs = -1;
+    for (paths_t::const_reference path : this->paths)
+    {
+        min_cycs = std::min(min_cycs, path->get_cycles().size());
+    }
+    return min_cycs;
+}
+
+size_t
+IF_EM_Path_Entropy::Printer::get_max_path_cycle_count(void) const
+{
+    size_t max_cycs = 0;
+    for (paths_t::const_reference path : this->paths)
+    {
+        max_cycs = std::max(max_cycs, path->get_cycles().size());
+    }
+    return max_cycs;
 }
 
 inline void
 IF_EM_Path_Entropy::Printer::add_path(paths_t::value_type new_path)
 {
     this->paths.push_back(new_path);
+    // this->print_path_entropy();
+    // std::exit(1);
 }
 
 inline void
@@ -302,7 +360,7 @@ IF_EM_Path_Entropy::Printer::add_cycle(
     // Only add cycles we've not seen before
     if (this->check_is_new_cycle(*new_cyc))
     {
-        this->graph_cycles.emplace_back(
+        this->graph_cycles.insert(
             new IF_EM_Path_Entropy::Cycle(cyc_path, cyc_target));
         for (IF_EM_Path_Entropy::path_t::value_type node : cyc_split_nodes)
         {
@@ -315,28 +373,9 @@ IF_EM_Path_Entropy::Printer::add_cycle(
             {
                 this->graph_cycles_splits.emplace(node, cycles_t());
             }
-            this->graph_cycles_splits.at(node).push_back(new_cyc);
+            this->graph_cycles_splits.at(node).insert(new_cyc);
         }
     }
-}
-
-void
-IF_EM_Path_Entropy::Printer::compute_path_entropy(
-    const IF_EntropyMap::Instruction* start_instr)
-{
-    // First, we find all the cycles from the given start node
-    IF_EM_Path_Entropy::path_t start_path { start_instr };
-    std::vector<bool> seen_instrs(
-        this->get_entropy_map().get_instruction_count(), false);
-    seen_instrs.at(start_instr->get_idx()) = true;
-    this->find_cycles(
-        start_path, seen_instrs, IF_EM_Path_Entropy::cycle_split_nodes_t());
-    this->print_cycles_with_splits();
-
-    // Now crawl all paths form the `start_instr`
-    IF_EM_Path_Entropy::Path* new_path
-        = new IF_EM_Path_Entropy::Path(start_path);
-    this->crawl_path(new_path, seen_instrs);
 }
 
 void
@@ -391,5 +430,57 @@ IF_EM_Path_Entropy::Printer::print_path_entropy(void) const
             i += 1;
         }
     }
+    std::cout << "==========\n";
+}
+
+void
+IF_EM_Path_Entropy::Printer::print_path_entropy_summary(void) const
+{
+    std::cout << "========== Entropy paths summary\n";
+    std::cout << "Total paths : " << this->get_paths_count() << '\n';
+
+    std::map<double, IF_EM_Path_Entropy::Printer::paths_t> paths_by_entropy;
+    double curr_entropy;
+
+    for (IF_EM_Path_Entropy::Printer::paths_t::const_reference pat :
+        this->paths)
+    {
+        curr_entropy = pat->get_entropy();
+        if (paths_by_entropy.find(curr_entropy) == paths_by_entropy.end())
+        {
+            paths_by_entropy.emplace(
+                curr_entropy, IF_EM_Path_Entropy::Printer::paths_t());
+        }
+        paths_by_entropy.at(curr_entropy).push_back(pat);
+    }
+    std::cout << "Path entropy -- Paths count -- % of total :\n";
+    for (const auto& [ent, paths] : paths_by_entropy)
+    {
+        std::cout << "\t" << ent << " -- ";
+        std::cout << paths.size() << " -- ";
+        std::cout << 100.0 * paths.size() / this->get_paths_count() << '\n';
+    }
+}
+
+void
+IF_EM_Path_Entropy::Printer::print_stats(void) const
+{
+    std::cout << "========== Entropy paths stats\n";
+    std::cout << "Total map instructions : " << this->em.get_instruction_count()
+              << '\n';
+    const auto em_cc = this->em.compute_cyclomatic_complexity();
+    std::cout << "Map cyclomatic complexity : " << std::get<2>(em_cc)
+              << " (edges " << std::get<0>(em_cc) << ", nodes "
+              << std::get<1>(em_cc) << ")\n";
+    std::cout << "Total paths : " << this->get_paths_count() << '\n';
+    std::cout << "Min path length : " << this->get_min_path_length() << '\n';
+    std::cout << "Max path length : " << this->get_max_path_length() << '\n';
+    std::cout << "Total cycles : " << this->get_cycles_count() << '\n';
+    std::cout << "Total cycle split nodes : " << this->get_cycle_splits_count()
+              << '\n';
+    std::cout << "Min path cycle count : " << this->get_min_path_cycle_count()
+              << '\n';
+    std::cout << "Max path cycle count : " << this->get_max_path_cycle_count()
+              << '\n';
     std::cout << "==========\n";
 }
