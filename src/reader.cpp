@@ -151,8 +151,8 @@ IF_Parser::make_entropy_map(
             instr_idx += 1;
         }
         em->insert(std::move(em_fn));
-        em->set_instruction_count(instr_idx);
     }
+    em->set_instruction_count(instr_idx);
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)

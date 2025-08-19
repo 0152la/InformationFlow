@@ -40,12 +40,19 @@ IF_FuzzEngine::fuzz_retained_entropy(const llvm::Instruction& instr)
         }
     }
 
-    binops_i64_t fn = this->emu.get_emulated_fn(instr);
-
     if (!instr.getType()->isIntegerTy())
     {
         // TODO remove this once we implement more argument types
         throw std::runtime_error("Invalid argument type; expected integer!");
+    }
+
+    binops_i64_t fn = this->emu.get_emulated_fn(instr);
+
+    if (!fn)
+    {
+        throw std::runtime_error(
+            std::string("Error retrieving internal function for opcode ")
+            + instr.getOpcodeName());
     }
 
     const uint8_t bit_width = instr.getType()->getIntegerBitWidth();

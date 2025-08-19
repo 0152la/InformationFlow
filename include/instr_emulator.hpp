@@ -71,6 +71,9 @@ public:
      * number of bits removed from it.
      */
 
+    /* Terminator Operations *************************************************/
+    static double estimate_switch(const llvm::Instruction&);
+
     /* Vector Operations *****************************************************/
     static double estimate_extract_element(const llvm::Instruction&);
 

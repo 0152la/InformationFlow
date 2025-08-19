@@ -25,6 +25,10 @@ emulated_fns_t emulated_fns;
  * than having to perform fuzzing
  */
 estimate_entropy_t estimate_entropy {
+    // Terminator Operations
+    { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::Switch),
+        IF_Emulator::estimate_switch },
+
     // Vector Operations
     { IF_Emulator::make_fn_name_from_opcode(llvm::Instruction::ExtractElement),
         IF_Emulator::estimate_extract_element },
@@ -171,6 +175,17 @@ IF_Emulator::populate_all_other_ops(void) const
                         .str());
             }
         }
+        else if (llvm_op == llvm::Instruction::FCmp)
+        {
+            for (unsigned int fcmp_pred = llvm::CmpInst::FIRST_FCMP_PREDICATE;
+                fcmp_pred < llvm::CmpInst::LAST_FCMP_PREDICATE; ++fcmp_pred)
+            {
+                this->dllink_snippet(fn_name + "_"
+                    + llvm::FCmpInst::getPredicateName(
+                        llvm::FCmpInst::Predicate(fcmp_pred))
+                        .str());
+            }
+        }
         else
         {
             this->dllink_snippet(fn_name);
@@ -225,15 +240,13 @@ IF_Emulator::make_fn_name_from_opcode(unsigned int opcode)
 }
 
 std::string
-IF_Emulator::make_emulated_fn_name(const llvm::Instruction& instr)
+IF_Emulator::make_emulated_fn_name(const llvm::Instruction& inst)
 {
-    std::string fn_name = IF_Emulator::snippet_prefix + instr.getOpcodeName();
-    if (const llvm::ICmpInst* icmp_instr
-        = llvm::dyn_cast<llvm::ICmpInst>(&instr))
+    std::string fn_name = IF_Emulator::snippet_prefix + inst.getOpcodeName();
+    if (const llvm::CmpInst* cmp_inst = llvm::dyn_cast<llvm::CmpInst>(&inst))
     {
         fn_name += "_"
-            + llvm::ICmpInst::getPredicateName(icmp_instr->getPredicate())
-                  .str();
+            + llvm::CmpInst::getPredicateName(cmp_inst->getPredicate()).str();
     }
     return fn_name;
 }
@@ -241,6 +254,19 @@ IF_Emulator::make_emulated_fn_name(const llvm::Instruction& instr)
 /*******************************************************************************
  * Estimated operations
  */
+
+/* Terminator Operations ******************************************************/
+
+/* The entropy loss is simply 1 / (<number_of_choices> + 1 default choice)
+ *
+ * TODO double check
+ */
+double
+IF_Emulator::estimate_switch(const llvm::Instruction& instr)
+{
+    const llvm::SwitchInst* si = llvm::dyn_cast<llvm::SwitchInst>(&instr);
+    return 1 / (si->getNumCases() + 1);
+}
 
 /* Vector Operations **********************************************************/
 

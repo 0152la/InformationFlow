@@ -100,6 +100,20 @@ IF_EntropyMap::Map::get_first_instr() const
     throw std::runtime_error("Couldn't find `main`!");
 }
 
+auto
+IF_EntropyMap::Map::get_nontrivial_instruction_count(void) const
+    -> decltype(this->instr_count)
+{
+    size_t i_count = 0;
+    for (const auto& fn : this->funcs)
+    {
+        i_count += std::count_if(fn->get_instrs().begin(),
+            fn->get_instrs().end(), [](const auto& inst)
+            { return !inst->is_trivial(); });
+    }
+    return i_count;
+}
+
 void
 IF_EntropyMap::Map::insert_external_func(std::string ex_fn)
 {

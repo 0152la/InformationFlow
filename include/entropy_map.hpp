@@ -9,8 +9,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -168,6 +168,8 @@ public:
     {
         return this->instr_count;
     }
+
+    auto get_nontrivial_instruction_count(void) const -> decltype(instr_count);
 
     void insert(std::unique_ptr<Function> em_fn)
     {
