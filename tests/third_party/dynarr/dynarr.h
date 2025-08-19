@@ -1,5 +1,3 @@
-// Taken from https://github.com/BareRose/dynarr
-
 /*
 dynarr.h - Portable, single-file, multi-purpose, dynamic array library for values of any type
 
@@ -48,8 +46,12 @@ dynarr arguments:
 #define DYNARR_H
 
 //process configuration
-#define DYNARR_IMPLEMENTATION
-#define DARRDEF static
+#ifdef DYNARR_STATIC
+    #define DYNARR_IMPLEMENTATION
+    #define DARRDEF static
+#else //DYNARR_EXTERN
+    #define DARRDEF extern
+#endif
 
 /*
 any* DYNARR_NEW(type)
@@ -195,8 +197,7 @@ DARRDEF void dynarrFree (void* a) {
 }
 DARRDEF int dynarrGrow (void** a) {
     //grow if currently at capacity
-    if (DARR_OFFS(*a)+DARR_SIZE(*a) == DARR_CAPA(*a))
-    {
+    if (DARR_OFFS(*a)+DARR_SIZE(*a) == DARR_CAPA(*a)) {
         if (DARR_OFFS(*a) >= DARR_SIZE(*a)) {
             //double the available capacity by offset reset
             memcpy(*a, DARR_EPTR(*a, 0), DARR_ELEM(*a)*DARR_SIZE(*a));
@@ -296,30 +297,3 @@ DARRDEF void dynarrSortStandard (void* a, int(*comp)(const void*, const void*)) 
 }
 
 #endif //DYNARR_IMPLEMENTATION
-
-#include <stdio.h> //printf
-
-static int sortInt(const int*, const int*);
-
-int main () {
-    //declare and initialize dynarr
-    int* darr = DYNARR_NEW(int);
-    //push a couple of elements
-    DYNARR_PUSH(darr, 4);
-    DYNARR_PUSH(darr, 1);
-    DYNARR_PUSH(darr, 3);
-    DYNARR_PUSH(darr, 2);
-    //sort dynarr in ascending order
-    DYNARR_SORT_STD(darr, sortInt);
-    //iterate through the dynarr and print its elements
-    for (int i = 0; i < DYNARR_SIZE(darr); i++)
-        printf("darr[%d] = %d\n", i, DYNARR_AT(darr, i));
-    //free the dynarr
-    DYNARR_FREE(darr);
-    //return
-    return 0;
-}
-
-static int sortInt (const int* a, const int* b) {
-    return *a-*b; //ascending order
-}
