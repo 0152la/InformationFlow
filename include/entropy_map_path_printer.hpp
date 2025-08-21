@@ -35,9 +35,13 @@ private:
     double compute_cycle_entropy(const path_t&) const;
 
 public:
+    /* Constructors ***********************************************************/
+
     Cycle(void) = delete;
     Cycle(const path_t&);
     Cycle(const path_t&, const IF_EntropyMap::Instruction*);
+
+    /* Getters ****************************************************************/
 
     inline const path_t& get_cycle(void) const { return this->cycle; };
 
@@ -55,9 +59,13 @@ public:
         return pow(this->entropy, bound);
     };
 
+    /* Others *****************************************************************/
+
     bool is_same_cycle(const Cycle&) const;
 
     bool has_node(path_t::value_type) const;
+
+    /* Printers ***************************************************************/
 
     std::string to_str(void) const;
     std::string to_str_entropy(void) const;
@@ -73,6 +81,8 @@ private:
     double compute_entropy(const IF_EM_Path_Entropy::path_t&);
 
 public:
+    /* Constructors ***********************************************************/
+
     Path(void) = default;
     Path(double _entropy, const path_t& _path, const cycles_t& _cycles) :
         entropy(_entropy),
@@ -81,6 +91,8 @@ public:
     Path(const path_t& _path, const cycles_t& _cycles) :
         Path(this->compute_entropy(_path), _path, _cycles) { };
     Path(const Path&) = default;
+
+    /* Getters ****************************************************************/
 
     double get_entropy(void) const { return this->entropy; };
 
@@ -92,6 +104,8 @@ public:
     {
         return this->path_instrs.back();
     };
+
+    /* Printers ***************************************************************/
 
     std::string to_str(void) const;
     std::string to_str_cycles(void) const;
@@ -108,9 +122,11 @@ private:
     size_t min_cycle_length = -1;
     size_t max_cycle_length = 0;
 
-    size_t cycles_on_paths_count  = 0;
+    size_t cycles_on_paths_count = 0;
 
 public:
+    /* Constructors ***********************************************************/
+
     Stats(void) = default;
 
     /* Getters ****************************************************************/
@@ -144,7 +160,7 @@ public:
         return this->cycles_on_paths_count;
     }
 
-    /* Adders *****************************************************************/
+    /* Setters ****************************************************************/
 
     void add_path(const IF_EM_Path_Entropy::path_t& _path)
     {
@@ -183,10 +199,10 @@ private:
     cycles_t graph_cycles;
     cycles_splits_t graph_cycles_splits;
     uint16_t bound = 2; // TODO
-    bool handle_cycles = true;
+    bool handle_cycles = false;
 
     IF_EM_Path_Entropy::Stats stats;
-    bool only_stats = false;
+    bool only_stats = true;
 
     void find_cycles(IF_EM_Path_Entropy::path_t, std::vector<bool>,
         IF_EM_Path_Entropy::cycle_split_nodes_t);
@@ -235,7 +251,7 @@ public:
         return this->graph_cycles_splits.size();
     };
 
-    /* Adders *****************************************************************/
+    /* Setters ****************************************************************/
 
     // inline void add_path(paths_t::value_type);
     inline void add_path(

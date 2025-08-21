@@ -34,16 +34,22 @@ public:
 private:
     idx_t idx;
     unsigned int opcode;
-    double retained_entropy;
-    bool trivial = false;
+
     const Instruction* succ_natural = nullptr;
     succs_t succs_instr;
     std::set<std::string> succs_extern;
 
+    double retained_entropy;
+    bool trivial = false;
+
 public:
+    /* Constructors ***********************************************************/
+
     Instruction(uint32_t _idx, const llvm::Instruction& _instr) :
         idx(_idx),
         opcode(_instr.getOpcode()) { };
+
+    /* Getters ****************************************************************/
 
     idx_t get_idx(void) const { return this->idx; };
 
@@ -69,6 +75,8 @@ public:
 
     bool is_trivial(void) const { return this->trivial; };
 
+    /* Setters ****************************************************************/
+
     void set_retained_entropy(double _entropy)
     {
         this->retained_entropy = _entropy;
@@ -87,9 +95,13 @@ public:
 
     void add_external_succ(std::string);
 
+    /* Printers ***************************************************************/
+
     const std::string to_str(void) const;
 
     const std::string to_str_simple(void) const;
+
+    /* Operators **************************************************************/
 
     bool operator==(const Instruction& o) const
     {
@@ -107,6 +119,8 @@ private:
     const std::string set_demangled_name(const llvm::Function&);
 
 public:
+    /* Constructors ***********************************************************/
+
     Function() = delete;
 
     Function(const llvm::Function& _fn) :
@@ -115,6 +129,8 @@ public:
     {
         this->instrs.reserve(_fn.getInstructionCount());
     };
+
+    /* Getters ****************************************************************/
 
     const std::string get_name(void) const { return this->name; };
 
@@ -132,10 +148,14 @@ public:
         return this->instrs;
     };
 
+    /* Setters ****************************************************************/
+
     void insert(std::unique_ptr<Instruction> _instr)
     {
         this->instrs.push_back(std::move(_instr));
     };
+
+    /* Printers ***************************************************************/
 
     const std::string to_str(void) const;
 };
@@ -149,7 +169,11 @@ private:
     uint32_t instr_count;
 
 public:
+    /* Constructors ***********************************************************/
+
     Map(const llvm::Module& _module) { this->funcs.reserve(_module.size()); };
+
+    /* Getters ****************************************************************/
 
     const Instruction* get_first_instr(void) const;
 
@@ -171,6 +195,8 @@ public:
 
     auto get_nontrivial_instruction_count(void) const -> decltype(instr_count);
 
+    /* Setters ****************************************************************/
+
     void insert(std::unique_ptr<Function> em_fn)
     {
         this->funcs.push_back(std::move(em_fn));
@@ -185,8 +211,12 @@ public:
         this->instr_count = instr_count;
     };
 
+    /* Others *****************************************************************/
+
     std::tuple<size_t, size_t, size_t> compute_cyclomatic_complexity(
         void) const;
+
+    /* Printers ***************************************************************/
 
     const std::string to_str(void) const;
     void print(void) const;
