@@ -2,6 +2,7 @@
 #define _IF_ENTROPYMAP_HPP
 
 // #include <format>
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -41,6 +42,9 @@ private:
 
     double retained_entropy;
     bool trivial = false;
+
+    bool compressed = false;
+    size_t compress_count = 0;
 
 public:
     /* Constructors ***********************************************************/
@@ -91,9 +95,18 @@ public:
         this->succ_natural = succ;
     };
 
+    // TODO external succs?
+    inline void clear_succs(void) { this->succs_instr.clear(); };
+
     void add_successor(const Instruction*);
 
     void add_external_succ(std::string);
+
+    inline void set_compressed_count(size_t to_set)
+    {
+        this->compressed = true;
+        this->compress_count = to_set;
+    };
 
     /* Printers ***************************************************************/
 
@@ -111,10 +124,13 @@ public:
 
 class Function
 {
+public:
+    using insts_t = std::vector<Instruction*>;
+
 private:
     const std::string name;
     const std::string demangled_name;
-    std::vector<std::unique_ptr<Instruction>> instrs;
+    insts_t instrs;
 
     const std::string set_demangled_name(const llvm::Function&);
 
@@ -130,6 +146,8 @@ public:
         this->instrs.reserve(_fn.getInstructionCount());
     };
 
+    ~Function();
+
     /* Getters ****************************************************************/
 
     const std::string get_name(void) const { return this->name; };
@@ -143,16 +161,26 @@ public:
 
     const Instruction* get_first_instr() const;
 
-    auto get_instrs(void) const -> const decltype(this->instrs)&
+    const insts_t& get_instrs(void) const { return this->instrs; };
+
+    inline size_t get_inst_count(void) const { return this->instrs.size(); };
+
+    inline size_t get_nontrivial_inst_count(void) const
     {
-        return this->instrs;
+        return std::count_if(this->instrs.begin(), this->instrs.end(),
+            [](const auto& inst) { return !inst->is_trivial(); });
     };
 
     /* Setters ****************************************************************/
 
-    void insert(std::unique_ptr<Instruction> _instr)
+    inline void set_insts(insts_t new_insts)
     {
-        this->instrs.push_back(std::move(_instr));
+        this->instrs = new_insts;
+    };
+
+    void insert(insts_t::value_type _instr)
+    {
+        this->instrs.push_back(_instr);
     };
 
     /* Printers ***************************************************************/
@@ -162,22 +190,28 @@ public:
 
 class Map
 {
+    public:
+        using funcs_t = std::vector<Function*>;
 private:
-    std::vector<std::unique_ptr<Function>> funcs;
+    funcs_t funcs;
     std::set<std::string> external_funcs;
     bool verbose = false;
     uint32_t instr_count;
+
+    bool compressed = false;
+    uint32_t compressed_instr_count;
 
 public:
     /* Constructors ***********************************************************/
 
     Map(const llvm::Module& _module) { this->funcs.reserve(_module.size()); };
+    ~Map();
 
     /* Getters ****************************************************************/
 
     const Instruction* get_first_instr(void) const;
 
-    inline auto get_funcs(void) const -> const decltype(funcs)&
+    inline const funcs_t& get_funcs(void) const
     {
         return this->funcs;
     };
@@ -197,7 +231,7 @@ public:
 
     /* Setters ****************************************************************/
 
-    void insert(std::unique_ptr<Function> em_fn)
+    void insert(funcs_t::value_type em_fn)
     {
         this->funcs.push_back(std::move(em_fn));
     };
@@ -213,12 +247,15 @@ public:
 
     /* Others *****************************************************************/
 
+    void compress_map(void);
+
     std::tuple<size_t, size_t, size_t> compute_cyclomatic_complexity(
         void) const;
 
     /* Printers ***************************************************************/
 
     const std::string to_str(void) const;
+    const std::string to_str_summary(void) const;
     void print(void) const;
 };
 

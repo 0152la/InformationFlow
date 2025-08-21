@@ -38,12 +38,6 @@ IF_EntropyMap::Instruction::to_str_simple(void) const
  * IF_EntropyMap::Function
  ******************************************************************************/
 
-const IF_EntropyMap::Instruction*
-IF_EntropyMap::Function::get_first_instr() const
-{
-    return this->instrs.front().get();
-}
-
 const std::string
 IF_EntropyMap::Function::set_demangled_name(const llvm::Function& _fn)
 {
@@ -55,6 +49,14 @@ IF_EntropyMap::Function::set_demangled_name(const llvm::Function& _fn)
     return dis->getName().str();
 }
 
+IF_EntropyMap::Function::~Function()
+{
+    for (insts_t::const_reference inst : this->instrs)
+    {
+        delete(inst);
+    }
+}
+
 const std::string
 IF_EntropyMap::Function::get_representing_name(void) const
 {
@@ -63,6 +65,12 @@ IF_EntropyMap::Function::get_representing_name(void) const
         return this->get_name();
     }
     return this->get_demangled_name();
+}
+
+const IF_EntropyMap::Instruction*
+IF_EntropyMap::Function::get_first_instr() const
+{
+    return this->instrs.front();
 }
 
 const std::string
@@ -86,10 +94,19 @@ IF_EntropyMap::Function::to_str(void) const
  * IF_EntropyMap::Map
  ******************************************************************************/
 
+IF_EntropyMap::Map::~Map()
+{
+    for (funcs_t::const_reference fn : this->funcs)
+    {
+        delete(fn);
+    }
+}
+
+
 const IF_EntropyMap::Instruction*
 IF_EntropyMap::Map::get_first_instr() const
 {
-    for (const auto& func : this->funcs)
+    for (IF_EntropyMap::Map::funcs_t::const_reference func : this->funcs)
     {
         if (!func->get_demangled_name().compare("main")
             || !func->get_name().compare("main"))
@@ -107,9 +124,9 @@ IF_EntropyMap::Map::get_nontrivial_instruction_count(void) const
     size_t i_count = 0;
     for (const auto& fn : this->funcs)
     {
-        i_count += std::count_if(fn->get_instrs().begin(),
-            fn->get_instrs().end(), [](const auto& inst)
-            { return !inst->is_trivial(); });
+        i_count
+            += std::count_if(fn->get_instrs().begin(), fn->get_instrs().end(),
+                [](const auto& inst) { return !inst->is_trivial(); });
     }
     return i_count;
 }
@@ -118,6 +135,40 @@ void
 IF_EntropyMap::Map::insert_external_func(std::string ex_fn)
 {
     this->external_funcs.insert(ex_fn);
+}
+
+void
+IF_EntropyMap::Map::compress_map(void)
+{
+    IF_EntropyMap::Function::insts_t compressed_insts;
+    IF_EntropyMap::Function::insts_t inst_chain;
+    for (const auto& em_fn : this->get_funcs())
+    {
+        compressed_insts.clear();
+        inst_chain.clear();
+        for (const auto& fn_inst : em_fn->get_instrs())
+        {
+            if (!fn_inst->is_trivial() || fn_inst->get_succs_count() > 1)
+            {
+                if (!inst_chain.empty())
+                {
+                    IF_EntropyMap::Instruction* to_keep
+                        = inst_chain.front();
+                    to_keep->clear_succs();
+                    to_keep->set_natural_successor(
+                        inst_chain.back()->get_natural_successor());
+                    to_keep->add_successor(
+                        inst_chain.back()->get_natural_successor());
+                    to_keep->set_compressed_count(inst_chain.size());
+                    compressed_insts.push_back(std::move(inst_chain.front()));
+                    inst_chain.clear();
+                }
+                compressed_insts.push_back(std::move(fn_inst));
+            }
+            inst_chain.push_back(std::move(fn_inst));
+        }
+        em_fn->set_insts(std::move(compressed_insts));
+    }
 }
 
 std::tuple<size_t, size_t, size_t>
@@ -161,6 +212,23 @@ IF_EntropyMap::Map::to_str(void) const
     for (const auto& em_fn : this->get_funcs())
     {
         oss << em_fn->to_str();
+    }
+    return oss.str();
+}
+
+const std::string
+IF_EntropyMap::Map::to_str_summary(void) const
+{
+    std::ostringstream oss;
+    oss << "Total instructions : " << this->get_instruction_count();
+    oss << " [ non-trivial " << this->get_nontrivial_instruction_count();
+    oss << " ]\n";
+    for (const auto& em_fn : this->get_funcs())
+    {
+        oss << '\t' << em_fn->get_representing_name();
+        oss << " -- instr " << em_fn->get_inst_count();
+        oss << " [ non-trivial " << em_fn->get_nontrivial_inst_count();
+        oss << " ]\n";
     }
     return oss.str();
 }

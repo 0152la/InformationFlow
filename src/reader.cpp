@@ -73,14 +73,15 @@ IF_Parser::make_entropy_map(
             continue;
         }
 
-        auto em_fn = std::make_unique<IF_EntropyMap::Function>(fn);
+        IF_EntropyMap::Function* em_fn = new IF_EntropyMap::Function(fn);
         IF_EntropyMap::Instruction* em_instr_prev = nullptr;
 
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
-                instr_idx, fn_inst);
+            auto em_instr = new IF_EntropyMap::Instruction(instr_idx, fn_inst);
+                //std::make_unique<IF_EntropyMap::Instruction>(
+                //instr_idx, fn_inst);
             double retained_entropy = compute_instr_entropy(fn_inst, if_fe);
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
@@ -90,7 +91,7 @@ IF_Parser::make_entropy_map(
                 // throw std::runtime_error(err.str());
                 llvm::errs() << "Warning: " << err.str() << '\n';
             }
-            em_instr_map.emplace(&fn_inst, em_instr.get());
+            em_instr_map.emplace(&fn_inst, em_instr);
 
             // Record special instruction successors, such as from calls or
             // branch instructions
@@ -106,22 +107,22 @@ IF_Parser::make_entropy_map(
                 }
                 else
                 {
-                    instr_succ_map.emplace(em_instr.get(),
+                    instr_succ_map.emplace(em_instr,
                         std::vector<const llvm::Instruction*>());
-                    instr_succ_map.at(em_instr.get())
+                    instr_succ_map.at(em_instr)
                         .push_back(&(callee->getEntryBlock().front()));
-                    func_calls.emplace(em_instr.get(), callee);
+                    func_calls.emplace(em_instr, callee);
                 }
             }
             else if (llvm::isa<llvm::BranchInst>(&fn_inst))
             {
                 instr_succ_map.emplace(
-                    em_instr.get(), std::vector<const llvm::Instruction*>());
+                    em_instr, std::vector<const llvm::Instruction*>());
                 const llvm::BranchInst* bi
                     = llvm::dyn_cast<llvm::BranchInst>(&fn_inst);
                 for (const auto& succ : bi->successors())
                 {
-                    instr_succ_map.at(em_instr.get())
+                    instr_succ_map.at(em_instr)
                         .push_back(&(succ->front()));
                 }
             }
@@ -132,7 +133,7 @@ IF_Parser::make_entropy_map(
                     func_returns.emplace(
                         &fn, std::vector<IF_EntropyMap::Instruction*>());
                 }
-                func_returns.at(&fn).push_back(em_instr.get());
+                func_returns.at(&fn).push_back(em_instr);
             }
 
             // If this is not the last instruction in a function, nor is it an
@@ -141,16 +142,16 @@ IF_Parser::make_entropy_map(
                 && em_instr_prev->get_opcode()
                     != llvm::Instruction::Unreachable)
             {
-                em_instr_prev->set_natural_successor(em_instr.get());
-                em_instr_prev->add_successor(em_instr.get());
+                em_instr_prev->set_natural_successor(em_instr);
+                em_instr_prev->add_successor(em_instr);
             }
 
-            em_instr_prev = em_instr.get();
+            em_instr_prev = em_instr;
             em_instr->set_retained_entropy(retained_entropy);
-            em_fn->insert(std::move(em_instr));
+            em_fn->insert(em_instr);
             instr_idx += 1;
         }
-        em->insert(std::move(em_fn));
+        em->insert(em_fn);
     }
     em->set_instruction_count(instr_idx);
 
