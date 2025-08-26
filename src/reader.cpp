@@ -35,6 +35,22 @@ IF_Parser::compute_instr_entropy(
     return if_fe.fuzz_retained_entropy(instr);
 }
 
+void
+IF_Parser::make_successor_relation_natural(IF_EntropyMap::Instruction* inst_from,
+    IF_EntropyMap::Instruction* inst_to) const
+{
+    inst_from->set_natural_successor(inst_to);
+    make_successor_relation(inst_from, inst_to);
+}
+
+void
+IF_Parser::make_successor_relation(IF_EntropyMap::Instruction* inst_from,
+    IF_EntropyMap::Instruction* inst_to) const
+{
+    inst_from->add_successor(inst_to);
+    inst_to->add_predecessor(inst_from);
+}
+
 std::unique_ptr<IF_EntropyMap::Map>
 IF_Parser::make_entropy_map(
     const llvm::Module& llvm_module, IF_FuzzEngine& if_fe)
@@ -49,7 +65,7 @@ IF_Parser::make_entropy_map(
 
     // Map holding which `LLVM Instruction` maps to which
     // `IF_EntropyMap::Instruction`. Used in resolving other dependencies
-    std::map<const llvm::Instruction*, const IF_EntropyMap::Instruction*>
+    std::map<const llvm::Instruction*, IF_EntropyMap::Instruction*>
         em_instr_map;
 
     // Map holding `llvm::Function`s and their `LLVM::ReturnInst`s (in
@@ -80,8 +96,8 @@ IF_Parser::make_entropy_map(
         for (const auto& fn_inst : llvm::instructions(fn))
         {
             auto em_instr = new IF_EntropyMap::Instruction(instr_idx, fn_inst);
-                //std::make_unique<IF_EntropyMap::Instruction>(
-                //instr_idx, fn_inst);
+            // std::make_unique<IF_EntropyMap::Instruction>(
+            // instr_idx, fn_inst);
             double retained_entropy = compute_instr_entropy(fn_inst, if_fe);
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
@@ -107,10 +123,10 @@ IF_Parser::make_entropy_map(
                 }
                 else
                 {
-                    instr_succ_map.emplace(em_instr,
-                        std::vector<const llvm::Instruction*>());
-                    instr_succ_map.at(em_instr)
-                        .push_back(&(callee->getEntryBlock().front()));
+                    instr_succ_map.emplace(
+                        em_instr, std::vector<const llvm::Instruction*>());
+                    instr_succ_map.at(em_instr).push_back(
+                        &(callee->getEntryBlock().front()));
                     func_calls.emplace(em_instr, callee);
                 }
             }
@@ -122,8 +138,7 @@ IF_Parser::make_entropy_map(
                     = llvm::dyn_cast<llvm::BranchInst>(&fn_inst);
                 for (const auto& succ : bi->successors())
                 {
-                    instr_succ_map.at(em_instr)
-                        .push_back(&(succ->front()));
+                    instr_succ_map.at(em_instr).push_back(&(succ->front()));
                 }
             }
             else if (llvm::isa<llvm::ReturnInst>(&fn_inst))
@@ -142,8 +157,9 @@ IF_Parser::make_entropy_map(
                 && em_instr_prev->get_opcode()
                     != llvm::Instruction::Unreachable)
             {
-                em_instr_prev->set_natural_successor(em_instr);
-                em_instr_prev->add_successor(em_instr);
+                this->make_successor_relation_natural(em_instr_prev, em_instr);
+                // em_instr_prev->set_natural_successor(em_instr);
+                // em_instr_prev->add_successor(em_instr);
             }
 
             em_instr_prev = em_instr;
@@ -162,7 +178,8 @@ IF_Parser::make_entropy_map(
         {
             try
             {
-                em_instr->add_successor(em_instr_map.at(instr));
+                this->make_successor_relation(em_instr, em_instr_map.at(instr));
+                // em_instr->add_successor(em_instr_map.at(instr));
             }
             catch (const std::out_of_range& ex)
             {
@@ -188,7 +205,10 @@ IF_Parser::make_entropy_map(
                 {
                     throw std::runtime_error("Unset natural successor!");
                 }
-                em_ret_instr->add_successor(em_instr->get_natural_successor());
+                this->make_successor_relation(em_ret_instr,
+                    const_cast<IF_EntropyMap::Instruction*>(
+                        em_instr->get_natural_successor()));
+                // em_ret_instr->add_successor(em_instr->get_natural_successor());
             }
         }
     }

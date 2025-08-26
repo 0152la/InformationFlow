@@ -10,7 +10,14 @@ void
 IF_EntropyMap::Instruction::add_successor(
     const IF_EntropyMap::Instruction* to_add)
 {
-    this->succs_instr.insert(to_add);
+    this->succ_insts.insert(to_add);
+}
+
+void
+IF_EntropyMap::Instruction::add_predecessor(
+    const IF_EntropyMap::Instruction* to_add)
+{
+    this->pred_insts.insert(to_add);
 }
 
 void
@@ -53,7 +60,7 @@ IF_EntropyMap::Function::~Function()
 {
     for (insts_t::const_reference inst : this->instrs)
     {
-        delete(inst);
+        delete inst;
     }
 }
 
@@ -94,14 +101,40 @@ IF_EntropyMap::Function::to_str(void) const
  * IF_EntropyMap::Map
  ******************************************************************************/
 
+IF_EntropyMap::Instruction*
+IF_EntropyMap::Map::make_compression(
+    IF_EntropyMap::Function::insts_t& inst_chain) const
+{
+    IF_EntropyMap::Instruction* to_keep = inst_chain.front();
+    to_keep->clear_succs();
+    to_keep->set_natural_successor(inst_chain.back()->get_natural_successor());
+    to_keep->add_successor(inst_chain.back()->get_natural_successor());
+    to_keep->set_compressed_count(inst_chain.size());
+
+    IF_EntropyMap::Function::insts_t::const_iterator chain_it
+        = inst_chain.begin();
+    std::advance(chain_it, 1);
+    while (chain_it != inst_chain.end())
+    {
+        for (IF_EntropyMap::Instruction::succs_t::const_reference pred_i :
+            (*chain_it)->get_preds_inst())
+        {
+        }
+        delete *chain_it;
+        std::advance(chain_it, 1);
+    }
+    inst_chain.clear();
+
+    return to_keep;
+}
+
 IF_EntropyMap::Map::~Map()
 {
     for (funcs_t::const_reference fn : this->funcs)
     {
-        delete(fn);
+        delete (fn);
     }
 }
-
 
 const IF_EntropyMap::Instruction*
 IF_EntropyMap::Map::get_first_instr() const
@@ -142,6 +175,22 @@ IF_EntropyMap::Map::compress_map(void)
 {
     IF_EntropyMap::Function::insts_t compressed_insts;
     IF_EntropyMap::Function::insts_t inst_chain;
+    decltype(this->instr_count) compressed_inst_count = 0;
+
+    auto compress_inst_chain = [&inst_chain, &compressed_insts, this]()
+    {
+        if (inst_chain.size() == 1)
+        {
+            compressed_insts.push_back(inst_chain.front());
+            inst_chain.clear();
+        }
+        else if (!inst_chain.empty())
+        {
+            compressed_insts.push_back(
+                this->make_compression(inst_chain));
+        }
+    };
+
     for (const auto& em_fn : this->get_funcs())
     {
         compressed_insts.clear();
@@ -150,25 +199,21 @@ IF_EntropyMap::Map::compress_map(void)
         {
             if (!fn_inst->is_trivial() || fn_inst->get_succs_count() > 1)
             {
-                if (!inst_chain.empty())
-                {
-                    IF_EntropyMap::Instruction* to_keep
-                        = inst_chain.front();
-                    to_keep->clear_succs();
-                    to_keep->set_natural_successor(
-                        inst_chain.back()->get_natural_successor());
-                    to_keep->add_successor(
-                        inst_chain.back()->get_natural_successor());
-                    to_keep->set_compressed_count(inst_chain.size());
-                    compressed_insts.push_back(std::move(inst_chain.front()));
-                    inst_chain.clear();
-                }
-                compressed_insts.push_back(std::move(fn_inst));
+                compress_inst_chain();
+                compressed_insts.push_back(fn_inst);
             }
-            inst_chain.push_back(std::move(fn_inst));
+            else
+            {
+                inst_chain.push_back(fn_inst);
+            }
         }
-        em_fn->set_insts(std::move(compressed_insts));
+        // TODO successors
+        compress_inst_chain();
+        em_fn->set_insts(compressed_insts);
+        compressed_inst_count += compressed_insts.size();
     }
+
+    this->set_instruction_count(compressed_inst_count);
 }
 
 std::tuple<size_t, size_t, size_t>
@@ -252,8 +297,13 @@ IF_EntropyMap::Map::print(void) const
                 std::cout << "\t"
                           << llvm::Instruction::getOpcodeName(
                                  em_fn_instr->get_opcode());
-                std::cout << " -- " << em_fn_instr->get_retained_entropy()
-                          << '\n';
+                std::cout << " -- " << em_fn_instr->get_retained_entropy();
+                if (em_fn_instr->is_compressed())
+                {
+                    std::cout << " -- compresses "
+                              << em_fn_instr->get_compressed_count();
+                }
+                std::cout << '\n';
                 // TODO arguments
             }
         }

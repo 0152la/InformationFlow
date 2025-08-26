@@ -37,7 +37,8 @@ private:
     unsigned int opcode;
 
     const Instruction* succ_natural = nullptr;
-    succs_t succs_instr;
+    succs_t succ_insts; // Successors of this instruction
+    succs_t pred_insts; // Instructions this is a successor to
     std::set<std::string> succs_extern;
 
     double retained_entropy;
@@ -61,9 +62,11 @@ public:
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
-    const succs_t& get_succs_inst(void) const { return this->succs_instr; };
+    inline const succs_t& get_succs_inst(void) const { return this->succ_insts; };
 
-    size_t get_succs_count(void) const { return this->succs_instr.size(); };
+    size_t get_succs_count(void) const { return this->succ_insts.size(); };
+
+    inline const succs_t& get_preds_inst(void) const { return this->pred_insts; };
 
     auto get_external_succs(void) const -> const decltype(this->succs_extern)&
     {
@@ -75,9 +78,16 @@ public:
         return this->succ_natural;
     };
 
-    const succs_t& get_all_successors(void) const { return this->succs_instr; };
+    const succs_t& get_all_successors(void) const { return this->succ_insts; };
 
-    bool is_trivial(void) const { return this->trivial; };
+    inline decltype(compress_count) get_compressed_count(void) const
+    {
+        return this->compress_count;
+    };
+
+    inline bool is_trivial(void) const { return this->trivial; };
+
+    inline bool is_compressed(void) const { return this->compressed; };
 
     /* Setters ****************************************************************/
 
@@ -96,9 +106,11 @@ public:
     };
 
     // TODO external succs?
-    inline void clear_succs(void) { this->succs_instr.clear(); };
+    inline void clear_succs(void) { this->succ_insts.clear(); };
 
     void add_successor(const Instruction*);
+
+    void add_predecessor(const Instruction*);
 
     void add_external_succ(std::string);
 
@@ -173,15 +185,9 @@ public:
 
     /* Setters ****************************************************************/
 
-    inline void set_insts(insts_t new_insts)
-    {
-        this->instrs = new_insts;
-    };
+    inline void set_insts(insts_t new_insts) { this->instrs = new_insts; };
 
-    void insert(insts_t::value_type _instr)
-    {
-        this->instrs.push_back(_instr);
-    };
+    void insert(insts_t::value_type _instr) { this->instrs.push_back(_instr); };
 
     /* Printers ***************************************************************/
 
@@ -190,8 +196,9 @@ public:
 
 class Map
 {
-    public:
-        using funcs_t = std::vector<Function*>;
+public:
+    using funcs_t = std::vector<Function*>;
+
 private:
     funcs_t funcs;
     std::set<std::string> external_funcs;
@@ -199,22 +206,22 @@ private:
     uint32_t instr_count;
 
     bool compressed = false;
-    uint32_t compressed_instr_count;
+
+    IF_EntropyMap::Instruction* make_compression(
+        IF_EntropyMap::Function::insts_t&) const;
 
 public:
     /* Constructors ***********************************************************/
 
     Map(const llvm::Module& _module) { this->funcs.reserve(_module.size()); };
+
     ~Map();
 
     /* Getters ****************************************************************/
 
     const Instruction* get_first_instr(void) const;
 
-    inline const funcs_t& get_funcs(void) const
-    {
-        return this->funcs;
-    };
+    inline const funcs_t& get_funcs(void) const { return this->funcs; };
 
     inline auto get_external_funcs(void) const -> const
         decltype(external_funcs)&

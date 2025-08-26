@@ -167,7 +167,7 @@ IF_Emulator::populate_all_other_ops(void) const
         if (llvm_op == llvm::Instruction::ICmp)
         {
             for (unsigned int icmp_pred = llvm::CmpInst::FIRST_ICMP_PREDICATE;
-                icmp_pred < llvm::CmpInst::LAST_ICMP_PREDICATE; ++icmp_pred)
+                icmp_pred <= llvm::CmpInst::LAST_ICMP_PREDICATE; ++icmp_pred)
             {
                 this->dllink_snippet(fn_name + "_"
                     + llvm::ICmpInst::getPredicateName(
@@ -178,7 +178,7 @@ IF_Emulator::populate_all_other_ops(void) const
         else if (llvm_op == llvm::Instruction::FCmp)
         {
             for (unsigned int fcmp_pred = llvm::CmpInst::FIRST_FCMP_PREDICATE;
-                fcmp_pred < llvm::CmpInst::LAST_FCMP_PREDICATE; ++fcmp_pred)
+                fcmp_pred <= llvm::CmpInst::LAST_FCMP_PREDICATE; ++fcmp_pred)
             {
                 this->dllink_snippet(fn_name + "_"
                     + llvm::FCmpInst::getPredicateName(

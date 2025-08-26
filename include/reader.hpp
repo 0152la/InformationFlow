@@ -8,8 +8,8 @@
 #include "randgen.hpp"
 
 #include <algorithm>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -54,6 +54,10 @@ private:
 
     double compute_instr_entropy(
         const llvm::Instruction&, IF_FuzzEngine&) const;
+    void make_successor_relation_natural(IF_EntropyMap::Instruction*,
+        IF_EntropyMap::Instruction*) const;
+    void make_successor_relation(IF_EntropyMap::Instruction*,
+        IF_EntropyMap::Instruction*) const;
 
 public:
     IF_Parser() = default;
