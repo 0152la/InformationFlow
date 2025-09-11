@@ -28,8 +28,8 @@ IF_Randgen::gen_signed_int(uint8_t bit_width)
     }
     else
     {
-        p = decltype(this->int_dist)::param_type { -(1 << bit_width),
-            (1 << bit_width) - 1 };
+        p = decltype(this->int_dist)::param_type { -(1 << (bit_width - 1)),
+            (1 << (bit_width - 1)) - 1 };
     }
     return this->int_dist(this->random_engine, p);
 }
