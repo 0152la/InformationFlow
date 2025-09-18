@@ -64,6 +64,7 @@ add_dependencies(lflow llvm_snippets)
 add_library(entropy STATIC
     entropy.cpp
     randgen.cpp
+    hashing.cpp
 )
 target_include_directories(entropy PUBLIC ${INCLUDE_DIR})
 

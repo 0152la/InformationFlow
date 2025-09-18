@@ -3,10 +3,11 @@
 
 #include "config.hpp"
 
-#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <system_error>
 #include <unordered_map>
 #include <utility>
@@ -27,6 +28,12 @@
 #include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
 
+/* Helper functions ***********************************************************/
+
+llvm::Function*
+make_llvm_fn(const std::string&, llvm::FunctionType*, llvm::Module&);
+
+/* Emitting instruction snippets **********************************************/
 struct llvm_pack
 {
     llvm::LLVMContext& ctx;
@@ -36,10 +43,33 @@ struct llvm_pack
 
 void
 emit_binop_fns(unsigned int, llvm_pack&);
-void
-emit_other_fns(llvm_pack&);
 
 void
 emit_cmp_fn(const std::string&, const llvm::CmpInst::Predicate&, llvm::Type*,
     llvm_pack&);
+void
+emit_conversion_fns(llvm_pack&);
+void
+emit_other_fns(llvm_pack&);
+
+/* Definition logging *********************************************************/
+
+struct llvm_impl_def
+{
+    const std::string name;
+    const std::string ret_ty;
+    const std::vector<std::string> params_ty;
+
+    llvm_impl_def(const std::string&& _name, const std::string& _ret,
+        std::vector<std::string>& _params) :
+        name(_name),
+        ret_ty(_ret),
+        params_ty(_params) { };
+};
+
+void
+emit_impl_def(const std::string&);
+void
+record_impl_def(const llvm::Function*);
+
 #endif // _IF_LLVM_GEN_HPP
