@@ -31,7 +31,8 @@
 /* Helper functions ***********************************************************/
 
 llvm::Function*
-make_llvm_fn(const std::string&, llvm::FunctionType*, llvm::Module&);
+make_llvm_fn(const std::string&, llvm::FunctionType*, unsigned int,
+    const std::string&, llvm::Module&);
 
 /* Emitting instruction snippets **********************************************/
 struct llvm_pack
@@ -60,16 +61,28 @@ struct llvm_impl_def
     const std::string ret_ty;
     const std::vector<std::string> params_ty;
 
-    llvm_impl_def(const std::string&& _name, const std::string& _ret,
-        std::vector<std::string>& _params) :
+    unsigned int opcode;
+    const std::string helper;
+
+    llvm_impl_def(const std::string& _name, const std::string& _ret,
+        std::vector<std::string>& _params, unsigned int _opcode,
+        const std::string& _helper) :
         name(_name),
         ret_ty(_ret),
-        params_ty(_params) { };
+        params_ty(_params),
+        opcode(_opcode),
+        helper(_helper) { };
+
+    llvm_impl_def(const std::string&& _name, const std::string& _ret,
+        std::vector<std::string>& _params, unsigned int _opcode) :
+        llvm_impl_def(_name, _ret, _params, _opcode, "") {};
 };
 
 void
 emit_impl_def(const std::string&);
 void
-record_impl_def(const llvm::Function*);
+record_impl_def(const llvm::Function*, unsigned int, const std::string&);
+void
+emit_impl_header(const std::string&);
 
 #endif // _IF_LLVM_GEN_HPP

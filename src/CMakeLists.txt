@@ -50,6 +50,7 @@ add_executable(iflow
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 target_link_libraries(iflow PRIVATE ${llvm_libs})
+target_link_libraries(iflow PRIVATE ${llvm_snippets})
 add_dependencies(iflow llvm_snippets)
 
 # Main library for functional tests
