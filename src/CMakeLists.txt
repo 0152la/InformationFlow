@@ -12,6 +12,7 @@ target_link_libraries(lgen PRIVATE ${llvm_libs})
 # library
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
+           ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.hpp
     COMMAND lgen
 )
 add_custom_target(lgen_make_snippets
@@ -49,15 +50,17 @@ add_executable(iflow
     main.cpp
 )
 target_include_directories(iflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_include_directories(iflow PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(iflow PRIVATE ${llvm_libs})
-target_link_libraries(iflow PRIVATE ${llvm_snippets})
-add_dependencies(iflow llvm_snippets)
+add_dependencies(iflow lgen_make_snippets)
 
 # Main library for functional tests
 add_library(lflow
     ${flow_sources}
 )
 target_include_directories(lflow PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
+target_include_directories(lflow PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(iflow PRIVATE ${llvm_libs})
 target_link_libraries(lflow PRIVATE ${llvm_libs})
 add_dependencies(lflow llvm_snippets)
 
@@ -67,5 +70,4 @@ add_library(entropy STATIC
     randgen.cpp
     hashing.cpp
 )
-target_include_directories(entropy PUBLIC ${INCLUDE_DIR})
-
+target_include_directories(entropy PRIVATE ${INCLUDE_DIR})

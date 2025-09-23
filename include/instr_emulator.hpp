@@ -1,6 +1,8 @@
 #ifndef _IF_INSTR_EMULATOR_HPP
 #define _IF_INSTR_EMULATOR_HPP
 
+#include "llvm_snippets.hpp"
+
 #include <climits>
 #include <cmath>
 #include <dlfcn.h>
