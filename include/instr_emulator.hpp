@@ -1,16 +1,19 @@
 #ifndef _IF_INSTR_EMULATOR_HPP
 #define _IF_INSTR_EMULATOR_HPP
 
+#include "config.hpp"
 #include "llvm_snippets.hpp"
 
 #include <climits>
 #include <cmath>
 #include <dlfcn.h>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <ranges>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -37,6 +40,10 @@ using binops_i64_t = std::function<int64_t(int64_t, int64_t)>;
 using binops_i64_ct = int64_t (*)(int64_t, int64_t);
 using emulated_fns_t = std::unordered_map<std::string, binops_i64_t>; // TODO
 
+using binops_dbl_t = std::function<double(double, double)>;
+using binops_dbl_ct = double (*)(double, double);
+using emulated_fns_dbl_t = std::unordered_map<std::string, binops_dbl_t>;
+
 using entropy_map_key_t = std::string;
 using set_entropy_t = std::unordered_map<entropy_map_key_t, double>;
 using estimate_entropy_t = std::unordered_map<entropy_map_key_t,
@@ -45,14 +52,38 @@ using estimate_entropy_t = std::unordered_map<entropy_map_key_t,
 // emulated_fns_unary;
 extern emulated_fns_t emulated_fns;
 
+#include "instr_emulator-typemap.hpp"
+
+// constexpr unsigned short instr_ty_count = 5;
+// const std::array<
+
+struct fn_def
+{
+    unsigned int op_code;
+    std::string extra_info;
+    std::string fn_name;
+
+    std::string ret_sig;
+    std::string ret_ty;
+    std::vector<std::string> params;
+
+    fn_def(const std::string);
+    const std::string to_str(void);
+};
+
 class IF_Emulator
+
 {
 private:
     static constexpr std::string snippet_prefix = "llvm_impl_";
+    emulated_fns2_t emulated_fnss;
 
     void* ll_snippet_handler;
 
     void dllink_snippet(const std::string&) const;
+    void dllink_snippet_float(const std::string&) const;
+    template <typename T, typename Tc> void populate_fn_def(const fn_def&);
+    void populate_ops(void);
     void populate_all_bin_ops(void) const;
     void populate_all_other_ops(void) const;
 
@@ -61,6 +92,7 @@ public:
     ~IF_Emulator();
 
     binops_i64_t get_emulated_fn(const llvm::Instruction&) const;
+    binops_dbl_t get_emulated_fn_float(const llvm::Instruction&) const;
 
     static std::string complete_fn_name(const std::string&);
     static std::string make_fn_name_from_opcode(unsigned int llvm_ir_opcode);
@@ -112,5 +144,7 @@ std::unique_ptr<struct_sz_t>
 get_llvm_struct_bitsize(const llvm::StructType*, const llvm::Module*);
 uint8_t
 get_operand_bit_width(const llvm::Type*, const llvm::Module*);
+
+#include "instr_emulator.tpp"
 
 #endif // _IF_INSTR_EMULATOR_HPP
