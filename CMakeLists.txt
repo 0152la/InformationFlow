@@ -4,6 +4,9 @@ project(InformationFlow LANGUAGES CXX)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 20)
 
+# Build third party dependencies
+add_subdirectory(${CMAKE_SOURCE_DIR}/third_party)
+
 # Set global compilation options
 add_compile_options(-pedantic -Wextra)
 add_compile_options($<$<CONFIG:Debug>:-Werror>)
