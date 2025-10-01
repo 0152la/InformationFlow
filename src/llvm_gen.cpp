@@ -37,7 +37,7 @@ emit_binop_fns(unsigned int op, llvm_pack& lp)
 {
     llvm::Type* binop_ty;
     std::string binop_name
-        = snippet_prefix + llvm::Instruction::getOpcodeName(op);
+        = make_llvm_snippet_name(llvm::Instruction::getOpcodeName(op));
 
     if (std::find(binops_float.begin(), binops_float.end(), op)
         != binops_float.end())
@@ -66,11 +66,13 @@ void
 emit_cmp_fn(
     const llvm::CmpInst::Predicate& cmp_pred, llvm::Type* op_ty, llvm_pack& lp)
 {
-    const std::string cmp_extra = llvm::CmpInst::getPredicateName(cmp_pred).str();
+    const std::string cmp_extra
+        = llvm::CmpInst::getPredicateName(cmp_pred).str();
     unsigned int cmp_opcode = op_ty->isIntegerTy() ? llvm::Instruction::ICmp
                                                    : llvm::Instruction::FCmp;
     const std::string cmp_ty = llvm::Instruction::getOpcodeName(cmp_opcode);
-    const std::string cmp_name = snippet_prefix + cmp_ty + "_" + cmp_extra;
+    //const std::string cmp_name = snippet_prefix + cmp_ty + "_" + cmp_extra;
+    const std::string cmp_name = make_llvm_snippet_name(cmp_ty, cmp_extra);
 
     std::vector<llvm::Type*> params { op_ty, op_ty };
     llvm::FunctionType* cmp_fn_ty(
@@ -89,10 +91,11 @@ void
 emit_conversion_fns(llvm_pack& lp)
 {
     llvm::Type* fptosi_ty = llvm::Type::getInt64Ty(lp.ctx);
-    llvm::Type* op_ty = llvm::Type::getFloatTy(lp.ctx);
+    llvm::Type* op_ty = llvm::Type::getDoubleTy(lp.ctx);
     llvm::FunctionType* conv_fn_ty(
         llvm::FunctionType::get(fptosi_ty, op_ty, false));
-    llvm::Function* fn = make_llvm_fn(snippet_prefix + std::string("fptosi"),
+    const std::string conv_name = make_llvm_snippet_name("fptosi");
+    llvm::Function* fn = make_llvm_fn(conv_name,
         conv_fn_ty, llvm::Instruction::FPToSI, "", lp.mod);
 
     llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
@@ -104,21 +107,16 @@ emit_conversion_fns(llvm_pack& lp)
 void
 emit_other_fns(llvm_pack& lp)
 {
-    std::string cmp_fn_name;
 
     // Emit `icmp` snippets
     for (const auto& icmp_pred : llvm::CmpInst::ICmpPredicates())
     {
-        cmp_fn_name = snippet_prefix + std::string("icmp_")
-            + llvm::CmpInst::getPredicateName(icmp_pred).str();
         emit_cmp_fn(icmp_pred, llvm::Type::getInt64Ty(lp.ctx), lp);
     }
 
     // Emit `fcmp` snippets
     for (const auto& fcmp_pred : llvm::CmpInst::FCmpPredicates())
     {
-        cmp_fn_name = snippet_prefix + std::string("fcmp_")
-            + llvm::CmpInst::getPredicateName(fcmp_pred).str();
         emit_cmp_fn(fcmp_pred, llvm::Type::getDoubleTy(lp.ctx), lp);
     }
 }

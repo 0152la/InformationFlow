@@ -2,6 +2,7 @@
 #define _IF_LLVM_GEN_HPP
 
 #include "config.hpp"
+#include "llvm_gen-names.hpp"
 
 #include <filesystem>
 #include <fstream>
