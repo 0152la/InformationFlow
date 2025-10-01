@@ -29,11 +29,6 @@ const std::string flt_ty_str = "double";
 const std::string bool_ty_str = "i1";
 
 const std::unordered_map<std::string, fn_enum> fn_sig_map {
-    //{ std::string("(i64)[i64,i64]"), fn_enum::BINOP_INT },
-    //{ std::string("(double)[double,double]"), fn_enum::BINOP_FLT },
-    //{ std::string("(i1)[i64,i64]"), fn_enum::CMP_FLT },
-    //{ std::string("(i1)[double,double]"), fn_enum::CMP_FLT },
-    //{ std::string("(i64)[float]"), fn_enum::CONV_FLT_TO_INT },
     { fmt::format("({0})[{0},{0}]", int_ty_str), fn_enum::BINOP_INT },
     { fmt::format("({0})[{0},{0}]", flt_ty_str), fn_enum::BINOP_FLT },
     { fmt::format("({0})[{1},{1}]", bool_ty_str, int_ty_str),
