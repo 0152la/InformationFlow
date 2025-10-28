@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(InformationFlow LANGUAGES CXX)
+project(InformationFlow LANGUAGES CXX C)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 20)

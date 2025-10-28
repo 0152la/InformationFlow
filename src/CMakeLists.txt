@@ -1,3 +1,5 @@
+add_subdirectory(entropy_eval)
+
 # Abstract required LLVM components
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 
@@ -23,7 +25,7 @@ add_custom_target(lgen_make_snippets
 
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/libllvm_snippets.so
-    COMMAND clang++ -shared -O2
+    COMMAND ${CMAKE_CXX_COMPILER} -shared -O2
             -o ${CMAKE_CURRENT_BINARY_DIR}/libllvm_snippets.so
             ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/llvm_snippets.ll
@@ -48,6 +50,7 @@ set(flow_sources
     entropy_map_path_printer.cpp
     fuzz_engine.cpp
     instr_emulator.cpp
+    instr_emulator-drr.cpp
     llvm_gen-names.cpp
     reader.cpp
 )

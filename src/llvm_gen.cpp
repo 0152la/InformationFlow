@@ -42,7 +42,7 @@ emit_binop_fns(unsigned int op, llvm_pack& lp)
     if (std::find(binops_float.begin(), binops_float.end(), op)
         != binops_float.end())
     {
-        binop_ty = llvm::Type::getDoubleTy(lp.ctx);
+        binop_ty = llvm::Type::getHalfTy(lp.ctx);
     }
     else
     {
@@ -71,7 +71,6 @@ emit_cmp_fn(
     unsigned int cmp_opcode = op_ty->isIntegerTy() ? llvm::Instruction::ICmp
                                                    : llvm::Instruction::FCmp;
     const std::string cmp_ty = llvm::Instruction::getOpcodeName(cmp_opcode);
-    //const std::string cmp_name = snippet_prefix + cmp_ty + "_" + cmp_extra;
     const std::string cmp_name = make_llvm_snippet_name(cmp_ty, cmp_extra);
 
     std::vector<llvm::Type*> params { op_ty, op_ty };
@@ -117,7 +116,7 @@ emit_other_fns(llvm_pack& lp)
     // Emit `fcmp` snippets
     for (const auto& fcmp_pred : llvm::CmpInst::FCmpPredicates())
     {
-        emit_cmp_fn(fcmp_pred, llvm::Type::getDoubleTy(lp.ctx), lp);
+        emit_cmp_fn(fcmp_pred, llvm::Type::getHalfTy(lp.ctx), lp);
     }
 }
 
@@ -169,6 +168,22 @@ record_impl_def(const llvm::Function* llvm_fn, unsigned int instr_opcode,
 }
 
 void
+emit_impl_header_cpp(const std::string& header_path)
+{
+    std::ostringstream hss;
+    hss << "#include <cstdint>\n\n";
+    hss << "extern \"C\"\n";
+    hss << "{\n";
+    hss << "#include \"" << make_snippets_header_path() << "\"\n";
+    hss << "}";
+
+    std::ofstream header_out;
+    header_out.open(header_path);
+    header_out << hss.str();
+    header_out.close();
+}
+
+void
 emit_impl_header(const std::string& header_path)
 {
     std::unordered_map<std::string, std::string> type_map {
@@ -176,16 +191,13 @@ emit_impl_header(const std::string& header_path)
         { "i1", "bool" },
         { "double", "double" },
         { "float", "float" },
+        { "half", "_Float16" },
     };
 
     std::ostringstream hss;
-    hss << "#include <cstdint>\n\n";
-    hss << "extern \"C\"\n";
-    hss << "{";
-
     for (const llvm_impl_def& fn_def : fn_defs)
     {
-        hss << "\n\t" << type_map[fn_def.ret_ty];
+        hss << type_map[fn_def.ret_ty];
         hss << " " << fn_def.name;
         hss << "(";
         if (!fn_def.params_ty.empty())
@@ -195,9 +207,8 @@ emit_impl_header(const std::string& header_path)
                 [&type_map](std::string s, std::string param)
                 { return std::move(s) + ", " + type_map[param]; });
         }
-        hss << ");";
+        hss << ");\n";
     }
-    hss << "\n}";
 
     std::ofstream header_out;
     header_out.open(header_path);
@@ -211,7 +222,7 @@ main()
     auto ctx = std::make_unique<llvm::LLVMContext>();
     auto bld = std::make_unique<llvm::IRBuilder<>>(*ctx);
     auto mod = std::make_unique<llvm::Module>("Snippet", *ctx);
-    mod->setTargetTriple("x86_64-pc-linux-gnu"); // TODO ?
+    mod->setTargetTriple("x86_64-unknown-linux-gnu"); // TODO ?
     llvm_pack lp { *ctx, *mod, *bld };
 
     unsigned int op_int;
@@ -236,6 +247,7 @@ main()
 
     emit_impl_def(make_snippets_def_path());
     emit_impl_header(make_snippets_header_path());
+    emit_impl_header_cpp(make_snippets_header_path_cpp());
 
     return 0;
 }
