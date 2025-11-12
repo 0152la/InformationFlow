@@ -27,6 +27,8 @@ make_snippets_def_path(void);
 const std::string
 make_snippets_header_path(void);
 const std::string
+make_snippets_header_path_cpp(void);
+const std::string
 make_snippets_ll_path(void);
 
 #endif // _IF_CONFIG_HPP

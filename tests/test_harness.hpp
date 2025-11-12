@@ -4,6 +4,7 @@
 
 #include "entropy.hpp"
 #include "randgen.hpp"
+#include "hashing.hpp"
 
 class EntropyHarness
 {

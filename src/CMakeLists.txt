@@ -48,9 +48,7 @@ set(flow_sources
     entropy_map.cpp
     entropy_map_graph.cpp
     entropy_map_path_printer.cpp
-    fuzz_engine.cpp
     instr_emulator.cpp
-    instr_emulator-drr.cpp
     llvm_gen-names.cpp
     reader.cpp
 )

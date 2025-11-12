@@ -26,6 +26,7 @@ endfunction()
 set(entropy_tests
     entropy-coin_flip
     entropy-dice_roll
+    entropy-add_raw
     entropy-func_loss
     simple-entropies
 )

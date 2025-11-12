@@ -36,6 +36,19 @@ template <typename T, size_t N> struct hash<array<T, N>>
     }
 };
 
+template <typename T> struct hash<vector<T>>
+{
+    size_t operator()(vector<T> const& _vec) const
+    {
+        size_t seed = 0;
+        for (const auto& v_elem : _vec)
+        {
+            ::hash_combine(seed, v_elem);
+        }
+        return seed;
+    }
+};
+
 }
 
 #include "hashing.tpp"

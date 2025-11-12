@@ -1,3 +1,3 @@
 #!/bin/sh
 
-ctags ./src/*.cpp ./include/*.hpp
+ctags ./src/*.cpp ./src/**/*.c ./include/*.hpp

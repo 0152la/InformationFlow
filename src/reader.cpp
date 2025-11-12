@@ -8,8 +8,7 @@ extern estimate_entropy_t estimate_entropy;
  ******************************************************************************/
 
 double
-IF_Parser::compute_instr_entropy(
-    const llvm::Instruction& instr, IF_FuzzEngine& if_fe) const
+IF_Parser::compute_instr_entropy(const llvm::Instruction& instr) const
 {
     const std::string fn_snip_name = IF_Emulator::make_emulated_fn_name(instr);
 
@@ -31,13 +30,13 @@ IF_Parser::compute_instr_entropy(
         return (fn_est_entropy->second)(instr);
     }
 
-    // Otherwise, we perform fuzzing, via emulated instructions.
-    return if_fe.fuzz_retained_entropy(instr);
+    llvm::outs() << "Unhandled instructions\n";
+    instr.print(llvm::outs());
+    exit(1);
 }
 
 std::unique_ptr<IF_EntropyMap::Map>
-IF_Parser::make_entropy_map(
-    const llvm::Module& llvm_module, IF_FuzzEngine& if_fe)
+IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 {
     uint32_t instr_idx = 0;
     auto em = std::make_unique<IF_EntropyMap::Map>(llvm_module);
@@ -81,7 +80,7 @@ IF_Parser::make_entropy_map(
         {
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
-            double retained_entropy = compute_instr_entropy(fn_inst, if_fe);
+            double retained_entropy = compute_instr_entropy(fn_inst);
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
                 std::ostringstream err;
@@ -192,6 +191,7 @@ IF_Parser::make_entropy_map(
         }
     }
 
+    em->init_stats();
     return em;
 }
 

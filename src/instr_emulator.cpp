@@ -320,8 +320,6 @@ IF_Emulator::populate_ops(void)
                 "No enum mapping for signature " + new_def.ret_sig);
         }
     }
-
-    std::exit(1);
 }
 
 IF_Emulator::IF_Emulator(const std::string& lib_path)

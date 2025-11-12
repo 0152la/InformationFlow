@@ -5,7 +5,6 @@
 #include "entropy_map_graph.hpp"
 #include "entropy_map_path_printer.hpp"
 #include "instr_emulator.hpp"
-#include "randgen.hpp"
 #include "reader.hpp"
 
 const char*
@@ -31,14 +30,12 @@ main()
     const char* snippets_lib_path = get_env_var("IF_LLVM_SNIP_LIB");
     size_t threshold = 1000;
 
-    IF_Randgen rng(42);
     IF_Emulator emu(snippets_lib_path);
-    IF_FuzzEngine fe(rng, emu);
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_m = if_p.parse_ll(input_file_path);
     std::unique_ptr<IF_EntropyMap::Map> if_em
-        = if_p.make_entropy_map(*if_m->get_module(), fe);
+        = if_p.make_entropy_map(*if_m->get_module());
 
     IF_EM_Path_Entropy::Printer em_pr(*if_em);
     em_pr.compute_path_entropy(if_em->get_first_instr());

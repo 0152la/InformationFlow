@@ -31,10 +31,9 @@ main()
 
     IF_Randgen if_rng(42);
     IF_Emulator if_emu(llvm_snippet_lib_path);
-    IF_FuzzEngine if_fe(if_rng, if_emu);
 
     std::unique_ptr<IF_EntropyMap::Map> if_em
-        = if_p.make_entropy_map(*if_m->get_module(), if_fe);
+        = if_p.make_entropy_map(*if_m->get_module());
 
     char* dest_file = (char*) malloc(strlen(dest_dir) + strlen(out_file) + 1);
     strcpy(dest_file, dest_dir);

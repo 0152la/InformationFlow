@@ -15,7 +15,6 @@
 #include "entropy_map_path_printer.hpp"
 #include "hashing.hpp"
 #include "instr_emulator.hpp"
-#include "randgen.hpp"
 #include "reader.hpp"
 
 #endif // _IF_MAIN_HPP

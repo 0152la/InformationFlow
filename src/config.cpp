@@ -14,6 +14,16 @@ const std::string
 make_snippets_header_path(void)
 {
     std::filesystem::path header_path(snippets_lib_path);
+    header_path.replace_extension("h");
+    header_path.replace_filename(
+        header_path.filename().string().substr(strlen("lib")));
+    return header_path.string();
+}
+
+const std::string
+make_snippets_header_path_cpp(void)
+{
+    std::filesystem::path header_path(snippets_lib_path);
     header_path.replace_extension("hpp");
     header_path.replace_filename(
         header_path.filename().string().substr(strlen("lib")));

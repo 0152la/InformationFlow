@@ -5,9 +5,10 @@
 int
 main()
 {
+    const uint64_t samples = pow(10, 7);
     constexpr uint8_t faces = 6;
     const double entropy = std::log2(faces);
-    EntropyHarness harness(1000, 0.01);
+    EntropyHarness harness(samples, 0.01);
 
     uint64_t test_in;
     uint64_t test_out;
@@ -18,5 +19,6 @@ main()
         harness.log_results(test_in, test_out);
     }
 
+    harness.print_measures();
     return !harness.validate_entropy_out(entropy);
 }

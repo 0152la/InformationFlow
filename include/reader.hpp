@@ -3,13 +3,11 @@
 
 #include "entropy.hpp"
 #include "entropy_map.hpp"
-#include "fuzz_engine.hpp"
 #include "instr_emulator.hpp"
-#include "randgen.hpp"
 
 #include <algorithm>
-#include <memory>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -50,16 +48,12 @@ public:
 class IF_Parser
 {
 private:
-    // IF_EntropyMap H_map; // H cause H = entropy :>
-
-    double compute_instr_entropy(
-        const llvm::Instruction&, IF_FuzzEngine&) const;
+    double compute_instr_entropy(const llvm::Instruction&) const;
 
 public:
     IF_Parser() = default;
 
-    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(
-        const llvm::Module&, IF_FuzzEngine&);
+    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(const llvm::Module&);
 
     static std::unique_ptr<IF_LLVM_Module> parse_ll(const std::string&);
     static void print_instrs(const llvm::Module&);
