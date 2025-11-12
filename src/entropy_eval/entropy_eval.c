@@ -14,7 +14,7 @@ compute_cmp_proportion(uint64_t* counts, uint8_t bitsize)
 {
     if (bitsize == 64)
     {
-        printf("Need to check 64 bitsize samples are correct.");
+        printf("Need to check 64 bitsize samples are correct.\n");
         exit(1);
     }
     uint64_t expected = pow(2, 2 * bitsize);
@@ -75,6 +75,7 @@ compute_fn_ucs(struct fn_uc_data_s* fn_data, void* dl_hdl)
     {
         struct uc_data_s* curr_uc_data = &fn_data->uc_data[i];
         uint8_t b = curr_uc_data->bit_sz;
+
         char* time_buf = get_curr_time_str();
         printf("[%s] START FN %s -- BITS %hhu (%hhu of %hhu)\n", time_buf,
             fn_data->fn_name, b, i + 1, fn_data->uc_data_count);
@@ -95,25 +96,42 @@ compute_fn_ucs(struct fn_uc_data_s* fn_data, void* dl_hdl)
             exit(1);
         }
 
+        struct count_info* ci = malloc(sizeof(struct count_info));
+        ci->bit_sz_in = b;
         switch (fn_data->fn_ty)
         {
+            case INT:
             case FLOAT:
-                counts = count_outs_float(FLOAT_BITS, (FN_PTR_FLT) fn);
-                break;
-            case FLOAT_CMP:
-                counts
-                    = count_outs_float_bool(FLOAT_BITS, (FN_PTR_FLT_BOOL) fn);
+                ci->bit_sz_out = b;
+                ci->inner_min = 0;
                 break;
             case INT_CMP:
-                counts = count_outs_int_cmp(b, (FN_PTR_CMP) fn);
+            case FLOAT_CMP:
+                ci->bit_sz_out = 1;
+                ci->inner_min = 0;
                 break;
-            default:
-                counts = count_outs(b, (FN_PTR) fn, fn_data->fn_ty == DIV);
+            case INT_DIV:
+                ci->bit_sz_out = b;
+                ci->inner_min = 1;
+                break;
         }
+        ci->fn = fn;
+        ci->fn_ty = fn_data->fn_ty;
+
+        if (b > THREADED_BITSIZE_LIMIT)
+        {
+            counts = count_outs_threaded(ci);
+        }
+        else
+        {
+            counts = count_outs(ci);
+        }
+
+        free(ci);
 
         switch (fn_data->fn_ty)
         {
-            case DIV:
+            case INT_DIV:
                 curr_uc_data->u_coef = compute_uncertainty_coef_div(counts, b);
                 break;
             case FLOAT_CMP:
@@ -192,7 +210,7 @@ make_fn_data(const char* fn_name_raw)
         }
         if (strstr(fn_name, "div") != NULL || strstr(fn_name, "rem") != NULL)
         {
-            fn_ty = DIV;
+            fn_ty = INT_DIV;
         }
         else if (strstr(fn_name, "cmp") != NULL)
         {
@@ -231,6 +249,7 @@ eval_coefs_for_def_fns(const char* def_file_path, void* dl_hdl, FILE* out_fd)
 
         free(fn_data->uc_data);
         free(fn_data);
+        break;
     }
     fclose(fn_def_fd);
 

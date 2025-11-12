@@ -1,24 +1,11 @@
+#ifndef ENTROPY_EVAL_H
+#define ENTROPY_EVAL_H
+
 #include <dlfcn.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "entropy_eval-float.h"
-#include "entropy_eval-float_bool.h"
-#include "entropy_eval-int.h"
-#include "entropy_eval-int_cmp.h"
-
-#define BUF_SZ 256
-
-enum fn_arg_ty_e
-{
-    INT,
-    INT_CMP,
-    DIV,
-    FLOAT,
-    FLOAT_CMP,
-};
+#include "entropy_eval-thread.h"
 
 /* Struct representing data for computing the uncertainty coefficient data for
  * a given bitsize
@@ -73,3 +60,5 @@ static struct fn_uc_data_s*
 make_fn_data(const char*);
 const char**
 eval_coefs_for_def_fns(const char*, void*, FILE*);
+
+#endif // ENTROPY_EVAL_H
