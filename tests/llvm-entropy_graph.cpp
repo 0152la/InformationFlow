@@ -1,4 +1,5 @@
 #include "entropy_map.hpp"
+#include "randgen.hpp"
 #include "reader.hpp"
 #include "entropy_map_graph.hpp"
 
