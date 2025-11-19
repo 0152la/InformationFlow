@@ -28,9 +28,12 @@ function emit_plots(data)
 
         xs = collect(keys(ucs))
         ys = collect(values(ucs))
-        fn_fit = Polynomials.fit(xs, ys)
-        fn_plot = scatter(xs, ys, markerstrokewidth=0, label="Data", title="Function `$(fn_name)`")
-        plot!(fn_plot, fn_fit, extrema(xs)..., label="Interpolation")
+        fn_plot = scatter(xs, ys, markerstrokewidth=0, label="Data", title="Function `$(fn_name)`", ylims = (0, 1.1), xlims = (0, 20))
+
+        if (length(ucs)) != 1
+            fn_fit = Polynomials.fit(xs, ys)
+            plot!(fn_plot, fn_fit, extrema(xs)..., label="Interpolation")
+        end
         Plots.png(fn_plot, joinpath(out_dir, "$(out_graph_prefix * fn_name)"))
     end
 end

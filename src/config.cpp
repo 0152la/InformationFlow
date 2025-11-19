@@ -1,5 +1,8 @@
 #include "config.hpp"
 
+namespace config
+{
+
 const std::string
 make_snippets_def_path(void)
 {
@@ -37,4 +40,6 @@ make_snippets_ll_path(void)
     ll_path.replace_extension("ll");
     ll_path.replace_filename(ll_path.filename().string().substr(strlen("lib")));
     return ll_path.string();
+}
+
 }

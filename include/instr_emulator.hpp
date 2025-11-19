@@ -2,6 +2,7 @@
 #define _IF_INSTR_EMULATOR_HPP
 
 #include "config.hpp"
+#include "llvm_gen-names.hpp"
 #include "llvm_snippets.hpp"
 
 #include <climits>
@@ -12,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <ranges>
 #include <regex>
 #include <sstream>
@@ -35,27 +37,15 @@
 #include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
 
-using unops_d_t = std::function<double(double)>;
-using binops_i64_t = std::function<int64_t(int64_t, int64_t)>;
-using binops_i64_ct = int64_t (*)(int64_t, int64_t);
-using emulated_fns_t = std::unordered_map<std::string, binops_i64_t>; // TODO
+#include "fmt/base.h"
 
-using binops_dbl_t = std::function<double(double, double)>;
-using binops_dbl_ct = double (*)(double, double);
-using emulated_fns_dbl_t = std::unordered_map<std::string, binops_dbl_t>;
-
-using entropy_map_key_t = std::string;
+using entropy_map_key_t = unsigned int;
 using set_entropy_t = std::unordered_map<entropy_map_key_t, double>;
 using estimate_entropy_t = std::unordered_map<entropy_map_key_t,
     std::function<double(const llvm::Instruction&)>>;
-// extern std::map<uint16_t, std::function<double(double)>>
-// emulated_fns_unary;
-extern emulated_fns_t emulated_fns;
 
-#include "instr_emulator-typemap.hpp"
-
-// constexpr unsigned short instr_ty_count = 5;
-// const std::array<
+using flow_set_t = set_entropy_t;
+using flow_estimate_t = estimate_entropy_t;
 
 struct fn_def
 {
@@ -76,26 +66,17 @@ class IF_Emulator
 {
 private:
     static constexpr std::string snippet_prefix = "llvm_impl_";
-    emulated_fns2_t emulated_fnss;
 
     void* ll_snippet_handler;
 
-    void dllink_snippet(const std::string&) const;
-    void dllink_snippet_float(const std::string&) const;
     template <typename T, typename Tc> void populate_fn_def(const fn_def&);
     void populate_ops(void);
-    void populate_all_bin_ops(void) const;
-    void populate_all_other_ops(void) const;
 
 public:
     IF_Emulator(const std::string&);
     ~IF_Emulator();
 
-    binops_i64_t get_emulated_fn(const llvm::Instruction&) const;
-    binops_dbl_t get_emulated_fn_float(const llvm::Instruction&) const;
-
     static std::string complete_fn_name(const std::string&);
-    static std::string make_fn_name_from_opcode(unsigned int llvm_ir_opcode);
     static std::string make_emulated_fn_name(const llvm::Instruction&);
 
     /* Estimated operations
@@ -104,9 +85,6 @@ public:
      * For example, a `trunt` instruction would retain entropy relative to the
      * number of bits removed from it.
      */
-
-    /* Terminator Operations *************************************************/
-    static double estimate_switch(const llvm::Instruction&);
 
     /* Vector Operations *****************************************************/
     static double estimate_extract_element(const llvm::Instruction&);
@@ -125,6 +103,14 @@ public:
     static double estimate_icmp_eq(const llvm::Instruction&);
     static double estimate_icmp_ne(const llvm::Instruction&);
     static double estimate_phi(const llvm::Instruction&);
+
+    /* Flow estimate functions
+     */
+
+    /* Terminator Operations *************************************************/
+    static double estimate_flow_br(const llvm::Instruction&);
+    static double estimate_flow_switch(const llvm::Instruction&);
+    static double estimate_flow_indirectbr(const llvm::Instruction&);
 };
 
 struct struct_sz_s;
@@ -144,7 +130,5 @@ std::unique_ptr<struct_sz_t>
 get_llvm_struct_bitsize(const llvm::StructType*, const llvm::Module*);
 uint8_t
 get_operand_bit_width(const llvm::Type*, const llvm::Module*);
-
-#include "instr_emulator.tpp"
 
 #endif // _IF_INSTR_EMULATOR_HPP

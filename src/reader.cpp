@@ -8,14 +8,14 @@ extern estimate_entropy_t estimate_entropy;
  ******************************************************************************/
 
 double
-IF_Parser::compute_instr_entropy(const llvm::Instruction& instr) const
+IF_Parser::compute_instr_entropy(const llvm::Instruction& inst) const
 {
-    const std::string fn_snip_name = IF_Emulator::make_emulated_fn_name(instr);
+    unsigned int inst_opcode = inst.getOpcode();
 
     // We first search whether this instruction is one we have a
     // default entropy for. If we do, then we simply set the entropy to
     // that value.
-    if (auto fn_set_entropy = set_entropy.find(fn_snip_name);
+    if (auto fn_set_entropy = set_entropy.find(inst_opcode);
         fn_set_entropy != set_entropy.end())
     {
         return fn_set_entropy->second;
@@ -24,14 +24,14 @@ IF_Parser::compute_instr_entropy(const llvm::Instruction& instr) const
     // Then we check whether we can estimate the entropy, without having
     // to fuzz
     // TODO decltype?
-    if (auto fn_est_entropy = estimate_entropy.find(fn_snip_name);
+    if (auto fn_est_entropy = estimate_entropy.find(inst_opcode);
         fn_est_entropy != estimate_entropy.end())
     {
-        return (fn_est_entropy->second)(instr);
+        return (fn_est_entropy->second)(inst);
     }
 
     llvm::outs() << "Unhandled instructions\n";
-    instr.print(llvm::outs());
+    inst.print(llvm::outs());
     exit(1);
 }
 

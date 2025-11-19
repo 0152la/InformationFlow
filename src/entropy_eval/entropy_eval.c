@@ -249,7 +249,6 @@ eval_coefs_for_def_fns(const char* def_file_path, void* dl_hdl, FILE* out_fd)
 
         free(fn_data->uc_data);
         free(fn_data);
-        break;
     }
     fclose(fn_def_fd);
 

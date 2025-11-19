@@ -9,6 +9,16 @@ namespace config
 {
 const std::string llvm_snippet_prefix = "llvm_impl";
 constexpr char llvm_snippet_delim = '_';
+
+const std::string
+make_snippets_def_path(void);
+const std::string
+make_snippets_header_path(void);
+const std::string
+make_snippets_header_path_cpp(void);
+const std::string
+make_snippets_ll_path(void);
+
 };
 
 constexpr unsigned long initial_tests = 10000;
@@ -21,14 +31,5 @@ constexpr unsigned short out_scale = 16;
 const std::string snippets_lib_path
     = "/home/andreilascu/Documents/Repos/InformationFlow/build/src/"
       "libllvm_snippets.so";
-
-const std::string
-make_snippets_def_path(void);
-const std::string
-make_snippets_header_path(void);
-const std::string
-make_snippets_header_path_cpp(void);
-const std::string
-make_snippets_ll_path(void);
 
 #endif // _IF_CONFIG_HPP

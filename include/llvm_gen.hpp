@@ -45,14 +45,17 @@ struct llvm_pack
 
 void
 emit_binop_fns(unsigned int, llvm_pack&);
-
 void
 emit_cmp_fn(const std::string&, const llvm::CmpInst::Predicate&, llvm::Type*,
     llvm_pack&);
+
+void
+emit_cmp_fn_flt(unsigned int, llvm_pack&);
+void
+emit_cmp_fn_int(unsigned int, llvm_pack&);
+
 void
 emit_conversion_fns(llvm_pack&);
-void
-emit_other_fns(llvm_pack&);
 
 /* Definition logging *********************************************************/
 

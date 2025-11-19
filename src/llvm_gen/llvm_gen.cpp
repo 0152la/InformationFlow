@@ -1,4 +1,8 @@
 #include "llvm_gen.hpp"
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instruction.h>
+#include <stdexcept>
 
 const std::string snippet_prefix = "llvm_impl_"; // TODO
 std::vector<llvm_impl_def> fn_defs;
@@ -10,6 +14,10 @@ const std::vector<std::pair<std::pair<unsigned int, unsigned int>,
         { { llvm::Instruction::BinaryOpsBegin,
                         llvm::Instruction::BinaryOpsEnd },
                       emit_binop_fns },
+        { { llvm::CmpInst::FIRST_FCMP_PREDICATE, llvm::CmpInst::LAST_FCMP_PREDICATE },
+            emit_cmp_fn_flt },
+        { { llvm::CmpInst::FIRST_ICMP_PREDICATE, llvm::CmpInst::LAST_ICMP_PREDICATE },
+            emit_cmp_fn_int },
     };
 // clang-format on
 
@@ -66,12 +74,25 @@ void
 emit_cmp_fn(
     const llvm::CmpInst::Predicate& cmp_pred, llvm::Type* op_ty, llvm_pack& lp)
 {
-    const std::string cmp_extra
-        = llvm::CmpInst::getPredicateName(cmp_pred).str();
-    unsigned int cmp_opcode = op_ty->isIntegerTy() ? llvm::Instruction::ICmp
-                                                   : llvm::Instruction::FCmp;
-    const std::string cmp_ty = llvm::Instruction::getOpcodeName(cmp_opcode);
-    const std::string cmp_name = make_llvm_snippet_name(cmp_ty, cmp_extra);
+    std::string cmp_extra = llvm::CmpInst::getPredicateName(cmp_pred).str();
+
+    unsigned int cmp_opcode;
+    if (llvm::CmpInst::isIntPredicate(cmp_pred))
+    {
+        cmp_opcode = llvm::Instruction::ICmp;
+    }
+    else if (llvm::CmpInst::isFPPredicate(cmp_pred))
+    {
+        cmp_opcode = llvm::Instruction::FCmp;
+        llvm::DataLayout dl = llvm::DataLayout(&lp.mod);
+        cmp_extra.append(std::to_string(dl.getTypeSizeInBits(op_ty)));
+    }
+    else
+    {
+        throw std::runtime_error("Unhandled CmpInst Predicate type!");
+    }
+    const std::string cmp_name = make_llvm_snippet_name(
+        llvm::Instruction::getOpcodeName(cmp_opcode), cmp_extra);
 
     std::vector<llvm::Type*> params { op_ty, op_ty };
     llvm::FunctionType* cmp_fn_ty(
@@ -87,6 +108,22 @@ emit_cmp_fn(
 }
 
 void
+emit_cmp_fn_int(unsigned int cmp_ty, llvm_pack& lp)
+{
+    emit_cmp_fn(
+        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getInt64Ty(lp.ctx), lp);
+}
+
+void
+emit_cmp_fn_flt(unsigned int cmp_ty, llvm_pack& lp)
+{
+    emit_cmp_fn(
+        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getHalfTy(lp.ctx), lp);
+    emit_cmp_fn(
+        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getFloatTy(lp.ctx), lp);
+}
+
+void
 emit_conversion_fns(llvm_pack& lp)
 {
     llvm::Type* fptosi_ty = llvm::Type::getInt64Ty(lp.ctx);
@@ -94,30 +131,13 @@ emit_conversion_fns(llvm_pack& lp)
     llvm::FunctionType* conv_fn_ty(
         llvm::FunctionType::get(fptosi_ty, op_ty, false));
     const std::string conv_name = make_llvm_snippet_name("fptosi");
-    llvm::Function* fn = make_llvm_fn(conv_name,
-        conv_fn_ty, llvm::Instruction::FPToSI, "", lp.mod);
+    llvm::Function* fn = make_llvm_fn(
+        conv_name, conv_fn_ty, llvm::Instruction::FPToSI, "", lp.mod);
 
     llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
     lp.ir_build.SetInsertPoint(bb);
     llvm::Value* ret_val = lp.ir_build.CreateFPToSI(fn->getArg(0), fptosi_ty);
     lp.ir_build.CreateRet(ret_val);
-}
-
-void
-emit_other_fns(llvm_pack& lp)
-{
-
-    // Emit `icmp` snippets
-    for (const auto& icmp_pred : llvm::CmpInst::ICmpPredicates())
-    {
-        emit_cmp_fn(icmp_pred, llvm::Type::getInt64Ty(lp.ctx), lp);
-    }
-
-    // Emit `fcmp` snippets
-    for (const auto& fcmp_pred : llvm::CmpInst::FCmpPredicates())
-    {
-        emit_cmp_fn(fcmp_pred, llvm::Type::getHalfTy(lp.ctx), lp);
-    }
 }
 
 void
@@ -174,7 +194,7 @@ emit_impl_header_cpp(const std::string& header_path)
     hss << "#include <cstdint>\n\n";
     hss << "extern \"C\"\n";
     hss << "{\n";
-    hss << "#include \"" << make_snippets_header_path() << "\"\n";
+    hss << "#include \"" << config::make_snippets_header_path() << "\"\n";
     hss << "}";
 
     std::ofstream header_out;
@@ -238,16 +258,15 @@ main()
         }
     }
     emit_conversion_fns(lp);
-    emit_other_fns(lp);
 
     llvm::verifyModule(*mod);
     std::error_code ec;
-    llvm::raw_fd_ostream snip_out(make_snippets_ll_path(), ec);
+    llvm::raw_fd_ostream snip_out(config::make_snippets_ll_path(), ec);
     mod->print(snip_out, nullptr);
 
-    emit_impl_def(make_snippets_def_path());
-    emit_impl_header(make_snippets_header_path());
-    emit_impl_header_cpp(make_snippets_header_path_cpp());
+    emit_impl_def(config::make_snippets_def_path());
+    emit_impl_header(config::make_snippets_header_path());
+    emit_impl_header_cpp(config::make_snippets_header_path_cpp());
 
     return 0;
 }

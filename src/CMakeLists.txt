@@ -4,10 +4,11 @@ add_subdirectory(entropy_eval)
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 
 # Executable for `llvm_snippet.ll` generation
+set(LLVM_GEN_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/llvm_gen)
 add_executable(lgen
     config.cpp
-    llvm_gen.cpp
-    llvm_gen-names.cpp
+    ${LLVM_GEN_SRC_DIR}/llvm_gen.cpp
+    ${LLVM_GEN_SRC_DIR}/llvm_gen-names.cpp
 )
 target_include_directories(lgen PRIVATE ${INCLUDE_DIR} ${LLVM_INCLUDE_DIRS})
 target_link_libraries(lgen PRIVATE ${llvm_libs})
@@ -49,7 +50,7 @@ set(flow_sources
     entropy_map_graph.cpp
     entropy_map_path_printer.cpp
     instr_emulator.cpp
-    llvm_gen-names.cpp
+    ${LLVM_GEN_SRC_DIR}/llvm_gen-names.cpp
     reader.cpp
 )
 
