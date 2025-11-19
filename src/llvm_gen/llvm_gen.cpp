@@ -1,11 +1,7 @@
 #include "llvm_gen.hpp"
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/InstrTypes.h>
-#include <llvm/IR/Instruction.h>
-#include <stdexcept>
 
 const std::string snippet_prefix = "llvm_impl_"; // TODO
-std::vector<llvm_impl_def> fn_defs;
+static std::vector<llvm_impl_def> fn_defs;
 
 // clang-format off
 const std::vector<std::pair<std::pair<unsigned int, unsigned int>,
@@ -34,6 +30,17 @@ make_llvm_fn(const std::string& fn_name, llvm::FunctionType* fn_ty,
     llvm::Function* fn(llvm::Function::Create(
         fn_ty, llvm::Function::ExternalLinkage, fn_name, mod));
     record_impl_def(fn, instr_opcode, instr_extra);
+    return fn;
+}
+
+llvm::Function*
+make_llvm_fn_cmp(const std::string& fn_name, llvm::FunctionType* fn_ty,
+    unsigned int instr_opcode, unsigned int cmp_pred,
+    const std::string& instr_extra, llvm::Module& mod)
+{
+    llvm::Function* fn
+        = make_llvm_fn(fn_name, fn_ty, instr_opcode, instr_extra, mod);
+    fn_defs.back().set_cmp_pred(cmp_pred);
     return fn;
 }
 
@@ -74,7 +81,7 @@ void
 emit_cmp_fn(
     const llvm::CmpInst::Predicate& cmp_pred, llvm::Type* op_ty, llvm_pack& lp)
 {
-    std::string cmp_extra = llvm::CmpInst::getPredicateName(cmp_pred).str();
+    std::string cmp_extra = "";
 
     unsigned int cmp_opcode;
     if (llvm::CmpInst::isIntPredicate(cmp_pred))
@@ -85,20 +92,20 @@ emit_cmp_fn(
     {
         cmp_opcode = llvm::Instruction::FCmp;
         llvm::DataLayout dl = llvm::DataLayout(&lp.mod);
-        cmp_extra.append(std::to_string(dl.getTypeSizeInBits(op_ty)));
+        cmp_extra = std::to_string(dl.getTypeSizeInBits(op_ty));
     }
     else
     {
         throw std::runtime_error("Unhandled CmpInst Predicate type!");
     }
-    const std::string cmp_name = make_llvm_snippet_name(
-        llvm::Instruction::getOpcodeName(cmp_opcode), cmp_extra);
+    const std::string cmp_name
+        = make_llvm_snippet_name_cmp(cmp_opcode, cmp_pred, cmp_extra);
 
     std::vector<llvm::Type*> params { op_ty, op_ty };
     llvm::FunctionType* cmp_fn_ty(
         llvm::FunctionType::get(llvm::Type::getInt1Ty(lp.ctx), params, false));
-    llvm::Function* fn
-        = make_llvm_fn(cmp_name, cmp_fn_ty, cmp_opcode, cmp_extra, lp.mod);
+    llvm::Function* fn = make_llvm_fn_cmp(
+        cmp_name, cmp_fn_ty, cmp_opcode, cmp_pred, cmp_extra, lp.mod);
 
     llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
     lp.ir_build.SetInsertPoint(bb);
@@ -144,10 +151,22 @@ void
 emit_impl_def(const std::string& def_path)
 {
     std::ostringstream defs;
+
+    const std::vector<std::string> header { "opcode", "cmp_opcode",
+        "name_extra", "fn_name", "ret_ty", "params_ty" };
+    defs << std::accumulate(std::next(header.begin()), header.end(),
+        header.front(),
+        [](std::string s, std::string h) { return std::move(s) + ',' + h; })
+         << '\n';
+
     for (const llvm_impl_def& fn_def : fn_defs)
     {
         defs << fn_def.opcode << ",";
-        defs << fn_def.helper << ",";
+        defs << (fn_def.cmp_pred == (unsigned int) -1
+                ? ""
+                : std::to_string(fn_def.cmp_pred))
+             << ",";
+        defs << fn_def.extra << ",";
         defs << fn_def.name;
         defs << "(" << fn_def.ret_ty << ")";
         defs << "[";

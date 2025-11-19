@@ -34,6 +34,9 @@
 llvm::Function*
 make_llvm_fn(const std::string&, llvm::FunctionType*, unsigned int,
     const std::string&, llvm::Module&);
+llvm::Function*
+make_llvm_fn_cmp(const std::string&, llvm::FunctionType*, unsigned int,
+    unsigned int, const std::string&, llvm::Module&);
 
 /* Emitting instruction snippets **********************************************/
 struct llvm_pack
@@ -66,20 +69,23 @@ struct llvm_impl_def
     const std::vector<std::string> params_ty;
 
     unsigned int opcode;
-    const std::string helper;
+    unsigned int cmp_pred = -1;
+    const std::string extra;
 
     llvm_impl_def(const std::string& _name, const std::string& _ret,
         std::vector<std::string>& _params, unsigned int _opcode,
-        const std::string& _helper) :
+        const std::string& _extra) :
         name(_name),
         ret_ty(_ret),
         params_ty(_params),
         opcode(_opcode),
-        helper(_helper) { };
+        extra(_extra) { };
 
-    llvm_impl_def(const std::string&& _name, const std::string& _ret,
+    llvm_impl_def(const std::string& _name, const std::string& _ret,
         std::vector<std::string>& _params, unsigned int _opcode) :
-        llvm_impl_def(_name, _ret, _params, _opcode, "") {};
+        llvm_impl_def(_name, _ret, _params, _opcode, "") { };
+
+    void set_cmp_pred(unsigned int pred) { this->cmp_pred = pred; };
 };
 
 void

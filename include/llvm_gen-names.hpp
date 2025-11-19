@@ -16,3 +16,8 @@ make_llvm_snippet_name(const std::string&);
 
 const std::string
 make_llvm_snippet_name(const llvm::Instruction&);
+
+const std::string
+make_llvm_snippet_name_cmp(unsigned int, unsigned int, const std::string&);
+const std::string
+make_llvm_snippet_name_cmp(unsigned int, unsigned int);

@@ -24,3 +24,21 @@ make_llvm_snippet_name(const llvm::Instruction& inst)
     }
     return make_llvm_snippet_name(inst.getOpcodeName());
 }
+
+const std::string
+make_llvm_snippet_name_cmp(
+    unsigned int opcode, unsigned int pred, const std::string& extra)
+{
+    std::string base = llvm::Instruction::getOpcodeName(opcode);
+    base += config::llvm_snippet_delim;
+    base += llvm::CmpInst::getPredicateName((llvm::CmpInst::Predicate) pred)
+                .str();
+    return make_llvm_snippet_name(base, extra);
+}
+
+const std::string
+make_llvm_snippet_name_cmp(unsigned int opcode, unsigned int pred)
+{
+    return make_llvm_snippet_name_cmp(opcode, pred, "");
+}
+
