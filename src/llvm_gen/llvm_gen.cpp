@@ -1,10 +1,14 @@
 #include "llvm_gen.hpp"
+#include <llvm/IR/IRBuilder.h>
 
 const std::string snippet_prefix = "llvm_impl_"; // TODO
 static std::vector<llvm_impl_def> fn_defs;
 
+/* Map from ranges of llvm opcodes to functions to produce LLVM snippets
+ * <<llvm_opcode_begin, llvm_opcode_end>, snippet_gen_function>
+ */
 // clang-format off
-const std::vector<std::pair<std::pair<unsigned int, unsigned int>,
+static const std::vector<std::pair<std::pair<unsigned int, unsigned int>,
     std::function<void(unsigned int, llvm_pack&)>>>
     emit_fn_map {
         { { llvm::Instruction::BinaryOpsBegin,
@@ -17,10 +21,34 @@ const std::vector<std::pair<std::pair<unsigned int, unsigned int>,
     };
 // clang-format on
 
-const std::array binops_float { llvm::Instruction::FAdd,
+static const std::array ignored_binops { llvm::Instruction::Add,
+    llvm::Instruction::Sub, llvm::Instruction::Or, llvm::Instruction::And,
+    llvm::Instruction::Xor };
+
+static const std::array binops_float { llvm::Instruction::FAdd,
     llvm::Instruction::FSub, llvm::Instruction::FMul, llvm::Instruction::FDiv,
     llvm::Instruction::FRem };
-const std::array ignored_other_ops { llvm::Instruction::PHI };
+static const std::array ignored_other_ops { llvm::Instruction::PHI };
+
+using cast_op_create_fn_ty = std::function<llvm::Value*(
+    llvm::IRBuilderBase&, llvm::Value*, llvm::Type*, const llvm::Twine&)>;
+// using cast_op_create_fn_ty = std::mem_fn;
+static const std::unordered_map<unsigned int, cast_op_create_fn_ty> cast_ops {
+    { llvm::Instruction::FPToSI,
+        std::mem_fn(&llvm::IRBuilderBase::CreateFPToSI) },
+    { llvm::Instruction::FPToUI,
+        std::mem_fn(&llvm::IRBuilderBase::CreateFPToUI) },
+    { llvm::Instruction::SIToFP,
+        std::mem_fn(&llvm::IRBuilderBase::CreateSIToFP) },
+    { llvm::Instruction::UIToFP,
+        std::bind(std::mem_fn(&llvm::IRBuilderBase::CreateUIToFP),
+            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
+            std::placeholders::_4, false) },
+};
+
+/*******************************************************************************
+ * Utility functions
+ ******************************************************************************/
 
 llvm::Function*
 make_llvm_fn(const std::string& fn_name, llvm::FunctionType* fn_ty,
@@ -44,12 +72,24 @@ make_llvm_fn_cmp(const std::string& fn_name, llvm::FunctionType* fn_ty,
     return fn;
 }
 
+/*******************************************************************************
+ * Emitting functions
+ ******************************************************************************/
+
 /* We use this for both `binary` and `bitwise_binary` instructions, as their
  * signatures are identical
  */
 void
 emit_binop_fns(unsigned int op, llvm_pack& lp)
 {
+    // We don't want to emit certain instructions, as these have proven
+    // (empirical or hand-derived) fixed uncertainty coefficient values
+    if (std::find(ignored_binops.begin(), ignored_binops.end(), op)
+        != ignored_binops.end())
+    {
+        return;
+    }
+
     llvm::Type* binop_ty;
     std::string binop_name
         = make_llvm_snippet_name(llvm::Instruction::getOpcodeName(op));
@@ -115,37 +155,61 @@ emit_cmp_fn(
 }
 
 void
-emit_cmp_fn_int(unsigned int cmp_ty, llvm_pack& lp)
+emit_cmp_fn_int(unsigned int pred, llvm_pack& lp)
 {
     emit_cmp_fn(
-        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getInt64Ty(lp.ctx), lp);
+        (llvm::CmpInst::Predicate) pred, llvm::Type::getInt64Ty(lp.ctx), lp);
 }
 
 void
-emit_cmp_fn_flt(unsigned int cmp_ty, llvm_pack& lp)
+emit_cmp_fn_flt(unsigned int pred, llvm_pack& lp)
 {
     emit_cmp_fn(
-        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getHalfTy(lp.ctx), lp);
+        (llvm::CmpInst::Predicate) pred, llvm::Type::getHalfTy(lp.ctx), lp);
     emit_cmp_fn(
-        (llvm::CmpInst::Predicate) cmp_ty, llvm::Type::getFloatTy(lp.ctx), lp);
+        (llvm::CmpInst::Predicate) pred, llvm::Type::getFloatTy(lp.ctx), lp);
 }
 
 void
 emit_conversion_fns(llvm_pack& lp)
 {
-    llvm::Type* fptosi_ty = llvm::Type::getInt64Ty(lp.ctx);
-    llvm::Type* op_ty = llvm::Type::getDoubleTy(lp.ctx);
-    llvm::FunctionType* conv_fn_ty(
-        llvm::FunctionType::get(fptosi_ty, op_ty, false));
-    const std::string conv_name = make_llvm_snippet_name("fptosi");
-    llvm::Function* fn = make_llvm_fn(
-        conv_name, conv_fn_ty, llvm::Instruction::FPToSI, "", lp.mod);
+    for (const auto& [opcode, create_fn] : cast_ops)
+    {
+        llvm::Type* ret_ty;
+        llvm::Type* op_ty;
+        switch (opcode)
+        {
+            case llvm::Instruction::FPToSI:
+            case llvm::Instruction::FPToUI:
+                ret_ty = llvm::Type::getInt16Ty(lp.ctx);
+                op_ty = llvm::Type::getHalfTy(lp.ctx);
+                break;
+            case llvm::Instruction::UIToFP:
+            case llvm::Instruction::SIToFP:
+                ret_ty = llvm::Type::getHalfTy(lp.ctx);
+                op_ty = llvm::Type::getInt16Ty(lp.ctx);
+                break;
+        }
+        llvm::FunctionType* conv_fn_ty(
+            llvm::FunctionType::get(ret_ty, op_ty, false));
+        const std::string conv_name
+            = make_llvm_snippet_name(llvm::Instruction::getOpcodeName(opcode));
+        llvm::Function* fn
+            = make_llvm_fn(conv_name, conv_fn_ty, opcode, "", lp.mod);
 
-    llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
-    lp.ir_build.SetInsertPoint(bb);
-    llvm::Value* ret_val = lp.ir_build.CreateFPToSI(fn->getArg(0), fptosi_ty);
-    lp.ir_build.CreateRet(ret_val);
+        llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
+        lp.ir_build.SetInsertPoint(bb);
+        // llvm::Value* ret_val = lp.ir_build.CreateFPToSI(fn->getArg(0),
+        // ret_ty);
+        llvm::Value* ret_val
+            = create_fn(lp.ir_build, fn->getArg(0), ret_ty, "");
+        lp.ir_build.CreateRet(ret_val);
+    }
 }
+
+/*******************************************************************************
+ * `Def` file functions
+ ******************************************************************************/
 
 void
 emit_impl_def(const std::string& def_path)
@@ -206,6 +270,10 @@ record_impl_def(const llvm::Function* llvm_fn, unsigned int instr_opcode,
         llvm_fn->getName().str(), ret_ty, fn_params, instr_opcode, instr_extra);
 }
 
+/*******************************************************************************
+ * Header file functions
+ ******************************************************************************/
+
 void
 emit_impl_header_cpp(const std::string& header_path)
 {
@@ -227,6 +295,7 @@ emit_impl_header(const std::string& header_path)
 {
     std::unordered_map<std::string, std::string> type_map {
         { "i64", "int64_t" },
+        { "i16", "int16_t" },
         { "i1", "bool" },
         { "double", "double" },
         { "float", "float" },
@@ -254,6 +323,22 @@ emit_impl_header(const std::string& header_path)
     header_out << hss.str();
     header_out.close();
 }
+
+/*******************************************************************************
+ * Main
+ *
+ * Generates three files to be used by other parts of the toolchain
+ * - a `llvm_snippets.ll` file, containing the implementation in LLVM IR of
+ * the operations of interest for the rest of the infrastructure; this will
+ * be compiled to a library file, to be consumed by `entropy_eval`, to
+ * evaluate empirically the uncertainty coefficient values
+ * - a `llvm_snippets.def` file, which contains various metadata of the
+ *   generated instructions above; this is used by various parts of the
+ *   toolchain in order to know which functions we are looking for the
+ *   empirical data for
+ * - a `llvm_snippets.{h,hpp}`, header files to be used to refer directly to
+ *   functions in the shared library compiled from `llvm_snippets.ll`
+ ******************************************************************************/
 
 int
 main()

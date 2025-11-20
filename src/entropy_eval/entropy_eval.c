@@ -188,6 +188,10 @@ make_fn_data(const char* fn_name_raw)
     // Check if this is a float operation
     if (strstr(fn_name, "_f") != NULL)
     {
+        if (strstr(fn_name, "32") != NULL)
+        {
+            return NULL;
+        }
         uc_data_count = 1;
         fn_uc_data = calloc(uc_data_count, sizeof(struct uc_data_s));
         fn_uc_data[0].bit_sz = FLOAT_BITS;

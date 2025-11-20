@@ -22,6 +22,9 @@ set_entropy_t set_entropy {
     // Binary Instructions
     { llvm::Instruction::Add, 0.5 },
     { llvm::Instruction::Sub, 0.5 },
+    { llvm::Instruction::And, 0.405639 },
+    { llvm::Instruction::Or, 0.405639 },
+    { llvm::Instruction::Xor, 0.5 },
 
     // Vector Operations
     { llvm::Instruction::InsertElement, 1.0 },
@@ -86,7 +89,6 @@ estimate_entropy_t estimate_entropy {
     //},
     { llvm::Instruction::PHI, IF_Emulator::estimate_phi },
 };
-
 
 flow_set_t flow_set_vals {
     // Terminator Instructions
@@ -328,7 +330,8 @@ IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
     }
 
     // TODO double check
-    return 1.0 / (1 << (from_sz - to_sz));
+    //return 1.0 / (1 << (from_sz - to_sz));
+    return to_sz / from_sz;
 }
 
 double
