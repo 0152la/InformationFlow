@@ -38,6 +38,25 @@ llvm::Function*
 make_llvm_fn_cmp(const std::string&, llvm::FunctionType*, unsigned int,
     unsigned int, const std::string&, llvm::Module&);
 
+using cast_op_create_fn_ty = std::function<llvm::Value*(
+    llvm::IRBuilderBase&, llvm::Value*, llvm::Type*, const llvm::Twine&)>;
+using cast_op_get_ty_ty = std::function<llvm::Type*(llvm::LLVMContext&)>;
+
+struct cast_op_data
+{
+    unsigned int opcode;
+    const cast_op_get_ty_ty ret_ty_fn;
+    const cast_op_get_ty_ty arg_ty_fn;
+    const std::string name_extra;
+
+    cast_op_data(unsigned int _oc, const cast_op_get_ty_ty _r_ty,
+        const cast_op_get_ty_ty _a_ty, const std::string _extra) :
+        opcode(_oc),
+        ret_ty_fn(_r_ty),
+        arg_ty_fn(_a_ty),
+        name_extra(_extra) { };
+};
+
 /* Emitting instruction snippets **********************************************/
 struct llvm_pack
 {

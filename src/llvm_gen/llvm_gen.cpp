@@ -30,20 +30,38 @@ static const std::array binops_float { llvm::Instruction::FAdd,
     llvm::Instruction::FRem };
 static const std::array ignored_other_ops { llvm::Instruction::PHI };
 
-using cast_op_create_fn_ty = std::function<llvm::Value*(
-    llvm::IRBuilderBase&, llvm::Value*, llvm::Type*, const llvm::Twine&)>;
 // using cast_op_create_fn_ty = std::mem_fn;
-static const std::unordered_map<unsigned int, cast_op_create_fn_ty> cast_ops {
-    { llvm::Instruction::FPToSI,
-        std::mem_fn(&llvm::IRBuilderBase::CreateFPToSI) },
-    { llvm::Instruction::FPToUI,
-        std::mem_fn(&llvm::IRBuilderBase::CreateFPToUI) },
-    { llvm::Instruction::SIToFP,
-        std::mem_fn(&llvm::IRBuilderBase::CreateSIToFP) },
-    { llvm::Instruction::UIToFP,
-        std::bind(std::mem_fn(&llvm::IRBuilderBase::CreateUIToFP),
-            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3,
-            std::placeholders::_4, false) },
+static const std::unordered_map<unsigned int, cast_op_create_fn_ty>
+    cast_op_create_fn {
+        { llvm::Instruction::FPToSI,
+            std::mem_fn(&llvm::IRBuilderBase::CreateFPToSI) },
+        { llvm::Instruction::FPToUI,
+            std::mem_fn(&llvm::IRBuilderBase::CreateFPToUI) },
+        { llvm::Instruction::SIToFP,
+            std::mem_fn(&llvm::IRBuilderBase::CreateSIToFP) },
+        { llvm::Instruction::UIToFP,
+            std::bind(std::mem_fn(&llvm::IRBuilderBase::CreateUIToFP),
+                std::placeholders::_1, std::placeholders::_2,
+                std::placeholders::_3, std::placeholders::_4, false) },
+    };
+
+static const std::vector<cast_op_data> cast_ops {
+    { llvm::Instruction::FPToSI, &llvm::Type::getInt16Ty,
+        &llvm::Type::getHalfTy, "f16" },
+    { llvm::Instruction::FPToUI, &llvm::Type::getHalfTy,
+        &llvm::Type::getInt16Ty, "f16" },
+    { llvm::Instruction::SIToFP, &llvm::Type::getInt16Ty,
+        &llvm::Type::getHalfTy, "f16" },
+    { llvm::Instruction::UIToFP, &llvm::Type::getHalfTy,
+        &llvm::Type::getInt16Ty, "f16" },
+    { llvm::Instruction::FPToSI, &llvm::Type::getInt32Ty,
+        &llvm::Type::getFloatTy, "f32" },
+    { llvm::Instruction::FPToUI, &llvm::Type::getFloatTy,
+        &llvm::Type::getInt32Ty, "f32" },
+    { llvm::Instruction::SIToFP, &llvm::Type::getInt32Ty,
+        &llvm::Type::getFloatTy, "f32" },
+    { llvm::Instruction::UIToFP, &llvm::Type::getFloatTy,
+        &llvm::Type::getInt32Ty, "f32" },
 };
 
 /*******************************************************************************
@@ -173,36 +191,27 @@ emit_cmp_fn_flt(unsigned int pred, llvm_pack& lp)
 void
 emit_conversion_fns(llvm_pack& lp)
 {
-    for (const auto& [opcode, create_fn] : cast_ops)
+    // for (const auto& [opcode, create_fn] : cast_ops)
+    for (const auto& co : cast_ops)
     {
-        llvm::Type* ret_ty;
-        llvm::Type* op_ty;
-        switch (opcode)
-        {
-            case llvm::Instruction::FPToSI:
-            case llvm::Instruction::FPToUI:
-                ret_ty = llvm::Type::getInt16Ty(lp.ctx);
-                op_ty = llvm::Type::getHalfTy(lp.ctx);
-                break;
-            case llvm::Instruction::UIToFP:
-            case llvm::Instruction::SIToFP:
-                ret_ty = llvm::Type::getHalfTy(lp.ctx);
-                op_ty = llvm::Type::getInt16Ty(lp.ctx);
-                break;
-        }
+        llvm::Type* ret_ty = co.ret_ty_fn(lp.ctx);
+        llvm::Type* op_ty = co.arg_ty_fn(lp.ctx);
+
         llvm::FunctionType* conv_fn_ty(
             llvm::FunctionType::get(ret_ty, op_ty, false));
-        const std::string conv_name
-            = make_llvm_snippet_name(llvm::Instruction::getOpcodeName(opcode));
-        llvm::Function* fn
-            = make_llvm_fn(conv_name, conv_fn_ty, opcode, "", lp.mod);
+        const std::string conv_name = make_llvm_snippet_name(
+            llvm::Instruction::getOpcodeName(co.opcode));
+        llvm::Function* fn = make_llvm_fn(
+            conv_name, conv_fn_ty, co.opcode, co.name_extra, lp.mod);
 
         llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
         lp.ir_build.SetInsertPoint(bb);
         // llvm::Value* ret_val = lp.ir_build.CreateFPToSI(fn->getArg(0),
         // ret_ty);
         llvm::Value* ret_val
-            = create_fn(lp.ir_build, fn->getArg(0), ret_ty, "");
+            //= create_fn(lp.ir_build, fn->getArg(0), ret_ty, "");
+            = (cast_op_create_fn.at(co.opcode))(
+                lp.ir_build, fn->getArg(0), ret_ty, "");
         lp.ir_build.CreateRet(ret_val);
     }
 }
