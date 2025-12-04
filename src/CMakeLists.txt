@@ -52,6 +52,7 @@ set(flow_sources
     entropy_map_graph.cpp
     entropy_map_path_printer.cpp
     instr_emulator.cpp
+    const_inst_emulator.cpp
     ${LLVM_GEN_SRC_DIR}/llvm_gen-names.cpp
     reader.cpp
 )

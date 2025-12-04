@@ -62,7 +62,6 @@ struct fn_def
 };
 
 class IF_Emulator
-
 {
 private:
     static constexpr std::string snippet_prefix = "llvm_impl_";
