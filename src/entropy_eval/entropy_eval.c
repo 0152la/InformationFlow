@@ -1,5 +1,12 @@
 #include "entropy_eval.h"
 
+static const char* cast_fn_ftoi[] = { "llvm_impl_fptoui", "llvm_impl_fptosi" };
+static const char* cast_fn_itof[] = { "llvm_impl_uitofp", "llvm_impl_sitofp" };
+
+/*******************************************************************************
+ * Utility functions
+ ******************************************************************************/
+
 char*
 get_curr_time_str(void)
 {
@@ -8,6 +15,42 @@ get_curr_time_str(void)
     strftime(curr_time_buf, BUF_SZ, "%Y-%m-%d %H:%M:%S", localtime(&curr_time));
     return curr_time_buf;
 }
+
+bool
+find_fn(const char* to_find, const char* arr[], size_t arr_sz)
+{
+    for (size_t i = 0; i < arr_sz / sizeof(arr[0]); ++i)
+    {
+        if (strcmp(to_find, arr[i]) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+prep_fn_uc_data_float(struct fn_uc_data_s* fn_data)
+{
+    fn_data->uc_data_count = 1;
+    fn_data->uc_data = calloc(fn_data->uc_data_count, sizeof(struct uc_data_s));
+    fn_data->uc_data[0].bit_sz = FLOAT_BITS;
+}
+
+void
+prep_fn_uc_data_int(struct fn_uc_data_s* fn_data)
+{
+    fn_data->uc_data_count = INT_BITS_MAX - INT_BITS_MIN + 1;
+    fn_data->uc_data = calloc(fn_data->uc_data_count, sizeof(struct uc_data_s));
+    for (uint8_t b = INT_BITS_MIN; b <= INT_BITS_MAX; ++b)
+    {
+        fn_data->uc_data[b - INT_BITS_MIN].bit_sz = b;
+    }
+}
+
+/*******************************************************************************
+ * Compute functions
+ ******************************************************************************/
 
 double
 compute_cmp_proportion(uint64_t* counts, uint8_t bitsize)
@@ -47,6 +90,25 @@ compute_entropy_out(uint64_t* counts, uint8_t bitsize)
 }
 
 double
+compute_entropy_out_cast(
+    uint64_t* counts, uint8_t bitsize_in, uint8_t bitsize_out)
+{
+    double h_o = 0;
+    double prob;
+    for (uint64_t x = 0; x < pow(2, bitsize_out); ++x)
+    {
+        if (counts[x] == 0)
+        {
+            continue;
+        }
+
+        prob = counts[x] / pow(2, bitsize_in);
+        h_o += prob * log2(prob);
+    }
+    return -h_o;
+}
+
+double
 compute_uncertainty_coef(uint64_t* counts, uint8_t bitsize)
 {
     return compute_entropy_out(counts, bitsize) / (2 * bitsize);
@@ -59,8 +121,13 @@ compute_uncertainty_coef_div(uint64_t* counts, uint8_t bitsize)
     double h_i = bitsize + log2(pow(2, bitsize) - 1);
     double r = h_o / h_i;
     return r;
-    /*return compute_entropy_out(counts, bitsize)*/
-    /*/ (bitsize + log2(pow(2, bitsize) + 1));*/
+}
+
+double
+compute_uncertainty_coef_cast(uint64_t* counts, uint8_t bitsize)
+{
+    return compute_entropy_out_cast(counts, bitsize, FLOAT_BITS)
+        / bitsize;
 }
 
 static void
@@ -105,6 +172,11 @@ compute_fn_ucs(struct fn_uc_data_s* fn_data, void* dl_hdl)
                 ci->bit_sz_out = b;
                 ci->inner_min = 0;
                 break;
+            case CAST_ITOF:
+            case CAST_FTOI:
+                ci->bit_sz_out = FLOAT_BITS;
+                ci->inner_min = 0;
+                break;
             case INT_CMP:
             case FLOAT_CMP:
                 ci->bit_sz_out = 1;
@@ -118,13 +190,33 @@ compute_fn_ucs(struct fn_uc_data_s* fn_data, void* dl_hdl)
         ci->fn = fn;
         ci->fn_ty = fn_data->fn_ty;
 
-        if (b > THREADED_BITSIZE_LIMIT)
+        switch (fn_data->fn_ty)
         {
-            counts = count_outs_threaded(ci);
-        }
-        else
-        {
-            counts = count_outs(ci);
+            case CAST_FTOI:
+            case CAST_ITOF:
+                if (b > THREADED_BITSIZE_LIMIT)
+                {
+                    counts = count_outs_cast_threaded(ci);
+                }
+                else
+                {
+                    counts = count_outs_cast(ci);
+                }
+                break;
+            case INT:
+            case FLOAT:
+            case INT_CMP:
+            case FLOAT_CMP:
+            case INT_DIV:
+                if (b > THREADED_BITSIZE_LIMIT)
+                {
+                    counts = count_outs_threaded(ci);
+                }
+                else
+                {
+                    counts = count_outs(ci);
+                }
+                break;
         }
 
         free(ci);
@@ -137,6 +229,10 @@ compute_fn_ucs(struct fn_uc_data_s* fn_data, void* dl_hdl)
             case FLOAT_CMP:
             case INT_CMP:
                 curr_uc_data->u_coef = compute_cmp_proportion(counts, b);
+                break;
+            case CAST_FTOI:
+            case CAST_ITOF:
+                curr_uc_data->u_coef = compute_uncertainty_coef_cast(counts, b);
                 break;
             default:
                 curr_uc_data->u_coef = compute_uncertainty_coef(counts, b);
@@ -165,7 +261,7 @@ log_fn_ucs(const struct fn_uc_data_s* fn_data, FILE* out_fd)
     for (uint8_t i = 0; i < fn_data->uc_data_count; ++i)
     {
         struct uc_data_s* curr_data = &fn_data->uc_data[i];
-        printf("\tUC[%hhu] = %f = idx %hhu", curr_data->bit_sz,
+        printf("\tUC[%02hhu] = %f = idx %hhu", curr_data->bit_sz,
             curr_data->u_coef, i);
         printf(" --- TIME %fs", curr_data->eval_time);
         printf("\n");
@@ -174,6 +270,10 @@ log_fn_ucs(const struct fn_uc_data_s* fn_data, FILE* out_fd)
     }
 }
 
+/*******************************************************************************
+ * Main functions
+ ******************************************************************************/
+
 static struct fn_uc_data_s*
 make_fn_data(const char* fn_name_raw)
 {
@@ -181,56 +281,55 @@ make_fn_data(const char* fn_name_raw)
     char* fn_name_end = strchr(fn_name, '(');
     *fn_name_end = '\0';
 
-    struct uc_data_s* fn_uc_data;
-    uint8_t uc_data_count;
-    enum fn_arg_ty_e fn_ty;
+    struct fn_uc_data_s* fn_data = malloc(sizeof(struct fn_uc_data_s));
+    fn_data->fn_name = fn_name;
 
+    // Check if this is a float-to-int cast operation
+    if (find_fn(fn_name, cast_fn_ftoi, sizeof(cast_fn_ftoi)))
+    {
+        prep_fn_uc_data_float(fn_data);
+        fn_data->fn_ty = CAST_FTOI;
+    }
+    // Check if this is a int-to-float cast operation
+    else if (find_fn(fn_name, cast_fn_itof, sizeof(cast_fn_itof)))
+    {
+        prep_fn_uc_data_int(fn_data);
+        fn_data->fn_ty = CAST_ITOF;
+    }
     // Check if this is a float operation
-    if (strstr(fn_name, "_f") != NULL)
+    else if (strstr(fn_name, "_f") != NULL)
     {
         if (strstr(fn_name, "32") != NULL)
         {
             return NULL;
         }
-        uc_data_count = 1;
-        fn_uc_data = calloc(uc_data_count, sizeof(struct uc_data_s));
-        fn_uc_data[0].bit_sz = FLOAT_BITS;
+        prep_fn_uc_data_float(fn_data);
         if (strstr(fn_name, "fcmp") != NULL)
         {
-            fn_ty = FLOAT_CMP;
+            fn_data->fn_ty = FLOAT_CMP;
         }
         else
         {
-            fn_ty = FLOAT;
+            fn_data->fn_ty = FLOAT;
         }
     }
     else
     {
-        uc_data_count = INT_BITS_MAX - INT_BITS_MIN + 1;
-        fn_uc_data = calloc(uc_data_count, sizeof(struct uc_data_s));
-        for (uint8_t b = INT_BITS_MIN; b <= INT_BITS_MAX; ++b)
-        {
-            fn_uc_data[b - INT_BITS_MIN].bit_sz = b;
-        }
+        prep_fn_uc_data_int(fn_data);
         if (strstr(fn_name, "div") != NULL || strstr(fn_name, "rem") != NULL)
         {
-            fn_ty = INT_DIV;
+            fn_data->fn_ty = INT_DIV;
         }
         else if (strstr(fn_name, "cmp") != NULL)
         {
-            fn_ty = INT_CMP;
+            fn_data->fn_ty = INT_CMP;
         }
         else
         {
-            fn_ty = INT;
+            fn_data->fn_ty = INT;
         }
     }
 
-    struct fn_uc_data_s* fn_data = malloc(sizeof(struct fn_uc_data_s));
-    fn_data->fn_name = fn_name;
-    fn_data->fn_ty = fn_ty;
-    fn_data->uc_data = fn_uc_data;
-    fn_data->uc_data_count = uc_data_count;
     return fn_data;
 }
 

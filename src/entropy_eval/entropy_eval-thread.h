@@ -51,7 +51,7 @@ struct thread_arg_base
     uint64_t* inner_counts;
 };
 
-struct threads_arr2
+struct threads_arr
 {
     pthread_t t;
     struct thread_arg_base* t_arg;
@@ -65,9 +65,22 @@ count_outs(struct count_info*);
 
 static void
 update_counts(uint64_t*, uint64_t*, uint8_t);
-void*
+static void*
 count_outs_threaded_stride(void*);
 uint64_t*
 count_outs_threaded(struct count_info*);
+
+// TODO fix
+static void
+do_one_count_cast(uint64_t, const struct count_info* ci, uint64_t*);
+uint64_t*
+count_outs_cast(struct count_info*);
+
+static void
+update_counts_cast(uint64_t*, uint64_t*, uint8_t);
+static void*
+count_outs_cast_threaded_stride(void*);
+uint64_t*
+count_outs_cast_threaded(struct count_info*);
 
 #endif // ENTROPY_EVAL_THREAD_H

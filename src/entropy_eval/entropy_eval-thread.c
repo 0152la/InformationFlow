@@ -1,4 +1,5 @@
 #include "entropy_eval-thread.h"
+#include "entropy_eval-thread_unary.c"
 
 static void
 do_one_count(
@@ -34,6 +35,11 @@ do_one_count(
             counts[val.i] += 1;
             break;
         }
+        default:
+        {
+            printf("Invalid type for binary operation!");
+            exit(1);
+        }
     }
 }
 
@@ -65,7 +71,7 @@ update_counts(uint64_t* counts, uint64_t* new_counts, uint8_t bit_sz_out)
     }
 }
 
-void*
+static void*
 count_outs_threaded_stride(void* t_arg_raw)
 {
     struct thread_arg_base* t_arg = (struct thread_arg_base*) t_arg_raw;
@@ -96,8 +102,8 @@ count_outs_threaded(struct count_info* ci)
         exit(1);
     }
     uint64_t stride = r_max / thread_count;
-    struct threads_arr2* threads
-        = calloc(thread_count, sizeof(struct threads_arr2));
+    struct threads_arr* threads
+        = calloc(thread_count, sizeof(struct threads_arr));
 
     printf("=== Running with %d threads for %d bits ...\n", thread_count,
         ci->bit_sz_in);

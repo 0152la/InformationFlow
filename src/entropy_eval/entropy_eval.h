@@ -47,9 +47,13 @@ compute_cmp_proportion(uint64_t*, uint8_t);
 double
 compute_entropy_out(uint64_t*, uint8_t);
 double
+compute_entropy_out_cast(uint64_t*, uint8_t, uint8_t);
+double
 compute_uncertainty_coef(uint64_t*, uint8_t);
 double
 compute_uncertainty_coef_div(uint64_t*, uint8_t);
+double
+compute_uncertainty_coef_cast(uint64_t*, uint8_t);
 
 static void
 compute_fn_ucs(struct fn_uc_data_s*, void*);
