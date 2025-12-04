@@ -1,0 +1,54 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{enumitem}
+
+\newcommand{\entropy}[1]{\mathcal{H}(#1)}
+\newcommand{\fnin}[2]{\((#1, #2)\)}
+
+\begin{document}
+
+\section{Addition}
+
+For unsigned integer addition (i.e. with wrap-around semantics) of \(n\) bit
+values, we prove that this operation retains half entropy by observing that
+\begin{enumerate}[label=\alph*)]
+    \item The output space of the addition is of size \(2^n\)
+    \item The input space of the addition is of size \(2^{n+1}\)
+    \item Each output is produced by \(2^{n}\) inputs
+\end{enumerate}
+
+The proof for (a) is trivial: there are a total of \(2^n\) representable
+values, meaning the output space is at most \(2^n\).
+
+The proof for (b) is also trivial: the input space of the addition is \(2^n *
+2^n = 2^{n+1}\).
+
+In order to prove (b), we start with the fact that output \(o\) can be obtained
+by input \fnin{o}{0}. Now, we decrement the first value by 1, and increment the
+second by 1, to obtain input \fnin{o - 1}{1}. The corresponding output is still
+\(o\). We can repeat this operation up to \(2^n - 1\) times, as repeating it
+for \(2^n\) times would yield \fnin{o - 2^n}{0 + 2^n} = \fnin{o}{0}, by
+wrap-around semantics. We can repeat this logic for each original output \(o,
+n\), where \(n \in [0, 2^n)\). Thus, each output value is mapped by \(2^n\)
+input values.
+
+Now, we simply apply the formula for Theil's U:
+
+\begin{equation}
+    U(I|O) = \frac{\entropy{I} - \entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I|O}}{\entropy{I}}
+\end{equation}
+
+For the input entropy, each input has \(p_i = \frac{1}{2^{n+1}}\). Thus:
+
+\begin{equation*}
+    \entropy{I} = \sum_{i} p_i * \log_2(p_i) = - 2^{n+1} * \frac{1}{2^{n+1}} * \log_2 (\frac{1}{2^{n+1}}) = n+1
+\end{equation*}
+
+For the conditional entropy, we have:
+
+\begin{equation*}
+    \entropy{I|O} = - \sum p(o, i) * \log_2 (\frac{p(o, i)}{p(o)}) = - 2^n * \frac{1}{2^n} * \log_2 ( \frac{\frac{1}{2^n}}{\frac{1}{2^n}} )
+\end{equation*}
+
+\end{document}

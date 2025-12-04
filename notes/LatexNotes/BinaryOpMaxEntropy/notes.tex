@@ -1,0 +1,56 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newcommand{\entropy}[1]{\mathcal{H}(#1)}
+\newcommand{\fnin}[2]{\((#1, #2)\)}
+
+\newcommand{\cmnt}[2]{{\color{red}{\textbf{#1:} #2}}}
+\newcommand{\AL}[1]{\cmnt{AL}{#1}}
+
+\begin{document}
+
+\textbf{Proposition:} For a deterministic, binary, integer arithmetic operation in LLVM, we aim to prove that the maximum value of the Uncertainty Coefficient~\cite{press2007numerical}, given by~\autoref{eq:unc_coef}, is \(0.5\).
+
+\begin{equation}\label{eq:unc_coef}
+    U(I|O) = \frac{\entropy{I} - \entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I|O}}{\entropy{I}}
+\end{equation}
+
+\textbf{Proof:} First, we determine the applicable values of an LLVM binary operation. LLVM integer types are defined as \texttt{i<n>}, where \texttt{<n>} is a literal integer determining the number of bits for that integer. Thus, \texttt{i1} is equivalent to a \texttt{boolean} value, and \texttt{i32} would (usually) be equivalent to an \texttt{int}. Further, LLVM binary integer arithmetic operations use the same type for the result and the operands. Therefore, we can set the type based on the integer bit size \AL{Here, on the whiteboard, you referred to this as the ``support size''. If you think that's more suitable, I can use that name}. For a type \texttt{ik}, the input space of an LLVM binary integer operation is \(2^k * 2^k = 2^{2k}\), while the output space is \(2^k\).
+
+We note that the output space contains all values from 0 to \(2^k-1\), and that when over-/under-flow happens, the result wraps around, similar to \texttt{C} unsigned integer wrap-around semantics~\cite[§6.2.5.11]{meneide2024information}.
+
+Since the LLVM operation is deterministic\AL{Is this the only, and sufficient reason?}, we can use squeeziness~\cite{clark2012squeeziness} in order to simplify the conditional entropy:
+
+\begin{equation}
+    \entropy{I|O} = \entropy{I} - \entropy{O}
+\end{equation}
+
+The input space is all possible pairs of integers in the range \([0, 2^k-1] \times [0, 2^k-1]\), uniformly distributed. Thus, the entropy over the inputs is
+
+\begin{equation}
+    \entropy{I} = log_2(|I|) = log_2(2^{2k}) = 2k
+\end{equation}
+
+We can thus simplify the original uncertainty coefficient equation:
+
+\begin{equation}
+    U(I|O) = 1 - \frac{\entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I} - \entropy{O}}{\entropy{I}} = \frac{\entropy{O}}{2k}
+\end{equation}
+
+The final ingredient is determining when \(\entropy{O}\) is at its maximum value, which happens when all outputs are uniformly distributed, thus obtaining
+
+\begin{gather}
+    \entropy{O} = log_2(2^k) = k \\
+    U(I|O) = \frac{k}{2k} = 0.5
+\end{gather}
+
+We note that this corresponds to both the Domain-to-Range Ratio value~\cite{woodward2000testability}, as well as the entropy for LLVM integer addition, as output values are uniformly distributed.
+
+\bibliographystyle{plain}
+\bibliography{notes}
+
+\end{document}
