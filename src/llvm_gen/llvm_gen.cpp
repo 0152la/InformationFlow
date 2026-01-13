@@ -30,7 +30,6 @@ static const std::array binops_float { llvm::Instruction::FAdd,
     llvm::Instruction::FRem };
 static const std::array ignored_other_ops { llvm::Instruction::PHI };
 
-// using cast_op_create_fn_ty = std::mem_fn;
 static const std::unordered_map<unsigned int, cast_op_create_fn_ty>
     cast_op_create_fn {
         { llvm::Instruction::FPToSI,
@@ -48,18 +47,18 @@ static const std::unordered_map<unsigned int, cast_op_create_fn_ty>
 static const std::vector<cast_op_data> cast_ops {
     { llvm::Instruction::FPToSI, &llvm::Type::getInt16Ty,
         &llvm::Type::getHalfTy, "f16" },
-    { llvm::Instruction::FPToUI, &llvm::Type::getHalfTy,
-        &llvm::Type::getInt16Ty, "f16" },
-    { llvm::Instruction::SIToFP, &llvm::Type::getInt16Ty,
+    { llvm::Instruction::FPToUI, &llvm::Type::getInt16Ty,
         &llvm::Type::getHalfTy, "f16" },
+    { llvm::Instruction::SIToFP, &llvm::Type::getHalfTy,
+        &llvm::Type::getInt16Ty, "f16" },
     { llvm::Instruction::UIToFP, &llvm::Type::getHalfTy,
         &llvm::Type::getInt16Ty, "f16" },
     { llvm::Instruction::FPToSI, &llvm::Type::getInt32Ty,
         &llvm::Type::getFloatTy, "f32" },
-    { llvm::Instruction::FPToUI, &llvm::Type::getFloatTy,
-        &llvm::Type::getInt32Ty, "f32" },
-    { llvm::Instruction::SIToFP, &llvm::Type::getInt32Ty,
+    { llvm::Instruction::FPToUI, &llvm::Type::getInt32Ty,
         &llvm::Type::getFloatTy, "f32" },
+    { llvm::Instruction::SIToFP, &llvm::Type::getFloatTy,
+        &llvm::Type::getInt32Ty, "f32" },
     { llvm::Instruction::UIToFP, &llvm::Type::getFloatTy,
         &llvm::Type::getInt32Ty, "f32" },
 };
@@ -191,7 +190,6 @@ emit_cmp_fn_flt(unsigned int pred, llvm_pack& lp)
 void
 emit_conversion_fns(llvm_pack& lp)
 {
-    // for (const auto& [opcode, create_fn] : cast_ops)
     for (const auto& co : cast_ops)
     {
         llvm::Type* ret_ty = co.ret_ty_fn(lp.ctx);
@@ -200,7 +198,7 @@ emit_conversion_fns(llvm_pack& lp)
         llvm::FunctionType* conv_fn_ty(
             llvm::FunctionType::get(ret_ty, op_ty, false));
         const std::string conv_name = make_llvm_snippet_name(
-            llvm::Instruction::getOpcodeName(co.opcode));
+            llvm::Instruction::getOpcodeName(co.opcode), co.name_extra);
         llvm::Function* fn = make_llvm_fn(
             conv_name, conv_fn_ty, co.opcode, co.name_extra, lp.mod);
 
@@ -304,6 +302,7 @@ emit_impl_header(const std::string& header_path)
 {
     std::unordered_map<std::string, std::string> type_map {
         { "i64", "int64_t" },
+        { "i32", "int32_t" },
         { "i16", "int16_t" },
         { "i1", "bool" },
         { "double", "double" },
@@ -355,7 +354,7 @@ main()
     auto ctx = std::make_unique<llvm::LLVMContext>();
     auto bld = std::make_unique<llvm::IRBuilder<>>(*ctx);
     auto mod = std::make_unique<llvm::Module>("Snippet", *ctx);
-    mod->setTargetTriple("x86_64-unknown-linux-gnu"); // TODO ?
+    mod->setTargetTriple("x86_64-unknown-linux-gnu");
     llvm_pack lp { *ctx, *mod, *bld };
 
     unsigned int op_int;
