@@ -2,6 +2,23 @@
 #include <tuple>
 #include <type_traits>
 
+// Helper templates
+
+// Get the first type of a tuple
+template <typename... As>
+using first_t = std::tuple_element_t<0, std::tuple<As...>>;
+
+// Check if all templates in a pack are the same
+template <typename T, typename... Ts>
+struct all_same : std::conjunction<std::is_same<T, Ts>...>
+{
+};
+
+template <typename... Ts>
+inline constexpr bool all_same_v = (sizeof...(Ts) == 0)
+    ? true
+    : all_same<std::tuple_element_t<0, std::tuple<Ts...>>, Ts...>::value;
+
 // Enforce `is_floating_point` check on `_Float16` to return true
 namespace std
 {
@@ -35,170 +52,201 @@ Runner::log_result(EvalResult& er, R res, size_t max_val) const
     }
 }
 
-template <typename T, typename R, typename A>
-const EvalResult
-Runner::do_eval(const std::function<R(A)> fn, uint8_t bit_sz, bool is_div) const
+// template <typename T, typename R, typename A1, typename A2>
+// const EvalResult
+// Runner::do_eval_thread(const std::function<R(A1, A2)> fn, uint8_t bit_sz,
+// bool is_div, size_t _tid, size_t stride) const
+//{
+// static_assert(std::is_same_v<A1, A2>);
+// EvalResult er(bit_sz);
+// size_t max_val_out = (_tid + 1) * stride;
+// size_t max_val_in = std::pow(2, bit_sz);
+// for (T x = _tid * stride; x < max_val_out; ++x)
+// for (T x = 0; x < max_val; ++x)
+//{
+// A1 x_a = convert_arg<T, A1>(x);
+// for (T y = (is_div ? 1 : 0); y < max_val_in; ++y)
+//{
+// A2 y_a = convert_arg<T, A2>(y);
+// R res = fn(x_a, y_a);
+// this->log_result<T, R>(er, res, max_val); // TODO make local
+// if (y == max_val_in - 1)
+//{
+// break;
+//}
+//}
+// if (x == max_val_out - 1)
+//{
+// break;
+//}
+//}
+// return er;
+//}
+
+// template <typename T, typename R, typename... Args>
+// const EvalResult
+// Runner::do_eval_thread_wrapper(const std::function<R(Args...)> fn,
+// uint8_t bit_sz, bool is_div, unsigned int thr_count) const
+//{
+// EvalResult er(bit_sz);
+
+// size_t outer_vals = std::pow(2, bit_sz);
+// if (outer_vals % thr_count != 0)
+//{
+// throw std::runtime_error(
+//"Invalid thread count {} - inexact division over {} values!",
+// thr_count, outer_vals);
+//}
+// size_t stride = outer_vals / thr_count;
+// std::thread* thrs = reinterpret_cast<std::thread*>(
+// calloc(thr_count, sizeof(std::thread)));
+// for (size_t t = 0; t < thr_count; ++t)
+//{
+// thrs[t] = std::thread(
+// do_eval_thread<T, R, Args...>(fn, bit_sz, is_div, t, stride));
+//}
+
+// for (size_t t = 0; t < thr_count; ++t)
+//{
+// thrs[t].join();
+// er.combine_results(
+//}
+//}
+
+template <size_t I, typename T, typename R, typename... As>
+void
+Runner::do_eval(EvalResult& er, const std::function<R(As...)>& fn,
+    uint8_t bit_sz, bool is_div, std::tuple<As...>& curr_args) const
 {
-    bool is_div2 = is_div; // TODO fix
-    EvalResult er(bit_sz);
-    size_t max_val = std::pow(2, bit_sz);
-    for (size_t x = 0; x < max_val; ++x)
+    auto max_val = std::pow(2, bit_sz);
+    constexpr auto divisor_idx = 2; // TODO move
+
+    if constexpr (I == sizeof...(As))
     {
-        A x_a = convert_arg<T, A>(x);
-        R res = fn(x_a);
+        R res = std::apply(fn, curr_args);
         this->log_result<T, R>(er, res, max_val);
     }
-    return er;
-}
-
-template <typename T, typename R, typename A1, typename A2>
-const EvalResult
-Runner::do_eval_thread(const std::function<R(A1, A2)> fn, uint8_t bit_sz,
-    bool is_div, size_t _tid, size_t stride) const
-{
-    static_assert(std::is_same_v<A1, A2>);
-    EvalResult er(bit_sz);
-    size_t max_val_out = (_tid + 1) * stride;
-    size_t max_val_in = std::pow(2, bit_sz);
-    for (T x = _tid * stride; x < max_val_out; ++x)
-        for (T x = 0; x < max_val; ++x)
+    else
+    {
+        for (size_t x = 0; x < max_val; ++x)
         {
-            A1 x_a = convert_arg<T, A1>(x);
-            for (T y = (is_div ? 1 : 0); y < max_val_in; ++y)
+            if constexpr (I == divisor_idx)
             {
-                A2 y_a = convert_arg<T, A2>(y);
-                R res = fn(x_a, y_a);
-                this->log_result<T, R>(er, res, max_val); // TODO make local
-                if (y == max_val_in - 1)
+                if (is_div && x == 0)
                 {
-                    break;
+                    continue;
                 }
             }
-            if (x == max_val_out - 1)
-            {
-                break;
-            }
+
+            using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
+            std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
+            do_eval<I + 1, T, R, As...>(er, fn, bit_sz, is_div, curr_args);
         }
-    return er;
-}
-
-template <typename T, typename R, typename... Args>
-const EvalResult
-Runner::do_eval_thread_wrapper(const std::function<R(Args...)> fn,
-    uint8_t bit_sz, bool is_div, unsigned int thr_count) const
-{
-    EvalResult er(bit_sz);
-
-    size_t outer_vals = std::pow(2, bit_sz);
-    if (outer_vals % thr_count != 0)
-    {
-        throw std::runtime_error(
-            "Invalid thread count {} - inexact division over {} values!",
-            thr_count, outer_vals);
-    }
-    size_t stride = outer_vals / thr_count;
-    std::thread* thrs = reinterpret_cast<std::thread*>(
-        calloc(thr_count, sizeof(std::thread)));
-    for (size_t t = 0; t < thr_count; ++t)
-    {
-        thrs[t] = std::thread(do_eval_thread<T, R, Args...>(fn, bit_sz, is_div, t,stride));
-    }
-
-    for (size_t t = 0; t < thr_count; ++t)
-    {
-        thrs[t].join();
-        er.combine_results(
     }
 }
 
-template <typename T, typename R, typename A1, typename A2>
-const EvalResult
-Runner::do_eval(
-    const std::function<R(A1, A2)> fn, uint8_t bit_sz, bool is_div) const
-{
-    static_assert(std::is_same_v<A1, A2>);
+// template <typename T, typename R, typename A>
+// const EvalResult
+// Runner::do_eval(const std::function<R(A)> fn, uint8_t bit_sz, bool is_div)
+// const
+//{
+// bool is_div2 = is_div; // TODO fix
+// EvalResult er(bit_sz);
+// size_t max_val = std::pow(2, bit_sz);
+// for (size_t x = 0; x < max_val; ++x)
+//{
+// A x_a = convert_arg<T, A>(x);
+// R res = fn(x_a);
+// this->log_result<T, R>(er, res, max_val);
+//}
+// return er;
+//}
 
-    EvalResult er(bit_sz);
-    size_t max_val = std::pow(2, bit_sz);
-    for (T x = 0; x < max_val; ++x)
-    {
-        A1 x_a = convert_arg<T, A1>(x);
-        for (T y = (is_div ? 1 : 0); y < max_val; ++y)
-        {
-            A2 y_a = convert_arg<T, A2>(y);
-            R res = fn(x_a, y_a);
-            this->log_result<T, R>(er, res, max_val);
-            if (y == max_val - 1)
-            {
-                break;
-            }
-        }
-        if (x == max_val - 1)
-        {
-            break;
-        }
-    }
-    return er;
-}
+// template <typename T, typename R, typename A1, typename A2>
+// const EvalResult
+// Runner::do_eval(
+// const std::function<R(A1, A2)> fn, uint8_t bit_sz, bool is_div) const
+//{
+// static_assert(std::is_same_v<A1, A2>);
 
-template <typename... As>
-using first_t = std::tuple_element_t<0, std::tuple<As...>>;
+// EvalResult er(bit_sz);
+// size_t max_val = std::pow(2, bit_sz);
+// for (T x = 0; x < max_val; ++x)
+//{
+// A1 x_a = convert_arg<T, A1>(x);
+// for (T y = (is_div ? 1 : 0); y < max_val; ++y)
+//{
+// A2 y_a = convert_arg<T, A2>(y);
+// R res = fn(x_a, y_a);
+// this->log_result<T, R>(er, res, max_val);
+// if (y == max_val - 1)
+//{
+// break;
+//}
+//}
+// if (x == max_val - 1)
+//{
+// break;
+//}
+//}
+// return er;
+//}
 
-template <typename T, typename R, typename... Args>
-const EntropyResult
-Runner::exhaust_eval_thread(const RunInfo& ri) const
-{
-    static_assert(std::is_unsigned_v<T> && std::is_integral_v<T>);
+// template <typename T, typename R, typename... Args>
+// const EntropyResult
+// Runner::exhaust_eval_thread(const RunInfo& ri) const
+//{
+// static_assert(std::is_unsigned_v<T> && std::is_integral_v<T>);
 
-    if (sizeof(T) * CHAR_BIT < ri.bit_sz_max)
-    {
-        const auto err = fmt::format(
-            "Given type {} (size {}) smaller than maximum bit_sz {}!",
-            typeid(T).name(), sizeof(T), ri.bit_sz_max);
-        throw std::runtime_error(err);
-    }
+// if (sizeof(T) * CHAR_BIT < ri.bit_sz_max)
+//{
+// const auto err = fmt::format(
+//"Given type {} (size {}) smaller than maximum bit_sz {}!",
+// typeid(T).name(), sizeof(T), ri.bit_sz_max);
+// throw std::runtime_error(err);
+//}
 
-    auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
-    auto fn = static_cast<std::function<R(Args...)>>(fn_c);
+// auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
+// auto fn = static_cast<std::function<R(Args...)>>(fn_c);
 
-    unsigned int thr_count
-        = std::thread::hardware_concurrency() - this->other_free_threads;
-    if (thr_count < this->min_thread_count)
-    {
-        throw std::runtime_error(
-            fmt::format("Expected {} min threads; found {}!",
-                this->min_thread_count, thr_count));
-    }
+// unsigned int thr_count
+//= std::thread::hardware_concurrency() - this->other_free_threads;
+// if (thr_count < this->min_thread_count)
+//{
+// throw std::runtime_error(
+// fmt::format("Expected {} min threads; found {}!",
+// this->min_thread_count, thr_count));
+//}
 
-    EntropyResult er;
-    if (std::is_floating_point_v<first_t<Args...>>)
-    {
-        bool check = true;
-        check &= ri.bit_sz_min == ri.bit_sz_max;
-        check &= ri.bit_sz_min == sizeof(T) * CHAR_BIT;
-        if (!check)
-        {
-            throw std::runtime_error(fmt::format(
-                "Expected bit range of single size {}; got [{}, {}]!",
-                sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
-        }
-    }
+// EntropyResult er;
+// if (std::is_floating_point_v<first_t<Args...>>)
+//{
+// bool check = true;
+// check &= ri.bit_sz_min == ri.bit_sz_max;
+// check &= ri.bit_sz_min == sizeof(T) * CHAR_BIT;
+// if (!check)
+//{
+// throw std::runtime_error(fmt::format(
+//"Expected bit range of single size {}; got [{}, {}]!",
+// sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
+//}
+//}
 
-    for (size_t b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
-    {
-        fmt::println("DO {}", b);
-        std::chrono::time_point<EntropyResultEntry::clock_ty> time_start
-            = EntropyResultEntry::clock_ty::now();
-        const EvalResult eval_res = this->do_eval_thread_wrapper<T, R, Args...>(
-            fn, b, ri.is_div, thr_count);
-        std::chrono::time_point<EntropyResultEntry::clock_ty> time_end
-            = EntropyResultEntry::clock_ty::now();
-        auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
-            time_end - time_start);
-        er.parse_evalresult(eval_res, time_dur);
-    }
-    return er;
-}
+// for (size_t b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
+//{
+// fmt::println("DO {}", b);
+// std::chrono::time_point<EntropyResultEntry::clock_ty> time_start
+//= EntropyResultEntry::clock_ty::now();
+// const EvalResult eval_res = this->do_eval_thread_wrapper<T, R, Args...>(
+// fn, b, ri.is_div, thr_count);
+// std::chrono::time_point<EntropyResultEntry::clock_ty> time_end
+//= EntropyResultEntry::clock_ty::now();
+// auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
+// time_end - time_start);
+// er.parse_evalresult(eval_res, time_dur);
+//}
+// return er;
+//}
 
 template <typename T, typename R, typename... Args>
 const EntropyResult
@@ -217,7 +265,7 @@ Runner::exhaust_eval(const RunInfo& ri) const
     auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
     auto fn = static_cast<std::function<R(Args...)>>(fn_c);
 
-    EntropyResult er;
+    EntropyResult entropy_res;
     if (std::is_floating_point_v<first_t<Args...>>)
     {
         bool check = true;
@@ -231,20 +279,20 @@ Runner::exhaust_eval(const RunInfo& ri) const
         }
     }
 
-    for (size_t b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
+    for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
     {
+        auto eval_res = EvalResult { b };
+        auto curr_args = std::tuple<Args...> {};
         fmt::println("DO {}", b);
-        std::chrono::time_point<EntropyResultEntry::clock_ty> time_start
-            = EntropyResultEntry::clock_ty::now();
-        const EvalResult eval_res
-            = this->do_eval<T, R, Args...>(fn, b, ri.is_div);
-        std::chrono::time_point<EntropyResultEntry::clock_ty> time_end
-            = EntropyResultEntry::clock_ty::now();
+        auto time_start = EntropyResultEntry::clock_ty::now();
+        this->do_eval<0, T, R, Args...>(eval_res, fn, b, ri.is_div, curr_args);
+        auto time_end = EntropyResultEntry::clock_ty::now();
         auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             time_end - time_start);
-        er.parse_evalresult(eval_res, time_dur);
+        eval_res.print();
+        entropy_res.parse_evalresult(eval_res, time_dur);
     }
-    return er;
+    return entropy_res;
 }
 
 template <typename T, typename R, typename A>

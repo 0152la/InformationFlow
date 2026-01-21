@@ -13,8 +13,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 
 #include "fmt/base.h"
@@ -126,8 +126,8 @@ private:
     void* dl_hdl;
     FILE* out_fd;
 
-    static unsigned int min_thread_count = 2;
-    static unsigned int other_free_threads = 2
+    static constexpr unsigned int min_thread_count = 2;
+    static constexpr unsigned int other_free_threads = 2;
 
     static constexpr auto def_path = std::string_view {
         "/home/andreilascu/Documents/Repos/InformationFlow/"
@@ -144,11 +144,9 @@ private:
     template <typename T, typename R>
     void log_result(EvalResult&, R, size_t) const;
 
-    template <typename T, typename R, typename A>
-    const EvalResult do_eval(const std::function<R(A)>, uint8_t, bool) const;
-    template <typename T, typename R, typename A1, typename A2>
-    const EvalResult do_eval(
-        const std::function<R(A1, A2)>, uint8_t, bool) const;
+    template <size_t I, typename T, typename R, typename... As>
+    void do_eval(EvalResult&, const std::function<R(As...)>&, uint8_t, bool,
+        std::tuple<As...>&) const;
 
     template <typename T, typename R, typename... Args>
     const EntropyResult exhaust_eval(const RunInfo&) const;

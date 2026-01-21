@@ -13,7 +13,7 @@ EvalResult::combine_results(const EvalResult& other)
 {
     for (res_t r = 0; r < other.get_max_res_val(); ++r)
     {
-        this->instances[r] += other->get_instance[r];
+        this->instances[r] += other.get_instance(r);
     }
 }
 
