@@ -1,0 +1,69 @@
+#ifndef _EEVAL_ENTROPY_HPP
+#define _EEVAL_ENTROPY_HPP
+
+#include <chrono>
+#include <iostream>
+#include <set>
+#include <stdexcept>
+
+#include "fmt/chrono.h"
+#include "fmt/format.h"
+
+#include "result.hpp"
+
+class EntropyCalcs
+{
+public:
+    static double compute_entropy(const EvalResult&);
+    static double compute_uncertainty_coef(const EvalResult&);
+};
+
+struct EntropyResultEntry
+{
+    using clock_ty = std::chrono::steady_clock;
+
+    uint8_t bit_sz;
+    std::chrono::microseconds dur_ms;
+    double entropy;
+    double uncertainty_coef;
+
+    EntropyResultEntry(
+        uint8_t _bs, std::chrono::microseconds _dur, double _h, double _uc) :
+        bit_sz(_bs),
+        dur_ms(_dur),
+        entropy(_h),
+        uncertainty_coef(_uc) { };
+
+    const std::string to_str(void) const;
+};
+
+struct EntropyResultEntry_cmp
+{
+    bool operator()(
+        const EntropyResultEntry* left, const EntropyResultEntry* right) const
+    {
+        return left->bit_sz < right->bit_sz;
+    }
+};
+
+class EntropyResult
+{
+private:
+    static bool cmp_data(
+        const EntropyResultEntry* fst, const EntropyResultEntry* snd)
+    {
+        return fst->bit_sz < snd->bit_sz;
+    }
+
+    // std::set<EntropyResultEntry*, decltype(&EntropyResult::cmp_data)> data;
+    std::set<EntropyResultEntry*, EntropyResultEntry_cmp> data;
+
+public:
+    ~EntropyResult(void);
+
+    void add_result(EntropyResultEntry*);
+    void parse_evalresult(const EvalResult&, std::chrono::microseconds);
+    void print(void) const;
+};
+
+#endif // _EEVAL_ENTROPY_HPP
