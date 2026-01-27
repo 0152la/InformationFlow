@@ -13,16 +13,24 @@ EvalResult::combine_results(const EvalResult& other)
 {
     for (res_t r = 0; r < other.get_max_res_val(); ++r)
     {
+        if (other.get_instance(r) == 0)
+        {
+            continue;
+        }
+
+        this->instance_count_distinct += (this->get_instance(r) == 0 ? 1 : 0);
         this->instances[r] += other.get_instance(r);
     }
+    this->instance_count += other.get_instance_count();
 }
+
 
 void
 EvalResult::print(void) const
 {
     std::cout << "== EvalResult\n";
     std::cout << fmt::format(
-        "  - Total distinct results :: {0}\n", this->instance_count);
+        "  - Total distinct results :: {0}\n", this->instance_count_distinct);
 
     std::ostringstream raw_instances_oss;
     size_t total_insts = 0;

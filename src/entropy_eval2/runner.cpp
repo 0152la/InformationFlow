@@ -112,14 +112,26 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
     }
     else
     {
-        this->bit_sz_min = def_ty_enum::int_min_bit_sz;
-        this->bit_sz_max = def_ty_enum::int_max_bit_sz;
+        this->bit_sz_min = RunInfo::int_min_bit_sz;
+        this->bit_sz_max = RunInfo::int_max_bit_sz;
     }
 };
 
 /*******************************************************************************
  * Runner
  ******************************************************************************/
+
+void
+Runner::eval_threads_join(
+    EvalRunInfo& eri, const std::span<ThreadRunInfo>& tris) const
+{
+    for (auto& tri : tris)
+    {
+        tri.thr.join();
+        eri.results.combine_results(tri.local_results);
+        tri.~ThreadRunInfo();
+    }
+}
 
 Runner::Runner(void)
 {
@@ -166,7 +178,7 @@ Runner::eval_all(void) const
             continue;
         }
 
-        if (buf.find("fadd") == std::string::npos)
+        if (buf.find("_add") == std::string::npos)
         {
             continue;
         }

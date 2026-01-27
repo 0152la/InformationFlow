@@ -2,14 +2,17 @@
 #define _EEVAL_RUNNER_HPP
 
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <dlfcn.h>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <numeric>
 #include <regex>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -66,9 +69,6 @@ public:
         { def_ty::F32, 32 },
     };
 
-    static constexpr uint8_t int_min_bit_sz = 2;
-    static constexpr uint8_t int_max_bit_sz = 16;
-
     static const std::string_view to_str(const def_ty& dt)
     {
         const auto it = std::find_if(def_ty_names.begin(), def_ty_names.end(),
@@ -117,7 +117,49 @@ struct RunInfo
     uint8_t bit_sz_max;
     bool is_div;
 
+    // TODO config
+    static constexpr uint8_t int_min_bit_sz = 2;
+    static constexpr uint8_t int_max_bit_sz = 16;
+
     RunInfo(const DefInfo&, void*);
+};
+
+struct EvalRunInfo
+{
+    EvalResult results;
+    const uint8_t bit_sz;
+    const uint64_t max_val;
+    const bool is_div;
+
+    // TODO config
+    static constexpr auto divisor_idx = 2;
+    static constexpr auto min_par_bit_sz = 13;
+
+    EvalRunInfo(uint8_t _bs, bool _div) :
+        results(EvalResult { _bs }),
+        bit_sz(_bs),
+        max_val(std::pow(2, this->bit_sz)),
+        is_div(_div) { };
+};
+
+struct ThreadRunInfo
+{
+    EvalRunInfo* eri;
+    EvalResult local_results;
+    uint8_t tid;
+    size_t stride;
+    std::thread thr;
+
+    ThreadRunInfo(EvalRunInfo& _eri, uint8_t _tid, size_t _stride) :
+        eri(&_eri),
+        local_results(EvalResult { _eri.bit_sz }),
+        tid(_tid),
+        stride(_stride) { };
+
+    // void set_thread(std::thread&& _thr)
+    //{
+    // this->thr = std::thread { _thr };
+    //};
 };
 
 class Runner
@@ -142,12 +184,25 @@ private:
     static constexpr auto out_path = std::string_view { "entropy_out.csv" };
 
     template <typename T, typename R>
-    void log_result(EvalResult&, R, size_t) const;
+    void log_result(EvalResult&, R, const EvalRunInfo&) const;
+
+    template <typename T, typename R, typename... As>
+    std::span<ThreadRunInfo> eval_threads_start(
+        EvalRunInfo&, const std::function<R(As...)>&) const;
+    void eval_threads_join(EvalRunInfo&, const std::span<ThreadRunInfo>&) const;
+    template <typename T, typename R, typename... As>
+    void do_eval_thread_init(
+        ThreadRunInfo&, const std::function<R(As...)>&) const;
 
     template <size_t I, typename T, typename R, typename... As>
-    void do_eval(EvalResult&, const std::function<R(As...)>&, uint8_t, bool,
+    void do_eval_thread(ThreadRunInfo&, const std::function<R(As...)>&,
         std::tuple<As...>&) const;
+    template <size_t I, typename T, typename R, typename... As>
+    void do_eval(
+        EvalRunInfo&, const std::function<R(As...)>&, std::tuple<As...>&) const;
 
+    template <typename T, typename R, typename... As>
+    void dispatch_eval(EvalRunInfo&, const std::function<R(As...)>&) const;
     template <typename T, typename R, typename... Args>
     const EntropyResult exhaust_eval(const RunInfo&) const;
 
@@ -159,6 +214,10 @@ private:
 public:
     Runner(void);
     ~Runner(void);
+
+    // template <size_t I, typename T, typename R, typename... As>
+    // void do_eval_thread(ThreadRunInfo&, const std::function<R(As...)>&,
+    // std::tuple<As...>&) const;
 
     const EntropyResult run_one(const DefInfo&) const;
     void eval_all(void) const;
