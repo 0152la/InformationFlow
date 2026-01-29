@@ -22,7 +22,6 @@ private:
     // type `res_t`, up to a max of 2^n bitsize
     instance_t* instances;
     uint64_t instance_count = 0;
-    uint64_t instance_count_distinct = 0;
     uint8_t bit_sz;
 
 public:
@@ -54,12 +53,6 @@ public:
     auto get_instance_count(void) const -> const decltype(this->instance_count)&
     {
         return this->instance_count;
-    }
-
-    auto get_instance_count_distinct(void) const -> const
-        decltype(this->instance_count_distinct)&
-    {
-        return this->instance_count_distinct;
     }
 
     auto get_max_instances(void) const -> decltype(instance_count)

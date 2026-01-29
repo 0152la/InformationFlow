@@ -22,7 +22,9 @@
 
 #include "fmt/base.h"
 #include "fmt/format.h"
+#include "fmt/ostream.h"
 
+#include "config.hpp"
 #include "entropy.hpp"
 #include "result.hpp"
 
@@ -48,8 +50,9 @@ public:
         I64,
         I32,
         I16,
+        I1,
         F16,
-        F32
+        F32,
     };
 
 private:
@@ -58,6 +61,7 @@ private:
             { "i64", def_ty::I64 },
             { "i32", def_ty::I32 },
             { "i16", def_ty::I16 },
+            { "i1", def_ty::I1 },
 
             { "float", def_ty::F32 },
             { "half", def_ty::F16 },
@@ -101,6 +105,7 @@ struct DefInfo
 
     DefInfo(const std::string&);
     std::string get_fn_name(void) const;
+    std::string get_extra(void) const;
     bool check_div(void) const;
     bool check_fop(void) const;
     std::string to_str(void) const;
@@ -117,10 +122,6 @@ struct RunInfo
     uint8_t bit_sz_max;
     bool is_div;
 
-    // TODO config
-    static constexpr uint8_t int_min_bit_sz = 2;
-    static constexpr uint8_t int_max_bit_sz = 16;
-
     RunInfo(const DefInfo&, void*);
 };
 
@@ -130,10 +131,6 @@ struct EvalRunInfo
     const uint8_t bit_sz;
     const uint64_t max_val;
     const bool is_div;
-
-    // TODO config
-    static constexpr auto divisor_idx = 2;
-    static constexpr auto min_par_bit_sz = 13;
 
     EvalRunInfo(uint8_t _bs, bool _div) :
         results(EvalResult { _bs }),
@@ -155,36 +152,15 @@ struct ThreadRunInfo
         local_results(EvalResult { _eri.bit_sz }),
         tid(_tid),
         stride(_stride) { };
-
-    // void set_thread(std::thread&& _thr)
-    //{
-    // this->thr = std::thread { _thr };
-    //};
 };
 
 class Runner
 {
 private:
     void* dl_hdl;
-    FILE* out_fd;
-
-    static constexpr unsigned int min_thread_count = 2;
-    static constexpr unsigned int other_free_threads = 2;
-
-    static constexpr auto def_path = std::string_view {
-        "/home/andreilascu/Documents/Repos/InformationFlow/"
-        "build/src/llvm_snippets.def"
-    };
-
-    static constexpr auto lib_path = std::string_view {
-        "/home/andreilascu/Documents/Repos/InformationFlow/"
-        "build/src/libllvm_snippets.so"
-    };
-
-    static constexpr auto out_path = std::string_view { "entropy_out.csv" };
 
     template <typename T, typename R>
-    void log_result(EvalResult&, R, const EvalRunInfo&) const;
+    void log_result(EvalResult&, R&, const EvalRunInfo&) const;
 
     template <typename T, typename R, typename... As>
     std::span<ThreadRunInfo> eval_threads_start(
@@ -215,10 +191,6 @@ public:
     Runner(void);
     ~Runner(void);
 
-    // template <size_t I, typename T, typename R, typename... As>
-    // void do_eval_thread(ThreadRunInfo&, const std::function<R(As...)>&,
-    // std::tuple<As...>&) const;
-
     const EntropyResult run_one(const DefInfo&) const;
     void eval_all(void) const;
 };
@@ -226,4 +198,3 @@ public:
 #include "runner.tpp"
 
 #endif // _EEVAL_RUNNER_HPP
-

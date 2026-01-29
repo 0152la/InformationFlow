@@ -1,5 +1,4 @@
 #include "runner.hpp"
-#include <unordered_map>
 
 /*******************************************************************************
  * DefInfo
@@ -7,13 +6,15 @@
 
 DefInfo::DefInfo(const std::string& line)
 {
+    // Line content for def file
     // opcode, cmp_opcode, name_extra, fn_name(ret_ty)[params_ty]
-    std::regex re("(\\d+),(\\d*),(\\w*),(\\w+)\\((\\w+)\\)\\[(.+)\\]");
-    std::smatch sm;
+    auto re
+        = std::regex { "(\\d+),(\\d*),(\\w*),(\\w+)\\((\\w+)\\)\\[(.+)\\]" };
+    auto sm = std::smatch {};
 
     if (!std::regex_match(line, sm, re))
     {
-        std::cout << "Error matching line " << line << "!\n";
+        fmt::println("Error matching line {}!", line);
         std::exit(1);
     }
 
@@ -26,8 +27,8 @@ DefInfo::DefInfo(const std::string& line)
     this->ret_str = sm[5].str();
 
     this->params_str = sm[6].str();
-    std::istringstream param_iss(sm[6].str());
-    std::string p;
+    auto param_iss = std::istringstream { sm[6].str() };
+    auto p = std::string {};
     while (std::getline(param_iss, p, ','))
     {
         this->params_ty.emplace_back(def_ty_enum::from_str(p));
@@ -37,14 +38,13 @@ DefInfo::DefInfo(const std::string& line)
 std::string
 DefInfo::get_fn_name(void) const
 {
-    std::string name = this->llvm_fn_name;
+    return this->llvm_fn_name;
+}
 
-    if (!this->extra_fn_name.empty())
-    {
-        name += DefInfo::extra_delim + this->extra_fn_name;
-    }
-
-    return name;
+std::string
+DefInfo::get_extra(void) const
+{
+    return this->extra_fn_name;
 }
 
 bool
@@ -83,7 +83,7 @@ DefInfo::check_fop(void) const
 std::string
 DefInfo::to_str(void) const
 {
-    std::ostringstream oss;
+    auto oss = std::ostringstream {};
     oss << "DefInfo == ";
     oss << "LLVM OPC " << this->llvm_opcode << " - ";
     oss << "CMP OPC " << this->cmp_opcode << " - ";
@@ -92,6 +92,7 @@ DefInfo::to_str(void) const
     oss << "RET " << this->ret_str << " - ";
     oss << "PARAMS (" << (this->params_str.empty() ? "void" : this->params_str)
         << ") ==";
+    oss << '\n';
     return oss.str();
 }
 
@@ -112,8 +113,8 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
     }
     else
     {
-        this->bit_sz_min = RunInfo::int_min_bit_sz;
-        this->bit_sz_max = RunInfo::int_max_bit_sz;
+        this->bit_sz_min = Config::int_min_bit_sz;
+        this->bit_sz_max = Config::int_max_bit_sz;
     }
 };
 
@@ -135,31 +136,26 @@ Runner::eval_threads_join(
 
 Runner::Runner(void)
 {
-    this->dl_hdl = dlopen((Runner::lib_path).data(), RTLD_NOW);
+    this->dl_hdl = dlopen((Config::lib_path).data(), RTLD_NOW);
     if (!this->dl_hdl)
     {
         std::cout << "Error opening library :: " << dlerror() << '\n';
         std::exit(1);
     }
-
-    this->out_fd = std::fopen((Runner::out_path).data(), "w");
-    if (this->out_fd == nullptr)
-    {
-        std::perror("Error opening definitions");
-        std::exit(1);
-    }
 }
 
-Runner::~Runner(void)
-{
-    dlclose(this->dl_hdl);
-    fclose(this->out_fd);
-}
+Runner::~Runner(void) { dlclose(this->dl_hdl); }
 
 const EntropyResult
 Runner::run_one(const DefInfo& di) const
 {
     void* fn = dlsym(this->dl_hdl, di.get_fn_name().c_str());
+    if (fn == nullptr)
+    {
+        throw std::runtime_error(fmt::format(
+            "Couldn't find function `{}` in compiled library at `{}`!",
+            di.get_fn_name(), Config::lib_path));
+    }
 
     auto ri = RunInfo { di, fn };
     return this->eval_ret(ri);
@@ -168,29 +164,43 @@ Runner::run_one(const DefInfo& di) const
 void
 Runner::eval_all(void) const
 {
-    std::string buf;
-    std::ifstream def_ifs(this->def_path.data());
-    static int i = 0;
+    auto buf = std::string {};
+    auto def_ifs = std::ifstream { (Config::def_path).data() };
+    auto out_fs_name = fmt::format(Config::out_path,
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()));
+    auto out_fs = std::ofstream { out_fs_name };
+    fmt::println("== Writing output to file `{}`", out_fs_name);
+
     while (std::getline(def_ifs, buf))
     {
-        if (buf.starts_with("opcode"))
+        if (buf.starts_with(Config::def_header_start))
         {
             continue;
         }
 
-        if (buf.find("_add") == std::string::npos)
+        if (buf.find("add") == std::string::npos)
         {
             continue;
         }
-        const DefInfo di(buf);
-        std::cout << di.to_str() << std::endl;
 
-        const EntropyResult er = this->run_one(di);
-        er.print();
+        const auto di = DefInfo { buf };
 
-        // i += 1; if (i == 2) { std::exit(1); }
-        std::exit(1);
+        std::cout << di.to_str();
+        out_fs << di.to_str();
+        if (di.get_extra() == "f32")
+        {
+            fmt::println(
+                out_fs, "!! Skipping `float` function {}!", di.get_fn_name());
+            continue;
+        }
+
+        const auto er = EntropyResult { this->run_one(di) };
+        out_fs << er.to_str();
+        out_fs.flush();
     }
+    out_fs.close();
+    fmt::println("== Done - `{}`", out_fs_name);
 }
 
 const EntropyResult
@@ -204,6 +214,8 @@ Runner::eval_ret(const RunInfo& ri) const
             return this->eval_args<uint32_t>(ri);
         case def_ty_enum::I16:
             return this->eval_args<uint16_t>(ri);
+        case def_ty_enum::I1:
+            return this->eval_args<bool>(ri);
         case def_ty_enum::F32:
             return this->eval_args<float>(ri);
         case def_ty_enum::F16:

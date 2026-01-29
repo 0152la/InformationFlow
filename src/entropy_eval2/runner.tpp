@@ -42,7 +42,7 @@ convert_arg(From init_val)
 
 template <typename T, typename R>
 void
-Runner::log_result(EvalResult& er, R res, const EvalRunInfo& eri) const
+Runner::log_result(EvalResult& er, R& res, const EvalRunInfo& eri) const
 {
     if constexpr (std::is_integral_v<R>)
     {
@@ -69,9 +69,10 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const std::function<R(As...)>& fn,
         size_t arg_val_min = (I == 0) ? tri.tid * tri.stride : 0;
         size_t arg_val_max
             = (I == 0) ? (tri.tid + 1) * tri.stride : tri.eri->max_val;
+        bool handled_nan = false;
         for (size_t x = arg_val_min; x < arg_val_max; ++x)
         {
-            if constexpr (I == EvalRunInfo::divisor_idx)
+            if constexpr (I == Config::divisor_idx)
             {
                 if (tri.eri->is_div && x == 0)
                 {
@@ -81,6 +82,17 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const std::function<R(As...)>& fn,
 
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
+            if constexpr (std::is_floating_point_v<x_arg_t>)
+            {
+                if (std::isnan(static_cast<double>(std::get<I>(curr_args))))
+                {
+                    if (handled_nan)
+                    {
+                        continue;
+                    }
+                    handled_nan = true;
+                }
+            }
             do_eval_thread<I + 1, T, R, As...>(tri, fn, curr_args);
         }
     }
@@ -100,12 +112,13 @@ std::span<ThreadRunInfo>
 Runner::eval_threads_start(
     EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
-    uint8_t thread_count = std::thread::hardware_concurrency();
-    if (thread_count < this->min_thread_count)
+    uint8_t thread_count
+        = std::thread::hardware_concurrency() - Config::other_free_threads;
+    if (thread_count < Config::min_thread_count)
     {
         throw std::runtime_error(
             fmt::format("Expected {} min threads; found {}!",
-                this->min_thread_count, thread_count));
+                Config::min_thread_count, thread_count));
     }
     if (eri.max_val % thread_count != 0)
     {
@@ -118,8 +131,11 @@ Runner::eval_threads_start(
     auto thrs_raw = static_cast<ThreadRunInfo*>(
         calloc(thread_count, sizeof(ThreadRunInfo)));
 
-    fmt::println("== [{:%Y-%m-%d == %H:%M:%S}] Running bit size {} with {} threads",
-        std::chrono::system_clock::now(), eri.bit_sz, thread_count);
+    fmt::println(
+        "== [{:%Y-%m-%d == %H:%M:%S}] Running bit size {} with {} threads",
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()),
+        eri.bit_sz, thread_count);
 
     for (uint8_t t = 0; t < thread_count; ++t)
     {
@@ -136,7 +152,7 @@ template <typename T, typename R, typename... As>
 void
 Runner::dispatch_eval(EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
-    if (eri.bit_sz >= eri.min_par_bit_sz)
+    if (eri.bit_sz >= Config::min_par_bit_sz)
     {
         auto thrs = this->eval_threads_start<T, R, As...>(eri, fn);
         this->eval_threads_join(eri, thrs);
@@ -163,7 +179,7 @@ Runner::do_eval(EvalRunInfo& eri, const std::function<R(As...)>& fn,
     {
         for (size_t x = 0; x < eri.max_val; ++x)
         {
-            if constexpr (I == EvalRunInfo::divisor_idx)
+            if constexpr (I == Config::divisor_idx)
             {
                 if (eri.is_div && x == 0)
                 {
@@ -213,9 +229,9 @@ Runner::exhaust_eval(const RunInfo& ri) const
     {
         auto eval_run_info = EvalRunInfo { b, ri.is_div };
         fmt::println("DO {}", b);
-        auto time_start = EntropyResultEntry::clock_ty::now();
+        auto time_start = Config::clock_ty::now();
         this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
-        auto time_end = EntropyResultEntry::clock_ty::now();
+        auto time_end = Config::clock_ty::now();
         auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             time_end - time_start);
         entropy_res.parse_evalresult(eval_run_info.results, time_dur);

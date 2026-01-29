@@ -4,10 +4,12 @@
 #include <chrono>
 #include <iostream>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 #include "fmt/chrono.h"
 #include "fmt/format.h"
+#include <fmt/base.h>
 
 #include "result.hpp"
 
@@ -20,8 +22,6 @@ public:
 
 struct EntropyResultEntry
 {
-    using clock_ty = std::chrono::steady_clock;
-
     uint8_t bit_sz;
     std::chrono::microseconds dur_ms;
     double entropy;
@@ -49,21 +49,21 @@ struct EntropyResultEntry_cmp
 class EntropyResult
 {
 private:
+    std::set<EntropyResultEntry*, EntropyResultEntry_cmp> data;
+
+    // TODO move comparison to this?
     static bool cmp_data(
         const EntropyResultEntry* fst, const EntropyResultEntry* snd)
     {
         return fst->bit_sz < snd->bit_sz;
     }
 
-    // std::set<EntropyResultEntry*, decltype(&EntropyResult::cmp_data)> data;
-    std::set<EntropyResultEntry*, EntropyResultEntry_cmp> data;
-
 public:
     ~EntropyResult(void);
 
     void add_result(EntropyResultEntry*);
     void parse_evalresult(const EvalResult&, std::chrono::microseconds);
-    void print(void) const;
+    std::string to_str(void) const;
 };
 
 #endif // _EEVAL_ENTROPY_HPP
