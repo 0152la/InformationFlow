@@ -50,7 +50,17 @@ Runner::log_result(EvalResult& er, R& res, const EvalRunInfo& eri) const
     }
     else if constexpr (std::is_floating_point_v<R>)
     {
-        er.add_result(static_cast<T>(res));
+        // TODO check further
+        if (std::isnan(static_cast<double>(res)))
+        {
+            er.add_result(eri.float_nan_val);
+            // res = eri.float_nan_val;
+        }
+        else
+        {
+            // er.add_result(static_cast<T>(res));
+            er.add_result(convert_arg<R, T>(res));
+        }
     }
 }
 
@@ -228,12 +238,20 @@ Runner::exhaust_eval(const RunInfo& ri) const
     for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
     {
         auto eval_run_info = EvalRunInfo { b, ri.is_div };
-        fmt::println("DO {}", b);
+        DEBUG_PRINT("DO {}", b);
         auto time_start = Config::clock_ty::now();
         this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
         auto time_end = Config::clock_ty::now();
         auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             time_end - time_start);
+        if constexpr (std::is_floating_point_v<R>)
+        {
+            DEBUG_PRINT(" == NaN count = {} of {} ({}%)",
+                eval_run_info.results.get_instance(eval_run_info.float_nan_val),
+                eval_run_info.results.get_instance_count(),
+                eval_run_info.results.get_instance(eval_run_info.float_nan_val)
+                    * 100.0 / eval_run_info.results.get_instance_count());
+        }
         entropy_res.parse_evalresult(eval_run_info.results, time_dur);
     }
     return entropy_res;

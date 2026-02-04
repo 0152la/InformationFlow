@@ -10,6 +10,8 @@
 
 #include "fmt/format.h"
 
+#include "config.hpp"
+
 class EvalResult
 {
 public:

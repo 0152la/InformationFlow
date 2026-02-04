@@ -10,17 +10,22 @@ EntropyCalcs::compute_entropy(const EvalResult& res)
     double h_o = 0.0;
     double prob;
     EvalResult::instance_t seen_instances = 0;
-    for (EvalResult::instance_t i = 0; i < res.get_max_res_val(); ++i)
+    EvalResult::instance_t curr_instances;
+    const EvalResult::instance_t total_instances = res.get_instance_count();
+    for (EvalResult::instance_t i = 0;
+        i < res.get_max_res_val() || seen_instances < total_instances;
+        ++i)
     {
         if (res.get_instance(i) == 0)
         {
             continue;
         }
+        curr_instances = res.get_instance(i);
 
-        prob = 1.0 * res.get_instance(i) / res.get_instance_count();
+        prob = 1.0 * curr_instances / total_instances;
         h_o += prob * std::log2(prob);
 
-        seen_instances += 1;
+        seen_instances += curr_instances;
     }
     return -h_o;
 }
@@ -75,6 +80,14 @@ EntropyResult::parse_evalresult(
     auto new_erd = new EntropyResultEntry { er.get_bit_sz(), eval_duration,
         EntropyCalcs::compute_entropy(er),
         EntropyCalcs::compute_uncertainty_coef(er) };
+
+    if (new_erd->uncertainty_coef < 0.0 || new_erd->uncertainty_coef > 1.0)
+    {
+        throw std::runtime_error(
+            fmt::format("Invalid value `{}` for uncertainty coefficient!",
+                new_erd->uncertainty_coef));
+    }
+
     this->add_result(new_erd);
 }
 

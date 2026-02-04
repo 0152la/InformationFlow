@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#define DEBUG_PRINT fmt::println
+
 namespace Config
 {
 using clock_ty = std::chrono::steady_clock;
@@ -19,6 +21,11 @@ constexpr uint8_t min_par_bit_sz = 13;
 constexpr uint8_t min_thread_count = 2;
 // allowed free threads for other computation
 constexpr uint8_t other_free_threads = 0; // 2;
+
+// we set one specific value for `nan`s for floating point types of a given
+// type, which is offset from the maximum value of an unsigned integer type of
+// the same size of that type by this amount
+constexpr uint64_t nan_default_offset = -2;
 
 constexpr auto def_path
     = std::string_view { "/home/andreilascu/Documents/Repos/InformationFlow/"

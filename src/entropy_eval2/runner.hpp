@@ -36,7 +36,7 @@ template <typename From, typename To> union conv_u
     conv_u(From _f) :
         f(_f)
     {
-        static_assert(sizeof(From) == sizeof(To));
+        //static_assert(sizeof(From) == sizeof(To));
     };
 
     To get(void) const { return t; };
@@ -130,12 +130,16 @@ struct EvalRunInfo
     EvalResult results;
     const uint8_t bit_sz;
     const uint64_t max_val;
+
+    const uint64_t float_nan_val;
     const bool is_div;
 
     EvalRunInfo(uint8_t _bs, bool _div) :
         results(EvalResult { _bs }),
         bit_sz(_bs),
-        max_val(std::pow(2, this->bit_sz)),
+        max_val(std::pow(2, _bs)),
+        float_nan_val(
+            static_cast<size_t>(std::pow(2, _bs)) + Config::nan_default_offset),
         is_div(_div) { };
 };
 
