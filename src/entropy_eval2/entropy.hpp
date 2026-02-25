@@ -7,9 +7,9 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "fmt/base.h"
 #include "fmt/chrono.h"
 #include "fmt/format.h"
-#include <fmt/base.h>
 
 #include "result.hpp"
 
@@ -35,6 +35,7 @@ struct EntropyResultEntry
         uncertainty_coef(_uc) { };
 
     const std::string to_str(void) const;
+    const std::string to_str_csv(std::string_view) const;
 };
 
 struct EntropyResultEntry_cmp
@@ -64,6 +65,7 @@ public:
     void add_result(EntropyResultEntry*);
     void parse_evalresult(const EvalResult&, std::chrono::microseconds);
     std::string to_str(void) const;
+    std::string to_str_csv(std::string_view) const;
 };
 
 #endif // _EEVAL_ENTROPY_HPP

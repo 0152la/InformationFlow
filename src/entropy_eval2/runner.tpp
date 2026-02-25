@@ -141,11 +141,11 @@ Runner::eval_threads_start(
     auto thrs_raw = static_cast<ThreadRunInfo*>(
         calloc(thread_count, sizeof(ThreadRunInfo)));
 
-    fmt::println(
-        "== [{:%Y-%m-%d == %H:%M:%S}] Running bit size {} with {} threads",
-        std::chrono::round<std::chrono::seconds>(
-            std::chrono::system_clock::now()),
-        eri.bit_sz, thread_count);
+    // DEBUG_PRINT(
+    //"== [{:%Y-%m-%d == %H:%M:%S}] Running bit size {} with {} threads\n",
+    // std::chrono::round<std::chrono::seconds>(
+    // std::chrono::system_clock::now()),
+    // eri.bit_sz, thread_count);
 
     for (uint8_t t = 0; t < thread_count; ++t)
     {
@@ -238,7 +238,15 @@ Runner::exhaust_eval(const RunInfo& ri) const
     for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
     {
         auto eval_run_info = EvalRunInfo { b, ri.is_div };
-        DEBUG_PRINT("DO {}", b);
+        std::cout << fmt::format("\r[{}] Running {} {} bits",
+            std::chrono::round<std::chrono::seconds>(
+                std::chrono::system_clock::now()),
+            ri.di->llvm_fn_name, b)
+                  << std::flush;
+        // DEBUG_PRINT("\r[{}] Running {} {} bits",
+        // std::chrono::round<std::chrono::seconds>(
+        // std::chrono::system_clock::now()),
+        // ri.di->llvm_fn_name, b);
         auto time_start = Config::clock_ty::now();
         this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
         auto time_end = Config::clock_ty::now();
@@ -246,14 +254,16 @@ Runner::exhaust_eval(const RunInfo& ri) const
             time_end - time_start);
         if constexpr (std::is_floating_point_v<R>)
         {
-            DEBUG_PRINT(" == NaN count = {} of {} ({}%)",
-                eval_run_info.results.get_instance(eval_run_info.float_nan_val),
-                eval_run_info.results.get_instance_count(),
+            DEBUG_PRINT(" == NaN count = {} of {} ({}%)\n",
+                fmt::group_digits(eval_run_info.results.get_instance(
+                    eval_run_info.float_nan_val)),
+                fmt::group_digits(eval_run_info.results.get_instance_count()),
                 eval_run_info.results.get_instance(eval_run_info.float_nan_val)
                     * 100.0 / eval_run_info.results.get_instance_count());
         }
         entropy_res.parse_evalresult(eval_run_info.results, time_dur);
     }
+    std::cout << '\r';
     return entropy_res;
 }
 

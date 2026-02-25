@@ -21,6 +21,7 @@
 #include <unordered_map>
 
 #include "fmt/base.h"
+#include "fmt/color.h"
 #include "fmt/format.h"
 #include "fmt/ostream.h"
 
@@ -36,7 +37,12 @@ template <typename From, typename To> union conv_u
     conv_u(From _f) :
         f(_f)
     {
-        //static_assert(sizeof(From) == sizeof(To));
+        if (sizeof(From) != sizeof(To))
+        {
+            throw std::runtime_error(fmt::format(
+                "Incompatible type conversion: from size {} to size {}.",
+                sizeof(From), sizeof(To)));
+        }
     };
 
     To get(void) const { return t; };
@@ -162,6 +168,12 @@ class Runner
 {
 private:
     void* dl_hdl;
+    std::ofstream log_fs;
+    std::ofstream csv_fs;
+
+    void logs_os_init(void);
+    void logs_os_close(void);
+    void log_one_run(const EntropyResult&, const DefInfo&);
 
     template <typename T, typename R>
     void log_result(EvalResult&, R&, const EvalRunInfo&) const;
@@ -196,7 +208,7 @@ public:
     ~Runner(void);
 
     const EntropyResult run_one(const DefInfo&) const;
-    void eval_all(void) const;
+    void eval_all(void);
 };
 
 #include "runner.tpp"

@@ -86,13 +86,17 @@ DefInfo::to_str(void) const
     auto oss = std::ostringstream {};
     oss << "DefInfo == ";
     oss << "LLVM OPC " << this->llvm_opcode << " - ";
-    oss << "CMP OPC " << this->cmp_opcode << " - ";
-    oss << "EXTRA " << this->extra_fn_name << " - ";
+    oss << "CMP OPC "
+        << (this->cmp_opcode == static_cast<unsigned int>(-1)
+                   ? "n/a"
+                   : std::to_string(this->cmp_opcode))
+        << " - ";
+    oss << "EXTRA "
+        << (this->extra_fn_name.empty() ? "n/a" : this->extra_fn_name) << " - ";
     oss << "FN " << this->llvm_fn_name << " - ";
     oss << "RET " << this->ret_str << " - ";
     oss << "PARAMS (" << (this->params_str.empty() ? "void" : this->params_str)
         << ") ==";
-    oss << '\n';
     return oss.str();
 }
 
@@ -121,6 +125,42 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
 /*******************************************************************************
  * Runner
  ******************************************************************************/
+
+void
+Runner::logs_os_init(void)
+{
+    auto out_log_fs_name = fmt::format(Config::out_log_path,
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()));
+    auto out_csv_fs_name = fmt::format(Config::out_csv_path,
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()));
+
+    this->log_fs = std::ofstream { out_log_fs_name };
+    this->csv_fs = std::ofstream { out_csv_fs_name };
+    this->csv_fs << "llvm_opcode,cmp_opcode,bit_size,uncertainty_coef\n";
+
+    DEBUG_PRINT(
+        "== Log - `{}` == csv - `{}`\n", out_log_fs_name, out_csv_fs_name);
+}
+
+void
+Runner::logs_os_close(void)
+{
+    this->log_fs.close();
+    this->csv_fs.close();
+}
+
+void
+Runner::log_one_run(const EntropyResult& res, const DefInfo& def)
+{
+    this->log_fs << def.to_str() << '\n';
+    this->log_fs << res.to_str();
+    this->log_fs.flush();
+
+    this->csv_fs << res.to_str_csv(def.llvm_fn_name);
+    this->csv_fs.flush();
+}
 
 void
 Runner::eval_threads_join(
@@ -162,15 +202,11 @@ Runner::run_one(const DefInfo& di) const
 }
 
 void
-Runner::eval_all(void) const
+Runner::eval_all(void)
 {
     auto buf = std::string {};
     auto def_ifs = std::ifstream { (Config::def_path).data() };
-    auto out_fs_name = fmt::format(Config::out_path,
-        std::chrono::round<std::chrono::seconds>(
-            std::chrono::system_clock::now()));
-    auto out_fs = std::ofstream { out_fs_name };
-    fmt::println("== Writing output to file `{}`", out_fs_name);
+    this->logs_os_init();
 
     while (std::getline(def_ifs, buf))
     {
@@ -179,28 +215,41 @@ Runner::eval_all(void) const
             continue;
         }
 
-        if (buf.find("add") == std::string::npos)
-        {
-            continue;
-        }
+        //if (buf.find("sitofp") == std::string::npos)
+        //{
+            //continue;
+        //}
+
+        //if (buf.find("_f") != std::string::npos
+            //&& buf.find("_fcmp") == std::string::npos)
+        //{
+            //continue;
+        //}
+
+        //if (buf.find("_fcmp") != std::string::npos)
+        //{
+            //continue;
+        //}
 
         const auto di = DefInfo { buf };
+        DEBUG_PRINT(fmt::fg(fmt::color::red) | fmt::emphasis::bold, "[{}] ",
+            std::chrono::round<std::chrono::seconds>(
+                std::chrono::system_clock::now()));
+        DEBUG_PRINT("{}\n", di.to_str());
 
-        std::cout << di.to_str();
-        out_fs << di.to_str();
+        // TODO put this behind a flag
         if (di.get_extra() == "f32")
         {
-            fmt::println(
-                out_fs, "!! Skipping `float` function {}!", di.get_fn_name());
+            fmt::println(this->log_fs, "!! Skipping `float` function {}!",
+                di.get_fn_name());
             continue;
         }
 
         const auto er = EntropyResult { this->run_one(di) };
-        out_fs << er.to_str();
-        out_fs.flush();
+        log_one_run(er, di);
     }
-    out_fs.close();
-    fmt::println("== Done - `{}`", out_fs_name);
+
+    this->logs_os_close();
 }
 
 const EntropyResult

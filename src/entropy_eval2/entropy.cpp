@@ -13,8 +13,7 @@ EntropyCalcs::compute_entropy(const EvalResult& res)
     EvalResult::instance_t curr_instances;
     const EvalResult::instance_t total_instances = res.get_instance_count();
     for (EvalResult::instance_t i = 0;
-        i < res.get_max_res_val() || seen_instances < total_instances;
-        ++i)
+        i < res.get_max_res_val() || seen_instances < total_instances; ++i)
     {
         if (res.get_instance(i) == 0)
         {
@@ -48,6 +47,14 @@ EntropyResultEntry::to_str(void) const
         "Bits {} -- Entropy Outs {} -- UC {} -- Duration {} - {}", this->bit_sz,
         this->entropy, this->uncertainty_coef, this->dur_ms,
         std::chrono::duration_cast<std::chrono::seconds>(this->dur_ms));
+}
+
+const std::string
+EntropyResultEntry::to_str_csv(
+    std::string_view llvm_fn_name) const
+{
+    return fmt::format("{},{},{}", llvm_fn_name,
+        this->bit_sz, this->uncertainty_coef);
 }
 
 /*******************************************************************************
@@ -99,6 +106,18 @@ EntropyResult::to_str(void) const
     for (const auto erd : this->data)
     {
         oss << erd->to_str() << '\n';
+    }
+    return oss.str();
+}
+
+std::string
+EntropyResult::to_str_csv(
+    std::string_view llvm_fn_name) const
+{
+    auto oss = std::ostringstream {};
+    for (const auto erd : this->data)
+    {
+        oss << erd->to_str_csv(llvm_fn_name) << '\n';
     }
     return oss.str();
 }

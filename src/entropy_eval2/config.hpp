@@ -1,16 +1,18 @@
 #ifndef _EEVAL_CONFIG_HPP
 #define _EEVAL_CONFIG_HPP
 
+#include <chrono>
 #include <cstdint>
+#include <string_view>
 
-#define DEBUG_PRINT fmt::println
+#define DEBUG_PRINT fmt::print
 
 namespace Config
 {
 using clock_ty = std::chrono::steady_clock;
 
-constexpr uint8_t int_min_bit_sz = 8;
-constexpr uint8_t int_max_bit_sz = 17;
+constexpr uint8_t int_min_bit_sz = 2;
+constexpr uint8_t int_max_bit_sz = 19;
 
 // index for divisor operand, to prevent division by 0
 constexpr uint8_t divisor_idx = 1;
@@ -37,7 +39,10 @@ constexpr auto lib_path
     = std::string_view { "/home/andreilascu/Documents/Repos/InformationFlow/"
                          "build/src/libllvm_snippets.so" };
 
-constexpr auto out_path
+constexpr auto out_log_path
+    = std::string_view { "entropy_out-{:%Y%m%d-%H%M%S}.log" };
+
+constexpr auto out_csv_path
     = std::string_view { "entropy_out-{:%Y%m%d-%H%M%S}.csv" };
 
 }
