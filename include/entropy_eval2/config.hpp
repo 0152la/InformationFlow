@@ -12,7 +12,7 @@ namespace Config
 using clock_ty = std::chrono::steady_clock;
 
 constexpr uint8_t int_min_bit_sz = 2;
-constexpr uint8_t int_max_bit_sz = 19;
+constexpr uint8_t int_max_bit_sz = 10;
 
 // index for divisor operand, to prevent division by 0
 constexpr uint8_t divisor_idx = 1;

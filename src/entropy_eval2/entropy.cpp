@@ -26,6 +26,7 @@ EntropyCalcs::compute_entropy(const EvalResult& res)
 
         seen_instances += curr_instances;
     }
+
     return -h_o;
 }
 
@@ -50,11 +51,10 @@ EntropyResultEntry::to_str(void) const
 }
 
 const std::string
-EntropyResultEntry::to_str_csv(
-    std::string_view llvm_fn_name) const
+EntropyResultEntry::to_str_csv(std::string_view llvm_fn_name) const
 {
-    return fmt::format("{},{},{}", llvm_fn_name,
-        this->bit_sz, this->uncertainty_coef);
+    return fmt::format(
+        "{},{},{}", llvm_fn_name, this->bit_sz, this->uncertainty_coef);
 }
 
 /*******************************************************************************
@@ -111,8 +111,7 @@ EntropyResult::to_str(void) const
 }
 
 std::string
-EntropyResult::to_str_csv(
-    std::string_view llvm_fn_name) const
+EntropyResult::to_str_csv(std::string_view llvm_fn_name) const
 {
     auto oss = std::ostringstream {};
     for (const auto erd : this->data)

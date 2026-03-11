@@ -1,4 +1,5 @@
 #include "runner.hpp"
+#include "config.hpp"
 
 /*******************************************************************************
  * DefInfo
@@ -45,6 +46,17 @@ std::string
 DefInfo::get_extra(void) const
 {
     return this->extra_fn_name;
+}
+
+std::string
+DefInfo::get_full_name(void) const
+{
+    std::string full_name = this->llvm_fn_name;
+    if (!this->extra_fn_name.empty())
+    {
+        full_name += this->extra_delim + this->extra_fn_name;
+    }
+    return full_name;
 }
 
 bool
@@ -123,25 +135,81 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
 };
 
 /*******************************************************************************
+ * EvalRunInfo
+ ******************************************************************************/
+
+EvalRunInfo::EvalRunInfo(uint8_t _out_bs, bool _is_div) :
+    out_bit_sz(_out_bs),
+    max_val(std::pow(2, _out_bs)),
+    is_div(_is_div) { };
+
+/*******************************************************************************
+ * InputData
+ ******************************************************************************/
+
+InputData::InputData(uint8_t _p_count, uint8_t _bit_sz, bool is_div_op) :
+    parameter_count(_p_count)
+{
+    this->parameter_ranges.reserve(this->parameter_count);
+    for (size_t i = 0; i < this->parameter_count; ++i)
+    {
+        parameter_ranges.emplace_back(InputDataRange {
+            0, static_cast<uint64_t>(std::pow(2, _bit_sz)) - 1 });
+    }
+
+    if (is_div_op)
+    {
+        this->parameter_ranges.at(Config::divisor_idx).set_start(1);
+    }
+}
+
+uint64_t
+InputData::get_input_count(void)
+{
+    uint64_t acc = 1;
+    for (const auto& idr : this->parameter_ranges)
+    {
+        acc *= idr.get_count();
+    }
+    return acc;
+}
+
+auto
+InputData::get_input_range(uint8_t param) const
+    -> decltype(this->parameter_ranges)::const_reference
+{
+    return this->parameter_ranges.at(param);
+}
+
+/*******************************************************************************
+ * ThreadRunInfo
+ ******************************************************************************/
+
+ThreadRunInfo::ThreadRunInfo(
+    EvalRunInfo& _eri, uint8_t _tid, size_t _stride, bool _used_cache) :
+    eri(&_eri),
+    local_results(EvalResult { _eri.out_bit_sz }),
+    tid(_tid),
+    stride(_stride),
+    used_cache(_used_cache) { };
+
+/*******************************************************************************
  * Runner
  ******************************************************************************/
 
 void
 Runner::logs_os_init(void)
 {
-    auto out_log_fs_name = fmt::format(Config::out_log_path,
+    this->log_fs_path = fmt::format(Config::out_log_path,
         std::chrono::round<std::chrono::seconds>(
             std::chrono::system_clock::now()));
-    auto out_csv_fs_name = fmt::format(Config::out_csv_path,
+    this->csv_fs_path = fmt::format(Config::out_csv_path,
         std::chrono::round<std::chrono::seconds>(
             std::chrono::system_clock::now()));
 
-    this->log_fs = std::ofstream { out_log_fs_name };
-    this->csv_fs = std::ofstream { out_csv_fs_name };
+    this->log_fs = std::ofstream { this->log_fs_path };
+    this->csv_fs = std::ofstream { this->csv_fs_path };
     this->csv_fs << "llvm_opcode,cmp_opcode,bit_size,uncertainty_coef\n";
-
-    DEBUG_PRINT(
-        "== Log - `{}` == csv - `{}`\n", out_log_fs_name, out_csv_fs_name);
 }
 
 void
@@ -149,6 +217,8 @@ Runner::logs_os_close(void)
 {
     this->log_fs.close();
     this->csv_fs.close();
+    DEBUG_PRINT(
+        "== Log - `{}` == csv - `{}`\n", this->log_fs_path, this->csv_fs_path);
 }
 
 void
@@ -164,12 +234,12 @@ Runner::log_one_run(const EntropyResult& res, const DefInfo& def)
 
 void
 Runner::eval_threads_join(
-    EvalRunInfo& eri, const std::span<ThreadRunInfo>& tris) const
+    EvalResult& res, const std::span<ThreadRunInfo>& tris) const
 {
     for (auto& tri : tris)
     {
         tri.thr.join();
-        eri.results.combine_results(tri.local_results);
+        res.combine_results(tri.local_results);
         tri.~ThreadRunInfo();
     }
 }
@@ -186,6 +256,45 @@ Runner::Runner(void)
 
 Runner::~Runner(void) { dlclose(this->dl_hdl); }
 
+void
+Runner::init_all(void)
+{
+    auto buf = std::string {};
+    auto def_ifs = std::ifstream { (Config::def_path).data() };
+    this->logs_os_init();
+
+    while (std::getline(def_ifs, buf))
+    {
+        if (buf.starts_with(Config::def_header_start))
+        {
+            continue;
+        }
+
+        this->defs.emplace_back(buf);
+    }
+}
+
+const DefInfo&
+Runner::get_def_info(std::string_view fn_name) const
+{
+    for (const auto& di : this->defs)
+    {
+        if (di.get_full_name() == fn_name)
+        {
+            return di;
+        }
+    }
+
+    throw std::runtime_error(
+        fmt::format("Couldn't find DefInfo for name `{}`!", fn_name));
+}
+
+const EntropyResult
+Runner::run_one(std::string_view fn_name) const
+{
+    return this->run_one(this->get_def_info(fn_name));
+}
+
 const EntropyResult
 Runner::run_one(const DefInfo& di) const
 {
@@ -201,37 +310,12 @@ Runner::run_one(const DefInfo& di) const
     return this->eval_ret(ri);
 }
 
+
 void
 Runner::eval_all(void)
 {
-    auto buf = std::string {};
-    auto def_ifs = std::ifstream { (Config::def_path).data() };
-    this->logs_os_init();
-
-    while (std::getline(def_ifs, buf))
+    for (const auto& di : this->defs)
     {
-        if (buf.starts_with(Config::def_header_start))
-        {
-            continue;
-        }
-
-        //if (buf.find("sitofp") == std::string::npos)
-        //{
-            //continue;
-        //}
-
-        //if (buf.find("_f") != std::string::npos
-            //&& buf.find("_fcmp") == std::string::npos)
-        //{
-            //continue;
-        //}
-
-        //if (buf.find("_fcmp") != std::string::npos)
-        //{
-            //continue;
-        //}
-
-        const auto di = DefInfo { buf };
         DEBUG_PRINT(fmt::fg(fmt::color::red) | fmt::emphasis::bold, "[{}] ",
             std::chrono::round<std::chrono::seconds>(
                 std::chrono::system_clock::now()));

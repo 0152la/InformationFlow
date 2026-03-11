@@ -21,6 +21,23 @@ inline constexpr bool all_same_v = (sizeof...(Ts) == 0)
     ? true
     : all_same<std::tuple_element_t<0, std::tuple<Ts...>>, Ts...>::value;
 
+// Check if all values in a tuple fulfill come condition
+template <typename Fn, typename Tuple, size_t... Is>
+bool
+check_tuple_impl(Fn&& fn, Tuple&& t, std::index_sequence<Is...>)
+{
+    return (fn(std::get<Is>(std::forward<Tuple>(t))) && ...);
+}
+
+template <typename Fn, typename Tuple>
+bool
+check_tuple(Fn&& fn, Tuple&& t)
+{
+    using T = std::remove_reference_t<Tuple>;
+    return check_tuple_impl(std::forward<Fn>(fn), std::forward<T>(t),
+        std::make_index_sequence<std::tuple_size_v<T>> {});
+}
+
 // Enforce `is_floating_point` check on `_Float16` to return true
 namespace std
 {
@@ -42,85 +59,65 @@ convert_arg(From init_val)
 
 template <typename T, typename R>
 void
-Runner::log_result(EvalResult& er, R& res, const EvalRunInfo& eri) const
+Runner::log_result(EvalResult& er, R& res) const
 {
     if constexpr (std::is_integral_v<R>)
     {
-        er.add_result(res % eri.max_val);
+        er.add_result(res % er.get_max_res_val());
     }
     else if constexpr (std::is_floating_point_v<R>)
     {
-        // TODO check further
-        if (std::isnan(static_cast<double>(res)))
-        {
-            er.add_result(eri.float_nan_val);
-            // res = eri.float_nan_val;
-        }
-        else
-        {
-            // er.add_result(static_cast<T>(res));
-            er.add_result(convert_arg<R, T>(res));
-        }
+        er.add_result(convert_arg<R, T>(res));
     }
 }
 
 template <size_t I, typename T, typename R, typename... As>
 void
-Runner::do_eval_thread(ThreadRunInfo& tri, const std::function<R(As...)>& fn,
-    std::tuple<As...>& curr_args) const
+Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
+    const std::function<R(As...)>& fn, std::tuple<As...>& curr_args) const
 {
     if constexpr (I == sizeof...(As))
     {
+        // if (tri.local_results.check_used_cache()
+        if (tri.used_cache
+            && check_tuple([&tri](auto arg)
+                { return arg < std::pow(2, tri.eri->out_bit_sz - 1); },
+                curr_args))
+        {
+            return;
+        }
         R res = std::apply(fn, curr_args);
-        this->log_result<T, R>(tri.local_results, res, *tri.eri);
+        this->log_result<T, R>(tri.local_results, res);
     }
     else
     {
-        size_t arg_val_min = (I == 0) ? tri.tid * tri.stride : 0;
-        size_t arg_val_max
-            = (I == 0) ? (tri.tid + 1) * tri.stride : tri.eri->max_val;
-        bool handled_nan = false;
-        for (size_t x = arg_val_min; x < arg_val_max; ++x)
+        // size_t arg_val_min = (I == 0) ? tri.tid * tri.stride : 0;
+        // size_t arg_val_max
+        //= (I == 0) ? (tri.tid + 1) * tri.stride : tri.eri->max_val;
+        // for (size_t x = arg_val_min; x < arg_val_max; ++x)
+        for (size_t x = inputs.get_input_range(I).start;
+            x < inputs.get_input_range(I).end; ++x)
         {
-            if constexpr (I == Config::divisor_idx)
-            {
-                if (tri.eri->is_div && x == 0)
-                {
-                    continue;
-                }
-            }
-
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
-            if constexpr (std::is_floating_point_v<x_arg_t>)
-            {
-                if (std::isnan(static_cast<double>(std::get<I>(curr_args))))
-                {
-                    if (handled_nan)
-                    {
-                        continue;
-                    }
-                    handled_nan = true;
-                }
-            }
-            do_eval_thread<I + 1, T, R, As...>(tri, fn, curr_args);
+            do_eval_thread<I + 1, T, R, As...>(tri, inputs, fn, curr_args);
         }
     }
 }
 
 template <typename T, typename R, typename... As>
 void
-Runner::do_eval_thread_init(
-    ThreadRunInfo& tri, const std::function<R(As...)>& fn) const
+Runner::do_eval_thread_init(ThreadRunInfo& tri, InputData inputs,
+    const std::function<R(As...)>& fn) const
 {
     auto tr_args = std::tuple<As...> {};
-    this->do_eval_thread<0, T, R, As...>(tri, fn, tr_args);
+    this->do_eval_thread<0, T, R, As...>(tri, inputs, fn, tr_args);
 }
 
 template <typename T, typename R, typename... As>
 std::span<ThreadRunInfo>
 Runner::eval_threads_start(
-    EvalRunInfo& eri, const std::function<R(As...)>& fn) const
+    EvalRunInfo& eri, bool used_cache, const std::function<R(As...)>& fn) const
 {
     uint8_t thread_count
         = std::thread::hardware_concurrency() - Config::other_free_threads;
@@ -149,57 +146,70 @@ Runner::eval_threads_start(
 
     for (uint8_t t = 0; t < thread_count; ++t)
     {
-        new (&thrs_raw[t]) ThreadRunInfo { eri, t, eri.max_val / thread_count };
+        auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
+        id.parameter_ranges.front().set_start(
+            thrs_raw[t].tid * thrs_raw[t].stride);
+        id.parameter_ranges.front().set_end(
+            (thrs_raw[t].tid + 1) * thrs_raw[t].stride);
+        new (&thrs_raw[t])
+            ThreadRunInfo { eri, t, eri.max_val / thread_count, used_cache };
+
         thrs_raw[t].thr
             = std::thread { &Runner::do_eval_thread_init<T, R, As...>, this,
-                  std::ref(thrs_raw[t]), fn };
+                  std::ref(thrs_raw[t]), id, fn };
     }
 
     return std::span(thrs_raw, thread_count);
 }
 
 template <typename T, typename R, typename... As>
-void
-Runner::dispatch_eval(EvalRunInfo& eri, const std::function<R(As...)>& fn) const
+const EvalResult
+Runner::dispatch_eval(EvalRunInfo& eri, EvalResultCache& er_cache,
+    const std::function<R(As...)>& fn) const
 {
-    if (eri.bit_sz >= Config::min_par_bit_sz)
+    auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
+    auto results = EvalResult { eri.out_bit_sz, er_cache };
+    if (eri.out_bit_sz >= Config::min_par_bit_sz)
     {
-        auto thrs = this->eval_threads_start<T, R, As...>(eri, fn);
-        this->eval_threads_join(eri, thrs);
+        auto thrs = this->eval_threads_start<T, R, As...>(
+            eri, results.check_used_cache(), fn);
+        this->eval_threads_join(results, thrs);
         free(thrs.data());
     }
     else
     {
         auto curr_args = std::tuple<As...> {};
-        this->do_eval<0, T, R, As...>(eri, fn, curr_args);
+        this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
     }
+    assert(results.get_instance_count() == id.get_input_count());
+    return results;
 }
 
 template <size_t I, typename T, typename R, typename... As>
 void
-Runner::do_eval(EvalRunInfo& eri, const std::function<R(As...)>& fn,
-    std::tuple<As...>& curr_args) const
+Runner::do_eval(EvalResult& results, const InputData& inputs,
+    const std::function<R(As...)>& fn, std::tuple<As...>& curr_args) const
 {
     if constexpr (I == sizeof...(As))
     {
+        if (results.check_used_cache()
+            && check_tuple([&results](auto arg)
+                { return arg < std::pow(2, results.get_bit_sz() - 1); },
+                curr_args))
+        {
+            return;
+        }
         R res = std::apply(fn, curr_args);
-        this->log_result<T, R>(eri.results, res, eri);
+        this->log_result<T, R>(results, res);
     }
     else
     {
-        for (size_t x = 0; x < eri.max_val; ++x)
+        for (size_t x = inputs.get_input_range(I).start;
+            x < inputs.get_input_range(I).end; ++x)
         {
-            if constexpr (I == Config::divisor_idx)
-            {
-                if (eri.is_div && x == 0)
-                {
-                    continue;
-                }
-            }
-
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
-            do_eval<I + 1, T, R, As...>(eri, fn, curr_args);
+            do_eval<I + 1, T, R, As...>(results, inputs, fn, curr_args);
         }
     }
 }
@@ -235,33 +245,34 @@ Runner::exhaust_eval(const RunInfo& ri) const
         }
     }
 
+    // TODO prep InputData
+
+    auto cache = EvalResultCache {};
     for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
     {
         auto eval_run_info = EvalRunInfo { b, ri.is_div };
-        std::cout << fmt::format("\r[{}] Running {} {} bits",
+        // std::cout << '\r';
+        std::cout << fmt::format("[{}] Running {} {} bits",
             std::chrono::round<std::chrono::seconds>(
                 std::chrono::system_clock::now()),
             ri.di->llvm_fn_name, b)
                   << std::flush;
+        std::cout << '\n';
         // DEBUG_PRINT("\r[{}] Running {} {} bits",
         // std::chrono::round<std::chrono::seconds>(
         // std::chrono::system_clock::now()),
         // ri.di->llvm_fn_name, b);
         auto time_start = Config::clock_ty::now();
-        this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
+        auto results
+            = this->dispatch_eval<T, R, Args...>(eval_run_info, cache, fn);
         auto time_end = Config::clock_ty::now();
         auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             time_end - time_start);
-        if constexpr (std::is_floating_point_v<R>)
+        entropy_res.parse_evalresult(results, time_dur);
+        if (b >= Config::min_par_bit_sz)
         {
-            DEBUG_PRINT(" == NaN count = {} of {} ({}%)\n",
-                fmt::group_digits(eval_run_info.results.get_instance(
-                    eval_run_info.float_nan_val)),
-                fmt::group_digits(eval_run_info.results.get_instance_count()),
-                eval_run_info.results.get_instance(eval_run_info.float_nan_val)
-                    * 100.0 / eval_run_info.results.get_instance_count());
+            cache.set_results(results);
         }
-        entropy_res.parse_evalresult(eval_run_info.results, time_dur);
     }
     std::cout << '\r';
     return entropy_res;

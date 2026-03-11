@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 
@@ -112,6 +113,7 @@ struct DefInfo
     DefInfo(const std::string&);
     std::string get_fn_name(void) const;
     std::string get_extra(void) const;
+    std::string get_full_name(void) const;
     bool check_div(void) const;
     bool check_fop(void) const;
     std::string to_str(void) const;
@@ -131,22 +133,62 @@ struct RunInfo
     RunInfo(const DefInfo&, void*);
 };
 
+struct InputDataRange
+{
+    uint64_t start;
+    uint64_t end;
+
+    InputDataRange(uint64_t _st, uint64_t _ed) :
+        start(_st),
+        end(_ed)
+    {
+        this->check_range();
+    };
+
+    void set_start(uint64_t new_st)
+    {
+        this->start = new_st;
+        this->check_range();
+    };
+
+    void set_end(uint64_t new_ed)
+    {
+        this->end = new_ed;
+        this->check_range();
+    };
+
+    uint64_t get_count(void) const { return this->end - this->start + 1; };
+
+private:
+    void check_range(void) const
+    {
+        if (start > end)
+        {
+            throw std::runtime_error(fmt::format(
+                "Invalid range [{}, {}] given!", this->start, this->end));
+        }
+    }
+};
+
+struct InputData
+{
+    uint8_t parameter_count;
+    std::vector<InputDataRange> parameter_ranges;
+
+    InputData(uint8_t, uint8_t, bool);
+    uint64_t get_input_count(void);
+    auto get_input_range(uint8_t) const
+        -> decltype(this->parameter_ranges)::const_reference;
+};
+
 struct EvalRunInfo
 {
-    EvalResult results;
-    const uint8_t bit_sz;
+    const uint8_t out_bit_sz;
     const uint64_t max_val;
 
-    const uint64_t float_nan_val;
-    const bool is_div;
+    bool is_div = false;
 
-    EvalRunInfo(uint8_t _bs, bool _div) :
-        results(EvalResult { _bs }),
-        bit_sz(_bs),
-        max_val(std::pow(2, _bs)),
-        float_nan_val(
-            static_cast<size_t>(std::pow(2, _bs)) + Config::nan_default_offset),
-        is_div(_div) { };
+    EvalRunInfo(uint8_t, bool);
 };
 
 struct ThreadRunInfo
@@ -156,45 +198,47 @@ struct ThreadRunInfo
     uint8_t tid;
     size_t stride;
     std::thread thr;
+    bool used_cache;
 
-    ThreadRunInfo(EvalRunInfo& _eri, uint8_t _tid, size_t _stride) :
-        eri(&_eri),
-        local_results(EvalResult { _eri.bit_sz }),
-        tid(_tid),
-        stride(_stride) { };
+    ThreadRunInfo(EvalRunInfo&, uint8_t, size_t, bool);
 };
 
 class Runner
 {
 private:
     void* dl_hdl;
+    std::string log_fs_path;
+    std::string csv_fs_path;
     std::ofstream log_fs;
     std::ofstream csv_fs;
+
+    std::vector<DefInfo> defs;
+
+    const DefInfo& get_def_info(std::string_view) const;
 
     void logs_os_init(void);
     void logs_os_close(void);
     void log_one_run(const EntropyResult&, const DefInfo&);
-
-    template <typename T, typename R>
-    void log_result(EvalResult&, R&, const EvalRunInfo&) const;
+    template <typename T, typename R> void log_result(EvalResult&, R&) const;
 
     template <typename T, typename R, typename... As>
     std::span<ThreadRunInfo> eval_threads_start(
-        EvalRunInfo&, const std::function<R(As...)>&) const;
-    void eval_threads_join(EvalRunInfo&, const std::span<ThreadRunInfo>&) const;
+        EvalRunInfo&, bool, const std::function<R(As...)>&) const;
+    void eval_threads_join(EvalResult&, const std::span<ThreadRunInfo>&) const;
     template <typename T, typename R, typename... As>
     void do_eval_thread_init(
-        ThreadRunInfo&, const std::function<R(As...)>&) const;
+        ThreadRunInfo&, InputData, const std::function<R(As...)>&) const;
 
     template <size_t I, typename T, typename R, typename... As>
-    void do_eval_thread(ThreadRunInfo&, const std::function<R(As...)>&,
-        std::tuple<As...>&) const;
+    void do_eval_thread(ThreadRunInfo&, const InputData&,
+        const std::function<R(As...)>&, std::tuple<As...>&) const;
     template <size_t I, typename T, typename R, typename... As>
-    void do_eval(
-        EvalRunInfo&, const std::function<R(As...)>&, std::tuple<As...>&) const;
+    void do_eval(EvalResult&, const InputData&, const std::function<R(As...)>&,
+        std::tuple<As...>&) const;
 
     template <typename T, typename R, typename... As>
-    void dispatch_eval(EvalRunInfo&, const std::function<R(As...)>&) const;
+    const EvalResult dispatch_eval(
+        EvalRunInfo&, EvalResultCache&, const std::function<R(As...)>&) const;
     template <typename T, typename R, typename... Args>
     const EntropyResult exhaust_eval(const RunInfo&) const;
 
@@ -207,8 +251,11 @@ public:
     Runner(void);
     ~Runner(void);
 
-    const EntropyResult run_one(const DefInfo&) const;
+    void init_all(void);
     void eval_all(void);
+
+    const EntropyResult run_one(std::string_view) const;
+    const EntropyResult run_one(const DefInfo&) const;
 };
 
 #include "runner.tpp"
