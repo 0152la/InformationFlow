@@ -1,9 +1,3 @@
-#include <chrono>
-#include <stdexcept>
-#include <tuple>
-#include <type_traits>
-#include <utility>
-
 // Helper templates
 
 // Get the first type of a tuple
@@ -91,12 +85,8 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
     }
     else
     {
-        // size_t arg_val_min = (I == 0) ? tri.tid * tri.stride : 0;
-        // size_t arg_val_max
-        //= (I == 0) ? (tri.tid + 1) * tri.stride : tri.eri->max_val;
-        // for (size_t x = arg_val_min; x < arg_val_max; ++x)
         for (size_t x = inputs.get_input_range(I).start;
-            x < inputs.get_input_range(I).end; ++x)
+            x <= inputs.get_input_range(I).end; ++x)
         {
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
@@ -146,13 +136,13 @@ Runner::eval_threads_start(
 
     for (uint8_t t = 0; t < thread_count; ++t)
     {
+        new (&thrs_raw[t])
+            ThreadRunInfo { eri, t, eri.max_val / thread_count, used_cache };
         auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
         id.parameter_ranges.front().set_start(
             thrs_raw[t].tid * thrs_raw[t].stride);
         id.parameter_ranges.front().set_end(
-            (thrs_raw[t].tid + 1) * thrs_raw[t].stride);
-        new (&thrs_raw[t])
-            ThreadRunInfo { eri, t, eri.max_val / thread_count, used_cache };
+            (thrs_raw[t].tid + 1) * thrs_raw[t].stride - 1);
 
         thrs_raw[t].thr
             = std::thread { &Runner::do_eval_thread_init<T, R, As...>, this,
@@ -181,7 +171,15 @@ Runner::dispatch_eval(EvalRunInfo& eri, EvalResultCache& er_cache,
         auto curr_args = std::tuple<As...> {};
         this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
     }
-    assert(results.get_instance_count() == id.get_input_count());
+
+    if (results.get_instance_count() != id.get_input_count())
+    {
+        throw std::runtime_error(
+            fmt::format("Mismatch for bit size {}: expected {} -- seen {}!",
+                eri.out_bit_sz, fmt::group_digits(id.get_input_count()),
+                fmt::group_digits(results.get_instance_count())));
+    }
+
     return results;
 }
 
@@ -205,7 +203,7 @@ Runner::do_eval(EvalResult& results, const InputData& inputs,
     else
     {
         for (size_t x = inputs.get_input_range(I).start;
-            x < inputs.get_input_range(I).end; ++x)
+            x <= inputs.get_input_range(I).end; ++x)
         {
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
