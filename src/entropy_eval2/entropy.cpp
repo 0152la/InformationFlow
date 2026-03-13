@@ -73,11 +73,8 @@ void
 EntropyResult::add_result(EntropyResultEntry* ere)
 {
     const auto ins = this->data.insert(ere);
-    if (!ins.second)
-    {
-        throw std::runtime_error(fmt::format(
-            "Already computed entropy for bit size {0}!", ere->bit_sz));
-    }
+    Utils::do_debug_check(!ins.second,
+        fmt::format("Already computed entropy for bit size {}!", ere->bit_sz));
 }
 
 void
@@ -88,12 +85,10 @@ EntropyResult::parse_evalresult(
         EntropyCalcs::compute_entropy(er),
         EntropyCalcs::compute_uncertainty_coef(er) };
 
-    if (new_erd->uncertainty_coef < 0.0 || new_erd->uncertainty_coef > 1.0)
-    {
-        throw std::runtime_error(
-            fmt::format("Invalid value `{}` for uncertainty coefficient!",
-                new_erd->uncertainty_coef));
-    }
+    Utils::do_debug_check(
+        new_erd->uncertainty_coef < 0.0 || new_erd->uncertainty_coef > 1.0,
+        fmt::format("Invalid value `{}` for uncertainty coefficient!",
+            new_erd->uncertainty_coef));
 
     this->add_result(new_erd);
 }

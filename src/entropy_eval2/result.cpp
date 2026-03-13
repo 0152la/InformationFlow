@@ -1,17 +1,16 @@
 #include "result.hpp"
 
 EvalResult::EvalResult(uint8_t _output_bit_sz) :
-    res_bit_sz(_output_bit_sz)
+    res_bit_sz(_output_bit_sz),
+    instance_count(0)
 {
     // TODO we just allocate space of 64-bit integer of instances (since we
     // generally won't go over that), but ideally we pack things tightly, while
     // ensuring the amount of memory allocated is well aligned
     instances = static_cast<instance_t*>(
         calloc(pow(2, res_bit_sz), sizeof(uint64_t)));
-    if (instances == nullptr)
-    {
-        throw std::runtime_error("Error initializing EvalResult instances!\n");
-    }
+    Utils::do_check(
+        instances == nullptr, "Error initializing EvalResult instances!");
 }
 
 EvalResult::EvalResult(uint8_t _output_bit_sz, EvalResultCache& _cache) :
@@ -19,6 +18,7 @@ EvalResult::EvalResult(uint8_t _output_bit_sz, EvalResultCache& _cache) :
 {
     if (_cache.active)
     {
+        this->instance_count += _cache.instance_count;
         this->instances = _cache.move_instances();
         size_t prev_bs_max_count = std::pow(2, this->res_bit_sz - 1);
         size_t prev_bs_size = prev_bs_max_count * sizeof(instance_t);
@@ -67,8 +67,6 @@ void
 EvalResult::print(void) const
 {
     std::cout << "== EvalResult\n";
-    // std::cout << fmt::format(
-    //"  - Total distinct results :: {0}\n", this->instance_count_distinct);
 
     std::ostringstream raw_instances_oss;
     size_t total_insts = 0;
@@ -98,6 +96,7 @@ void
 EvalResultCache::set_results(EvalResult& res)
 {
     this->res = res.move_instances();
+    this->instance_count = res.get_instance_count();
     this->active = true;
 }
 
@@ -106,6 +105,7 @@ EvalResultCache::move_instances(void) -> decltype(this->res)
 {
     auto ptr = this->res;
     this->res = nullptr;
+    this->instance_count = 0;
     this->active = false;
     return ptr;
 }

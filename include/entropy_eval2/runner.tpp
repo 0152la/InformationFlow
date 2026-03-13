@@ -72,7 +72,6 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
 {
     if constexpr (I == sizeof...(As))
     {
-        // if (tri.local_results.check_used_cache()
         if (tri.used_cache
             && check_tuple([&tri](auto arg)
                 { return arg < std::pow(2, tri.eri->out_bit_sz - 1); },
@@ -85,8 +84,9 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
     }
     else
     {
-        for (size_t x = inputs.get_input_range(I).start;
-            x <= inputs.get_input_range(I).end; ++x)
+        const auto& curr_input = inputs.get_input_range(I);
+        for (size_t x = curr_input.start; x <= curr_input.end;
+            x += curr_input.step)
         {
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
@@ -111,38 +111,26 @@ Runner::eval_threads_start(
 {
     uint8_t thread_count
         = std::thread::hardware_concurrency() - Config::other_free_threads;
-    if (thread_count < Config::min_thread_count)
-    {
-        throw std::runtime_error(
-            fmt::format("Expected {} min threads; found {}!",
-                Config::min_thread_count, thread_count));
-    }
-    if (eri.max_val % thread_count != 0)
-    {
-        throw std::runtime_error(
-            fmt::format("Inexact thread splitting: {} threads over {} values "
-                        "leaves {} leftover!",
-                thread_count, eri.max_val, eri.max_val % thread_count));
-    }
+
+    Utils::do_check(thread_count < Config::min_thread_count,
+        fmt::format("Expected {} min threads; found {}!",
+            Config::min_thread_count, thread_count));
+
+    Utils::do_check(eri.max_val % thread_count != 0,
+        fmt::format("Inexact thread splitting: {} threads over {} values "
+                    "leaves {} leftover!",
+            thread_count, eri.max_val, eri.max_val % thread_count));
 
     auto thrs_raw = static_cast<ThreadRunInfo*>(
         calloc(thread_count, sizeof(ThreadRunInfo)));
 
-    // DEBUG_PRINT(
-    //"== [{:%Y-%m-%d == %H:%M:%S}] Running bit size {} with {} threads\n",
-    // std::chrono::round<std::chrono::seconds>(
-    // std::chrono::system_clock::now()),
-    // eri.bit_sz, thread_count);
-
     for (uint8_t t = 0; t < thread_count; ++t)
     {
-        new (&thrs_raw[t])
-            ThreadRunInfo { eri, t, eri.max_val / thread_count, used_cache };
+        new (&thrs_raw[t]) ThreadRunInfo { eri, used_cache };
         auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
-        id.parameter_ranges.front().set_start(
-            thrs_raw[t].tid * thrs_raw[t].stride);
-        id.parameter_ranges.front().set_end(
-            (thrs_raw[t].tid + 1) * thrs_raw[t].stride - 1);
+        auto& outer_param = id.parameter_ranges.front();
+        outer_param.set_start(t);
+        outer_param.step = thread_count;
 
         thrs_raw[t].thr
             = std::thread { &Runner::do_eval_thread_init<T, R, As...>, this,
@@ -172,13 +160,10 @@ Runner::dispatch_eval(EvalRunInfo& eri, EvalResultCache& er_cache,
         this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
     }
 
-    if (results.get_instance_count() != id.get_input_count())
-    {
-        throw std::runtime_error(
+    Utils::do_check(results.get_instance_count() != id.get_input_count(),
             fmt::format("Mismatch for bit size {}: expected {} -- seen {}!",
                 eri.out_bit_sz, fmt::group_digits(id.get_input_count()),
                 fmt::group_digits(results.get_instance_count())));
-    }
 
     return results;
 }
@@ -218,32 +203,23 @@ Runner::exhaust_eval(const RunInfo& ri) const
 {
     static_assert(std::is_unsigned_v<T> && std::is_integral_v<T>);
 
-    if (sizeof(T) * CHAR_BIT < ri.bit_sz_max)
-    {
-        const auto err = fmt::format(
+    Utils::do_debug_check(sizeof(T) * CHAR_BIT < ri.bit_sz_max, fmt::format(
             "Given type {} (size {}) smaller than maximum bit_sz {}!",
-            typeid(T).name(), sizeof(T), ri.bit_sz_max);
-        throw std::runtime_error(err);
-    }
+            typeid(T).name(), sizeof(T), ri.bit_sz_max));
 
     auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
     auto fn = static_cast<std::function<R(Args...)>>(fn_c);
 
     EntropyResult entropy_res;
-    if (std::is_floating_point_v<first_t<Args...>>)
+    if constexpr (std::is_floating_point_v<first_t<Args...>>)
     {
         bool check = true;
         check &= ri.bit_sz_min == ri.bit_sz_max;
         check &= ri.bit_sz_min == sizeof(T) * CHAR_BIT;
-        if (!check)
-        {
-            throw std::runtime_error(fmt::format(
+        Utils::do_debug_check(check, fmt::format(
                 "Expected bit range of single size {}; got [{}, {}]!",
                 sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
-        }
     }
-
-    // TODO prep InputData
 
     auto cache = EvalResultCache {};
     for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
@@ -267,9 +243,9 @@ Runner::exhaust_eval(const RunInfo& ri) const
         auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
             time_end - time_start);
         entropy_res.parse_evalresult(results, time_dur);
-        if (b >= Config::min_par_bit_sz)
+        if (b >= Config::min_par_bit_sz - 2)
         {
-            cache.set_results(results);
+             //cache.set_results(results);
         }
     }
     std::cout << '\r';

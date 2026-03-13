@@ -186,11 +186,9 @@ InputData::get_input_range(uint8_t param) const
  ******************************************************************************/
 
 ThreadRunInfo::ThreadRunInfo(
-    EvalRunInfo& _eri, uint8_t _tid, size_t _stride, bool _used_cache) :
+    EvalRunInfo& _eri, bool _used_cache) :
     eri(&_eri),
     local_results(EvalResult { _eri.out_bit_sz }),
-    tid(_tid),
-    stride(_stride),
     used_cache(_used_cache) { };
 
 /*******************************************************************************
@@ -299,12 +297,9 @@ const EntropyResult
 Runner::run_one(const DefInfo& di) const
 {
     void* fn = dlsym(this->dl_hdl, di.get_fn_name().c_str());
-    if (fn == nullptr)
-    {
-        throw std::runtime_error(fmt::format(
+    Utils::do_check(fn == nullptr, fmt::format(
             "Couldn't find function `{}` in compiled library at `{}`!",
             di.get_fn_name(), Config::lib_path));
-    }
 
     auto ri = RunInfo { di, fn };
     return this->eval_ret(ri);
@@ -354,7 +349,7 @@ Runner::eval_ret(const RunInfo& ri) const
         case def_ty_enum::F16:
             return this->eval_args<_Float16>(ri);
         default:
-            throw std::runtime_error(fmt::format("Unhandled return type {0}!",
+            throw std::runtime_error(fmt::format("Unhandled return type {}!",
                 def_ty_enum::to_str(ri.di->ret_ty)));
     }
 }

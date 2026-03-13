@@ -29,6 +29,7 @@
 #include "config.hpp"
 #include "entropy.hpp"
 #include "result.hpp"
+#include "utils.hpp"
 
 template <typename From, typename To> union conv_u
 {
@@ -38,12 +39,10 @@ template <typename From, typename To> union conv_u
     conv_u(From _f) :
         f(_f)
     {
-        if (sizeof(From) != sizeof(To))
-        {
-            throw std::runtime_error(fmt::format(
+        Utils::do_check(sizeof(From) != sizeof(To),
+            fmt::format(
                 "Incompatible type conversion: from size {} to size {}.",
                 sizeof(From), sizeof(To)));
-        }
     };
 
     To get(void) const { return t; };
@@ -85,10 +84,7 @@ public:
         const auto it = std::find_if(def_ty_names.begin(), def_ty_names.end(),
             [&dt](const std::pair<std::string_view, def_ty>& name)
             { return name.second == dt; });
-        if (it == def_ty_names.end())
-        {
-            throw std::runtime_error("Error converting `def_ty`!");
-        }
+        Utils::do_check(it == def_ty_names.end(), "Error converting `def_ty`!");
         return it->first;
     }
 
@@ -137,10 +133,12 @@ struct InputDataRange
 {
     uint64_t start;
     uint64_t end;
+    uint64_t step;
 
     InputDataRange(uint64_t _st, uint64_t _ed) :
         start(_st),
-        end(_ed)
+        end(_ed),
+        step(1)
     {
         this->check_range();
     };
@@ -162,11 +160,9 @@ struct InputDataRange
 private:
     void check_range(void) const
     {
-        if (start > end)
-        {
-            throw std::runtime_error(fmt::format(
+        Utils::do_check(start > end,
+            fmt::format(
                 "Invalid range [{}, {}] given!", this->start, this->end));
-        }
     }
 };
 
@@ -195,12 +191,10 @@ struct ThreadRunInfo
 {
     EvalRunInfo* eri;
     EvalResult local_results;
-    uint8_t tid;
-    size_t stride;
     std::thread thr;
     bool used_cache;
 
-    ThreadRunInfo(EvalRunInfo&, uint8_t, size_t, bool);
+    ThreadRunInfo(EvalRunInfo&, bool);
 };
 
 class Runner

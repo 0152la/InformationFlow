@@ -3,14 +3,12 @@
 int
 main(void)
 {
-    auto eval_runner = Runner();
-    eval_runner.eval_all();
+    Testing::do_all_tests();
 
-    //eval_coefs_for_def_fns(def_path, dl_hdl, out_fd);
-
-    //const char* time_buf = get_curr_time_str();
-    //printf("[%s] END\n", time_buf);
-    //free((char*) time_buf);
+    //auto runner = Runner {};
+    //runner.init_all();
+    //runner.run_one("llvm_impl_add");
+    //runner.run_one("llvm_impl_fadd");
 
     return 0;
 }

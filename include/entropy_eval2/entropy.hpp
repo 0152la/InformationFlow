@@ -11,6 +11,7 @@
 #include "fmt/chrono.h"
 #include "fmt/format.h"
 
+#include "utils.hpp"
 #include "result.hpp"
 
 class EntropyCalcs
@@ -62,7 +63,10 @@ private:
 public:
     ~EntropyResult(void);
 
-    auto get_data(void) const -> const decltype(this->data)& { return this->data; };
+    auto get_data(void) const -> const decltype(this->data)&
+    {
+        return this->data;
+    };
 
     void add_result(EntropyResultEntry*);
     void parse_evalresult(const EvalResult&, std::chrono::microseconds);

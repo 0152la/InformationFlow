@@ -13,6 +13,7 @@
 #include "fmt/format.h"
 
 #include "config.hpp"
+#include "utils.hpp"
 
 struct EvalResultCache;
 
@@ -31,7 +32,7 @@ private:
     // `instances` is where the instance counts are held. The indices are of
     // type `res_t`, up to a max of 2^n bitsize
     instance_t* instances;
-    uint64_t instance_count = 0;
+    uint64_t instance_count;
     uint8_t res_bit_sz;
 
     bool used_cache = false; // XXX for simplicity, assume this means the full
@@ -84,6 +85,7 @@ public:
 struct EvalResultCache
 {
     EvalResult::instance_t* res;
+    uint64_t instance_count;
     bool active;
 
     EvalResultCache(void) :
