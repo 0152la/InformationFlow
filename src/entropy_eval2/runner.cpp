@@ -277,7 +277,7 @@ Runner::get_def_info(std::string_view fn_name) const
 {
     for (const auto& di : this->defs)
     {
-        if (di.get_full_name() == fn_name)
+        if (di.get_fn_name() == fn_name)
         {
             return di;
         }

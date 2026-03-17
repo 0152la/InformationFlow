@@ -37,6 +37,33 @@ EvalResult::~EvalResult(void)
     }
 }
 
+EvalResult::EvalResult(const EvalResult& other) :
+    EvalResult(other.res_bit_sz)
+{
+    std::memcpy(other.instances, this->instances,
+        std::pow(2, this->res_bit_sz) * sizeof(instance_t));
+}
+
+EvalResult::EvalResult(EvalResult&& other)
+{
+    this->instance_count = other.get_instance_count();
+    this->instances = other.move_instances();
+    this->res_bit_sz = other.res_bit_sz;
+}
+
+EvalResult&
+EvalResult::operator=(const EvalResult& other)
+{
+    return *this = EvalResult(other);
+}
+
+EvalResult&
+EvalResult::operator=(EvalResult&& other) noexcept
+{
+    other.swap_instances(this->instances);
+    return *this;
+}
+
 void
 EvalResult::add_result(res_t _res)
 {
@@ -55,12 +82,16 @@ EvalResult::combine_results(const EvalResult& other)
     this->instance_count += other.get_instance_count();
 }
 
+void
+EvalResult::swap_instances(decltype(instances)& other)
+{
+    std::swap(this->instances, other);
+}
+
 auto
 EvalResult::move_instances(void) -> decltype(this->instances)
 {
-    auto inst_ptr = this->instances;
-    this->instances = nullptr;
-    return inst_ptr;
+    return std::exchange(this->instances, nullptr);
 }
 
 void

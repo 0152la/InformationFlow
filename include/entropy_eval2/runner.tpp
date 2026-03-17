@@ -146,26 +146,36 @@ Runner::dispatch_eval(EvalRunInfo& eri, EvalResultCache& er_cache,
     const std::function<R(As...)>& fn) const
 {
     auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
-    auto results = EvalResult { eri.out_bit_sz, er_cache };
+    std::optional<EvalResult> results;
+    if constexpr (std::is_floating_point_v<R>)
+    {
+        results.emplace(sizeof(R), er_cache);
+    }
+    else
+    {
+        results.emplace(eri.out_bit_sz, er_cache);
+    }
+
+    //auto results = EvalResult { eri.out_bit_sz, er_cache };
     if (eri.out_bit_sz >= Config::min_par_bit_sz)
     {
         auto thrs = this->eval_threads_start<T, R, As...>(
-            eri, results.check_used_cache(), fn);
-        this->eval_threads_join(results, thrs);
+            eri, results->check_used_cache(), fn);
+        this->eval_threads_join(results.value(), thrs);
         free(thrs.data());
     }
     else
     {
         auto curr_args = std::tuple<As...> {};
-        this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
+        this->do_eval<0, T, R, As...>(results.value(), id, fn, curr_args);
     }
 
-    Utils::do_check(results.get_instance_count() != id.get_input_count(),
-            fmt::format("Mismatch for bit size {}: expected {} -- seen {}!",
-                eri.out_bit_sz, fmt::group_digits(id.get_input_count()),
-                fmt::group_digits(results.get_instance_count())));
+    Utils::do_debug_check(results->get_instance_count() != id.get_input_count(),
+        fmt::format("Mismatch for bit size {}: expected {} -- seen {}!",
+            eri.out_bit_sz, fmt::group_digits(id.get_input_count()),
+            fmt::group_digits(results->get_instance_count())));
 
-    return results;
+    return std::move(results.value());
 }
 
 template <size_t I, typename T, typename R, typename... As>
@@ -203,8 +213,8 @@ Runner::exhaust_eval(const RunInfo& ri) const
 {
     static_assert(std::is_unsigned_v<T> && std::is_integral_v<T>);
 
-    Utils::do_debug_check(sizeof(T) * CHAR_BIT < ri.bit_sz_max, fmt::format(
-            "Given type {} (size {}) smaller than maximum bit_sz {}!",
+    Utils::do_debug_check(sizeof(T) * CHAR_BIT < ri.bit_sz_max,
+        fmt::format("Given type {} (size {}) smaller than maximum bit_sz {}!",
             typeid(T).name(), sizeof(T), ri.bit_sz_max));
 
     auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
@@ -216,8 +226,8 @@ Runner::exhaust_eval(const RunInfo& ri) const
         bool check = true;
         check &= ri.bit_sz_min == ri.bit_sz_max;
         check &= ri.bit_sz_min == sizeof(T) * CHAR_BIT;
-        Utils::do_debug_check(check, fmt::format(
-                "Expected bit range of single size {}; got [{}, {}]!",
+        Utils::do_debug_check(check,
+            fmt::format("Expected bit range of single size {}; got [{}, {}]!",
                 sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
     }
 
@@ -245,7 +255,8 @@ Runner::exhaust_eval(const RunInfo& ri) const
         entropy_res.parse_evalresult(results, time_dur);
         if (b >= Config::min_par_bit_sz - 2)
         {
-             //cache.set_results(results);
+            // cache.set_results(results); // TODO caching bad, replace with
+            // running highest bit size and back computing
         }
     }
     std::cout << '\r';

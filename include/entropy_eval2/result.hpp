@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 #include "fmt/format.h"
 
@@ -43,6 +44,10 @@ public:
     EvalResult(uint8_t);
     EvalResult(uint8_t, EvalResultCache&);
     ~EvalResult(void);
+    EvalResult(const EvalResult&);
+    EvalResult(EvalResult&&);
+    EvalResult& operator=(const EvalResult&);
+    EvalResult& operator=(EvalResult&&) noexcept;
 
     void add_result(res_t);
     void combine_results(const EvalResult&);
@@ -51,6 +56,8 @@ public:
     {
         return this->instances;
     }
+
+    void swap_instances(decltype(instances)&);
 
     auto get_instance(size_t idx) const -> instance_t
     {

@@ -11,6 +11,7 @@
 #include <future>
 #include <iostream>
 #include <numeric>
+#include <optional>
 #include <regex>
 #include <span>
 #include <sstream>
