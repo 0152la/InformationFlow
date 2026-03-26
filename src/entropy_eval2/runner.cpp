@@ -1,5 +1,4 @@
 #include "runner.hpp"
-#include "config.hpp"
 
 /*******************************************************************************
  * DefInfo
@@ -11,7 +10,7 @@ DefInfo::DefInfo(const std::string& line)
     // opcode, cmp_opcode, name_extra, fn_name(ret_ty)[params_ty]
     auto re
         = std::regex { "(\\d+),(\\d*),(\\w*),(\\w+)\\((\\w+)\\)\\[(.+)\\]" };
-    auto sm = std::smatch {};
+    auto sm = std::smatch { };
 
     if (!std::regex_match(line, sm, re))
     {
@@ -29,7 +28,7 @@ DefInfo::DefInfo(const std::string& line)
 
     this->params_str = sm[6].str();
     auto param_iss = std::istringstream { sm[6].str() };
-    auto p = std::string {};
+    auto p = std::string { };
     while (std::getline(param_iss, p, ','))
     {
         this->params_ty.emplace_back(def_ty_enum::from_str(p));
@@ -95,7 +94,7 @@ DefInfo::check_fop(void) const
 std::string
 DefInfo::to_str(void) const
 {
-    auto oss = std::ostringstream {};
+    auto oss = std::ostringstream { };
     oss << "DefInfo == ";
     oss << "LLVM OPC " << this->llvm_opcode << " - ";
     oss << "CMP OPC "
@@ -138,10 +137,28 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
  * EvalRunInfo
  ******************************************************************************/
 
-EvalRunInfo::EvalRunInfo(uint8_t _out_bs, bool _is_div) :
-    out_bit_sz(_out_bs),
-    max_val(std::pow(2, _out_bs)),
-    is_div(_is_div) { };
+EvalRunInfo::EvalRunInfo(const RunInfo& ri) :
+    bit_sz_in_min(ri.bit_sz_min),
+    bit_sz_in_max(ri.bit_sz_max),
+    bit_sz_out_min(EvalRunInfo::get_out_bit_sz(ri, true)),
+    bit_sz_out_max(EvalRunInfo::get_out_bit_sz(ri, false)),
+    is_div(ri.is_div) { };
+
+EvalData::bit_sz_t
+EvalRunInfo::get_out_bit_sz(const RunInfo& ri, bool get_min)
+{
+    if (def_ty_enum::is_def_ty_int(ri.di->ret_ty))
+    {
+        return (get_min ? ri.bit_sz_min : ri.bit_sz_max);
+    }
+    else if (def_ty_enum::is_def_ty_float(ri.di->ret_ty))
+    {
+        return def_ty_enum::def_ty_fl_bitsizes.at(ri.di->ret_ty);
+    }
+    throw std::runtime_error(
+        fmt::format("Unhandled DefInfo ret_ty `{}` for bit size conversion!",
+            ri.di->ret_str));
+}
 
 /*******************************************************************************
  * InputData
@@ -185,11 +202,9 @@ InputData::get_input_range(uint8_t param) const
  * ThreadRunInfo
  ******************************************************************************/
 
-ThreadRunInfo::ThreadRunInfo(
-    EvalRunInfo& _eri, bool _used_cache) :
+ThreadRunInfo::ThreadRunInfo(const EvalRunInfo& _eri) :
     eri(&_eri),
-    local_results(EvalResult { _eri.out_bit_sz }),
-    used_cache(_used_cache) { };
+    local_results(_eri.bit_sz_out_min, _eri.bit_sz_out_max) { };
 
 /*******************************************************************************
  * Runner
@@ -232,7 +247,7 @@ Runner::log_one_run(const EntropyResult& res, const DefInfo& def)
 
 void
 Runner::eval_threads_join(
-    EvalResult& res, const std::span<ThreadRunInfo>& tris) const
+    EvalData::Results& res, const std::span<ThreadRunInfo>& tris) const
 {
     for (auto& tri : tris)
     {
@@ -257,7 +272,7 @@ Runner::~Runner(void) { dlclose(this->dl_hdl); }
 void
 Runner::init_all(void)
 {
-    auto buf = std::string {};
+    auto buf = std::string { };
     auto def_ifs = std::ifstream { (Config::def_path).data() };
     this->logs_os_init();
 
@@ -297,14 +312,13 @@ const EntropyResult
 Runner::run_one(const DefInfo& di) const
 {
     void* fn = dlsym(this->dl_hdl, di.get_fn_name().c_str());
-    Utils::do_check(fn == nullptr, fmt::format(
-            "Couldn't find function `{}` in compiled library at `{}`!",
+    Utils::do_check(fn == nullptr,
+        fmt::format("Couldn't find function `{}` in compiled library at `{}`!",
             di.get_fn_name(), Config::lib_path));
 
     auto ri = RunInfo { di, fn };
     return this->eval_ret(ri);
 }
-
 
 void
 Runner::eval_all(void)

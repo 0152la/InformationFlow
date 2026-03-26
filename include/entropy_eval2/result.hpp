@@ -10,97 +10,79 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include "fmt/format.h"
 
 #include "config.hpp"
 #include "utils.hpp"
 
-struct EvalResultCache;
-
-class EvalResult
+namespace EvalData
 {
-public:
-    // For values of type `res_t`, holds counts of type `instance_t`
-    // `res_t` - the domain of the output (= 2 ^ output_bit_sz)
-    // `instance_t` - total input counts
-    // - for binary operations = 2 ^ (input_bit_sz + 1)
-    // - for unary operations  = 2 ^ (input_bit_sz)
-    using res_t = uint64_t;
-    using instance_t = uint64_t;
+// count of individual output values
+using instance_t = uint32_t;
+// domain of outputs - expected to fit `2 ^ [max_bit_sz]` values
+using res_t = uint32_t;
+using bit_sz_t = uint8_t;
 
-private:
+// For values of type `res_t`, holds counts of type `instance_t`
+// `res_t` - the domain of the output (= 2 ^ output_bit_sz)
+// `instance_t` - total input counts
+// - for binary operations = 2 ^ (input_bit_sz + 1)
+// - for unary operations  = 2 ^ (input_bit_sz)
+
+struct Counter
+{
+    bit_sz_t bs;
+    bit_sz_t max_bs;
+
     // `instances` is where the instance counts are held. The indices are of
     // type `res_t`, up to a max of 2^n bitsize
     instance_t* instances;
     uint64_t instance_count;
-    uint8_t res_bit_sz;
 
-    bool used_cache = false; // XXX for simplicity, assume this means the full
-                             // results for previous bit_size were cached;
-                             // perhaps TODO later for flexibility
+    Counter(bit_sz_t, bit_sz_t);
+    Counter(const Counter&);
+    Counter(Counter&&) noexcept;
+    ~Counter(void);
 
-public:
-    EvalResult(uint8_t);
-    EvalResult(uint8_t, EvalResultCache&);
-    ~EvalResult(void);
-    EvalResult(const EvalResult&);
-    EvalResult(EvalResult&&);
-    EvalResult& operator=(const EvalResult&);
-    EvalResult& operator=(EvalResult&&) noexcept;
+    Counter& operator=(const Counter&);
+    Counter& operator=(Counter&&) noexcept;
 
     void add_result(res_t);
-    void combine_results(const EvalResult&);
+    void combine_results(const Counter&);
+    res_t get_max_res_val(void) const;
 
-    auto get_instances(void) const -> const decltype(this->instances)&
-    {
-        return this->instances;
-    }
-
-    void swap_instances(decltype(instances)&);
-
-    auto get_instance(size_t idx) const -> instance_t
-    {
-        return this->instances[idx];
-    };
-
-    auto get_instance_count(void) const -> const decltype(this->instance_count)&
-    {
-        return this->instance_count;
-    }
-
-    auto get_max_res_val(void) const -> res_t
-    {
-        return std::pow(2, this->res_bit_sz);
-    }
-
-    auto get_bit_sz(void) const -> const decltype(res_bit_sz)&
-    {
-        return this->res_bit_sz;
-    }
-
-    auto check_used_cache(void) const -> const decltype(this->used_cache)&
-    {
-        return this->used_cache;
-    }
-
-    auto move_instances(void) -> decltype(this->instances);
-
-    void print(void) const;
+    std::string to_str(void) const;
 };
 
-struct EvalResultCache
+class Results
 {
-    EvalResult::instance_t* res;
-    uint64_t instance_count;
-    bool active;
+private:
+    std::vector<Counter> results;
 
-    EvalResultCache(void) :
-        active(false) { };
-    ~EvalResultCache(void);
+public:
+    bit_sz_t min_bit_sz;
+    bit_sz_t max_bit_sz;
 
-    void set_results(EvalResult&);
-    auto move_instances(void) -> decltype(this->res);
+    Results(bit_sz_t, bit_sz_t);
+    ~Results(void);
+
+    void add_result(res_t, bit_sz_t);
+    void combine_results(const EvalData::Results&);
+
+    auto get_results(void) const -> const decltype(this->results)&;
+
+    auto get_results_for_bitsize(bit_sz_t) const -> const Counter&;
+
+    auto get_results_count(void) const
+        -> decltype(EvalData::Counter::instance_count);
+
+    auto get_max_res_val(void) const -> res_t;
+
+    std::string to_str(void) const;
+};
+
 };
 
 #endif // _EEVAL_RESULT_HPP

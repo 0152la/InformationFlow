@@ -6,34 +6,31 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 
 #include "fmt/base.h"
 #include "fmt/chrono.h"
 #include "fmt/format.h"
 
-#include "utils.hpp"
 #include "result.hpp"
+#include "utils.hpp"
 
 class EntropyCalcs
 {
 public:
-    static double compute_entropy(const EvalResult&);
-    static double compute_uncertainty_coef(const EvalResult&);
+    static double compute_entropy(const EvalData::Counter&);
+    static double compute_uncertainty_coef(const EvalData::Counter&);
+    static double compute_uncertainty_coef_given_entropy(
+        double, const EvalData::Counter&);
 };
 
 struct EntropyResultEntry
 {
-    uint8_t bit_sz;
-    std::chrono::microseconds dur_ms;
+    EvalData::bit_sz_t bit_sz;
     double entropy;
     double uncertainty_coef;
 
-    EntropyResultEntry(
-        uint8_t _bs, std::chrono::microseconds _dur, double _h, double _uc) :
-        bit_sz(_bs),
-        dur_ms(_dur),
-        entropy(_h),
-        uncertainty_coef(_uc) { };
+    EntropyResultEntry(const EvalData::Counter&);
 
     const std::string to_str(void) const;
     const std::string to_str_csv(std::string_view) const;
@@ -42,34 +39,31 @@ struct EntropyResultEntry
 struct EntropyResultEntry_cmp
 {
     bool operator()(
-        const EntropyResultEntry* left, const EntropyResultEntry* right) const
+        const EntropyResultEntry& left, const EntropyResultEntry& right) const
     {
-        return left->bit_sz < right->bit_sz;
+        return left.bit_sz < right.bit_sz;
     }
 };
 
 class EntropyResult
 {
 private:
-    std::set<EntropyResultEntry*, EntropyResultEntry_cmp> data;
+    std::set<EntropyResultEntry, EntropyResultEntry_cmp> data;
 
     // TODO move comparison to this?
     static bool cmp_data(
-        const EntropyResultEntry* fst, const EntropyResultEntry* snd)
+        const EntropyResultEntry& fst, const EntropyResultEntry& snd)
     {
-        return fst->bit_sz < snd->bit_sz;
+        return fst.bit_sz < snd.bit_sz;
     }
 
 public:
-    ~EntropyResult(void);
-
     auto get_data(void) const -> const decltype(this->data)&
     {
         return this->data;
     };
 
-    void add_result(EntropyResultEntry*);
-    void parse_evalresult(const EvalResult&, std::chrono::microseconds);
+    void parse_evalresults(const EvalData::Results&);
     std::string to_str(void) const;
     std::string to_str_csv(std::string_view) const;
 };

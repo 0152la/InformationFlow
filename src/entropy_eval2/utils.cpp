@@ -2,6 +2,14 @@
 
 namespace Utils
 {
+
+void
+debug_print(std::string_view msg)
+{
+    fmt::print(fmt::fg(fmt::color::red) | fmt::emphasis::bold, "[DEBUG] ");
+    std::cout << msg << std::endl;
+}
+
 void
 do_check(bool cond, std::string_view msg)
 {
@@ -12,7 +20,8 @@ do_check(bool cond, std::string_view msg)
 }
 
 void
-do_debug_check([[maybe_unused]] bool cond, [[maybe_unused]] std::string_view msg)
+do_debug_check(
+    [[maybe_unused]] bool cond, [[maybe_unused]] std::string_view msg)
 {
 #ifndef NDEBUG
     if (cond)

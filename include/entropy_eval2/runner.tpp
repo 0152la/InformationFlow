@@ -15,6 +15,22 @@ inline constexpr bool all_same_v = (sizeof...(Ts) == 0)
     ? true
     : all_same<std::tuple_element_t<0, std::tuple<Ts...>>, Ts...>::value;
 
+// Get the maximum integer equivalent (cast) value of a tuple
+template <typename T, std::size_t... Is>
+auto
+tuple_max_impl(const T& t, std::index_sequence<Is...>)
+{
+    // TODO consider `std::common_type_t`
+    return std::max({ static_cast<uint64_t>(std::get<Is>(t))... });
+}
+
+template <typename... Ts>
+auto
+tuple_max(const std::tuple<Ts...>& t)
+{
+    return tuple_max_impl(t, std::index_sequence_for<Ts...> { });
+}
+
 // Check if all values in a tuple fulfill come condition
 template <typename Fn, typename Tuple, size_t... Is>
 bool
@@ -29,7 +45,7 @@ check_tuple(Fn&& fn, Tuple&& t)
 {
     using T = std::remove_reference_t<Tuple>;
     return check_tuple_impl(std::forward<Fn>(fn), std::forward<T>(t),
-        std::make_index_sequence<std::tuple_size_v<T>> {});
+        std::make_index_sequence<std::tuple_size_v<T>> { });
 }
 
 // Enforce `is_floating_point` check on `_Float16` to return true
@@ -53,15 +69,17 @@ convert_arg(From init_val)
 
 template <typename T, typename R>
 void
-Runner::log_result(EvalResult& er, R& res) const
+Runner::log_result(
+    EvalData::Results& er, R& res, EvalData::bit_sz_t bit_sz) const
 {
+    // TODO fix EvalData::Counter placement
     if constexpr (std::is_integral_v<R>)
     {
-        er.add_result(res % er.get_max_res_val());
+        er.add_result(res % er.get_max_res_val(), bit_sz);
     }
     else if constexpr (std::is_floating_point_v<R>)
     {
-        er.add_result(convert_arg<R, T>(res));
+        er.add_result(convert_arg<R, T>(res), bit_sz);
     }
 }
 
@@ -72,15 +90,11 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
 {
     if constexpr (I == sizeof...(As))
     {
-        if (tri.used_cache
-            && check_tuple([&tri](auto arg)
-                { return arg < std::pow(2, tri.eri->out_bit_sz - 1); },
-                curr_args))
-        {
-            return;
-        }
         R res = std::apply(fn, curr_args);
-        this->log_result<T, R>(tri.local_results, res);
+        EvalData::bit_sz_t bs
+            = (res == R { } ? 0
+                            : std::floor(std::log2(tuple_max(curr_args))) + 1);
+        this->log_result<T, R>(tri.local_results, res, bs);
     }
     else
     {
@@ -100,14 +114,14 @@ void
 Runner::do_eval_thread_init(ThreadRunInfo& tri, InputData inputs,
     const std::function<R(As...)>& fn) const
 {
-    auto tr_args = std::tuple<As...> {};
+    auto tr_args = std::tuple<As...> { };
     this->do_eval_thread<0, T, R, As...>(tri, inputs, fn, tr_args);
 }
 
 template <typename T, typename R, typename... As>
 std::span<ThreadRunInfo>
 Runner::eval_threads_start(
-    EvalRunInfo& eri, bool used_cache, const std::function<R(As...)>& fn) const
+    const EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
     uint8_t thread_count
         = std::thread::hardware_concurrency() - Config::other_free_threads;
@@ -116,18 +130,13 @@ Runner::eval_threads_start(
         fmt::format("Expected {} min threads; found {}!",
             Config::min_thread_count, thread_count));
 
-    Utils::do_check(eri.max_val % thread_count != 0,
-        fmt::format("Inexact thread splitting: {} threads over {} values "
-                    "leaves {} leftover!",
-            thread_count, eri.max_val, eri.max_val % thread_count));
-
     auto thrs_raw = static_cast<ThreadRunInfo*>(
         calloc(thread_count, sizeof(ThreadRunInfo)));
 
     for (uint8_t t = 0; t < thread_count; ++t)
     {
-        new (&thrs_raw[t]) ThreadRunInfo { eri, used_cache };
-        auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
+        new (&thrs_raw[t]) ThreadRunInfo { eri };
+        auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.is_div };
         auto& outer_param = id.parameter_ranges.front();
         outer_param.set_start(t);
         outer_param.step = thread_count;
@@ -141,64 +150,52 @@ Runner::eval_threads_start(
 }
 
 template <typename T, typename R, typename... As>
-const EvalResult
-Runner::dispatch_eval(EvalRunInfo& eri, EvalResultCache& er_cache,
-    const std::function<R(As...)>& fn) const
+const EvalData::Results
+Runner::dispatch_eval(
+    const EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
-    auto id = InputData { sizeof...(As), eri.out_bit_sz, eri.is_div };
-    std::optional<EvalResult> results;
-    if constexpr (std::is_floating_point_v<R>)
-    {
-        results.emplace(sizeof(R), er_cache);
-    }
-    else
-    {
-        results.emplace(eri.out_bit_sz, er_cache);
-    }
+    auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.is_div };
+    auto results = EvalData::Results { eri.bit_sz_out_min, eri.bit_sz_out_max };
 
-    //auto results = EvalResult { eri.out_bit_sz, er_cache };
-    if (eri.out_bit_sz >= Config::min_par_bit_sz)
+    if (results.max_bit_sz >= Config::min_par_bit_sz)
     {
-        auto thrs = this->eval_threads_start<T, R, As...>(
-            eri, results->check_used_cache(), fn);
-        this->eval_threads_join(results.value(), thrs);
+        auto thrs = this->eval_threads_start<T, R, As...>(eri, fn);
+        this->eval_threads_join(results, thrs);
         free(thrs.data());
     }
     else
     {
-        auto curr_args = std::tuple<As...> {};
-        this->do_eval<0, T, R, As...>(results.value(), id, fn, curr_args);
+        auto curr_args = std::tuple<As...> { };
+        this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
     }
 
-    Utils::do_debug_check(results->get_instance_count() != id.get_input_count(),
-        fmt::format("Mismatch for bit size {}: expected {} -- seen {}!",
-            eri.out_bit_sz, fmt::group_digits(id.get_input_count()),
-            fmt::group_digits(results->get_instance_count())));
+    Utils::do_debug_check(results.get_results_count() != id.get_input_count(),
+        fmt::format("Result instances mismatch for bit size {}: expected {} -- "
+                    "seen {} !",
+            Config::int_max_bit_sz, fmt::group_digits(id.get_input_count()),
+            fmt::group_digits(results.get_results_count())));
 
-    return std::move(results.value());
+    return results;
 }
 
 template <size_t I, typename T, typename R, typename... As>
 void
-Runner::do_eval(EvalResult& results, const InputData& inputs,
+Runner::do_eval(EvalData::Results& results, const InputData& inputs,
     const std::function<R(As...)>& fn, std::tuple<As...>& curr_args) const
 {
     if constexpr (I == sizeof...(As))
     {
-        if (results.check_used_cache()
-            && check_tuple([&results](auto arg)
-                { return arg < std::pow(2, results.get_bit_sz() - 1); },
-                curr_args))
-        {
-            return;
-        }
         R res = std::apply(fn, curr_args);
-        this->log_result<T, R>(results, res);
+        EvalData::bit_sz_t bs
+            = (res == R { } ? 0
+                          : std::floor(std::log2(tuple_max(curr_args))) + 1);
+        this->log_result<T, R>(results, res, bs);
     }
     else
     {
-        for (size_t x = inputs.get_input_range(I).start;
-            x <= inputs.get_input_range(I).end; ++x)
+        const auto& curr_input = inputs.get_input_range(I);
+        for (size_t x = curr_input.start; x <= curr_input.end;
+            x += curr_input.step)
         {
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
@@ -220,7 +217,6 @@ Runner::exhaust_eval(const RunInfo& ri) const
     auto fn_c = reinterpret_cast<R (*)(Args...)>(ri.fn_ptr);
     auto fn = static_cast<std::function<R(Args...)>>(fn_c);
 
-    EntropyResult entropy_res;
     if constexpr (std::is_floating_point_v<first_t<Args...>>)
     {
         bool check = true;
@@ -231,34 +227,30 @@ Runner::exhaust_eval(const RunInfo& ri) const
                 sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
     }
 
-    auto cache = EvalResultCache {};
-    for (auto b = ri.bit_sz_min; b <= ri.bit_sz_max; ++b)
-    {
-        auto eval_run_info = EvalRunInfo { b, ri.is_div };
-        // std::cout << '\r';
-        std::cout << fmt::format("[{}] Running {} {} bits",
-            std::chrono::round<std::chrono::seconds>(
-                std::chrono::system_clock::now()),
-            ri.di->llvm_fn_name, b)
-                  << std::flush;
-        std::cout << '\n';
-        // DEBUG_PRINT("\r[{}] Running {} {} bits",
-        // std::chrono::round<std::chrono::seconds>(
-        // std::chrono::system_clock::now()),
-        // ri.di->llvm_fn_name, b);
-        auto time_start = Config::clock_ty::now();
-        auto results
-            = this->dispatch_eval<T, R, Args...>(eval_run_info, cache, fn);
-        auto time_end = Config::clock_ty::now();
-        auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
-            time_end - time_start);
-        entropy_res.parse_evalresult(results, time_dur);
-        if (b >= Config::min_par_bit_sz - 2)
-        {
-            // cache.set_results(results); // TODO caching bad, replace with
-            // running highest bit size and back computing
-        }
-    }
+    auto eval_run_info = EvalRunInfo { ri };
+    // std::cout << '\r';
+    std::cout << fmt::format("[{}] Running {} ...",
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()),
+        ri.di->llvm_fn_name)
+              << std::flush;
+    std::cout << '\r';
+    auto time_start = Config::clock_ty::now();
+    auto results = this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
+    auto time_end = Config::clock_ty::now();
+    auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
+        time_end - time_start);
+    std::cout << fmt::format("[{}] == End `{}` - Duration {} ==",
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()),
+        ri.di->llvm_fn_name, time_dur)
+              << std::flush;
+    std::cout << '\n';
+
+    std::cout << results.to_str() << std::endl;
+    EntropyResult entropy_res;
+    entropy_res.parse_evalresults(results);
+
     std::cout << '\r';
     return entropy_res;
 }

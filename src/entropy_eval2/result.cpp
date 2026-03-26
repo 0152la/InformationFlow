@@ -1,142 +1,209 @@
 #include "result.hpp"
+#include "config.hpp"
+#include "entropy.hpp"
 
-EvalResult::EvalResult(uint8_t _output_bit_sz) :
-    res_bit_sz(_output_bit_sz),
+/*******************************************************************************
+ * EvalData::Counter
+ ******************************************************************************/
+
+EvalData::Counter::Counter(bit_sz_t _bs, bit_sz_t _max_bs) :
+    bs(_bs),
+    max_bs(_max_bs),
     instance_count(0)
 {
-    // TODO we just allocate space of 64-bit integer of instances (since we
-    // generally won't go over that), but ideally we pack things tightly, while
-    // ensuring the amount of memory allocated is well aligned
-    instances = static_cast<instance_t*>(
-        calloc(pow(2, res_bit_sz), sizeof(uint64_t)));
+    Utils::debug_print(
+        fmt::format("=== CONSTRUCT COUNTER bs {} - mbs {}", _bs, _max_bs));
+    this->instances = static_cast<EvalData::instance_t*>(
+        calloc(std::pow(2, this->max_bs), sizeof(instance_t)));
     Utils::do_check(
         instances == nullptr, "Error initializing EvalResult instances!");
 }
 
-EvalResult::EvalResult(uint8_t _output_bit_sz, EvalResultCache& _cache) :
-    EvalResult(_output_bit_sz)
+EvalData::Counter::Counter(const Counter& other) :
+    EvalData::Counter::Counter(other.bs, other.max_bs)
 {
-    if (_cache.active)
-    {
-        this->instance_count += _cache.instance_count;
-        this->instances = _cache.move_instances();
-        size_t prev_bs_max_count = std::pow(2, this->res_bit_sz - 1);
-        size_t prev_bs_size = prev_bs_max_count * sizeof(instance_t);
-        this->instances = static_cast<instance_t*>(
-            realloc(this->instances, 2 * prev_bs_size));
-        std::memset(this->instances + prev_bs_max_count, 0, prev_bs_size);
-        this->used_cache = true;
-    }
+    Utils::debug_print(fmt::format(
+        "=== COPY COUNTER bs {} - mbs {}", other.bs, other.max_bs));
+    this->instance_count = other.instance_count;
+    memcpy(this->instances, other.instances,
+        std::pow(2, this->max_bs) * sizeof(instance_t));
 }
 
-EvalResult::~EvalResult(void)
+EvalData::Counter::Counter(Counter&& other) noexcept :
+    bs(other.bs),
+    max_bs(other.max_bs),
+    instance_count(other.instance_count)
 {
+    Utils::debug_print(fmt::format(
+        "=== MOVE COUNTER bs {} - mbs {}", other.bs, other.max_bs));
+    other.instance_count = 0;
+    this->instances = std::exchange(other.instances, nullptr);
+}
+
+EvalData::Counter::~Counter(void)
+{
+    Utils::debug_print(fmt::format(
+        "=== DESTROY COUNTER bs {} - mbs {}", this->bs, this->max_bs));
     if (this->instances)
     {
         free(this->instances);
     }
 }
 
-EvalResult::EvalResult(const EvalResult& other) :
-    EvalResult(other.res_bit_sz)
+EvalData::Counter&
+EvalData::Counter::operator=(const EvalData::Counter& other)
 {
-    std::memcpy(other.instances, this->instances,
-        std::pow(2, this->res_bit_sz) * sizeof(instance_t));
+    Utils::debug_print(fmt::format(
+        "=== ASSIGN COPY COUNTER bs {} - mbs {}", other.bs, other.max_bs));
+    return *this = EvalData::Counter(other);
 }
 
-EvalResult::EvalResult(EvalResult&& other)
+EvalData::Counter&
+EvalData::Counter::operator=(EvalData::Counter&& other) noexcept
 {
-    this->instance_count = other.get_instance_count();
-    this->instances = other.move_instances();
-    this->res_bit_sz = other.res_bit_sz;
-}
-
-EvalResult&
-EvalResult::operator=(const EvalResult& other)
-{
-    return *this = EvalResult(other);
-}
-
-EvalResult&
-EvalResult::operator=(EvalResult&& other) noexcept
-{
-    other.swap_instances(this->instances);
+    Utils::debug_print(fmt::format(
+        "=== ASSIGN MOVE COUNTER bs {} - mbs {}", other.bs, other.max_bs));
+    std::swap(this->instances, other.instances);
+    std::swap(this->bs, other.bs);
+    std::swap(this->max_bs, other.max_bs);
+    std::swap(this->instance_count, other.instance_count);
     return *this;
 }
 
 void
-EvalResult::add_result(res_t _res)
+EvalData::Counter::add_result(res_t new_res)
 {
-    this->instances[_res] += 1;
-    instance_count += 1;
+    this->instances[new_res] += 1;
+    this->instance_count += 1;
+    Utils::debug_print(fmt::format("ADD RES {} TO BS {} -- SAW {} OF {}", new_res, this->bs,
+        this->instances[new_res], this->instance_count));
 }
 
 void
-EvalResult::combine_results(const EvalResult& other)
+EvalData::Counter::combine_results(const Counter& other)
 {
-    assert(this->res_bit_sz >= other.get_bit_sz());
-    for (res_t r = 0; r < other.get_max_res_val(); ++r)
+    for (res_t r = 0; r < this->get_max_res_val(); ++r)
     {
-        this->instances[r] += other.get_instance(r);
+        this->instances[r] += other.instances[r];
     }
-    this->instance_count += other.get_instance_count();
+    this->instance_count += other.instance_count;
+}
+
+EvalData::res_t
+EvalData::Counter::get_max_res_val(void) const
+{
+    return std::pow(2, this->max_bs);
+}
+
+std::string
+EvalData::Counter::to_str(void) const
+{
+    std::ostringstream oss;
+    oss << fmt::format(
+        "Bit size {} -- Total instances {}\n", this->bs, this->instance_count);
+    for (res_t r = 0; r < this->get_max_res_val(); ++r)
+    {
+        oss << fmt::format("\t -- {} == {}\n", r, this->instances[r]);
+    }
+    return oss.str();
+}
+
+/*******************************************************************************
+ * EvalData::Results
+ ******************************************************************************/
+
+EvalData::Results::Results(bit_sz_t _min_bit_sz, bit_sz_t _max_bit_sz) :
+    min_bit_sz(_min_bit_sz),
+    max_bit_sz(_max_bit_sz)
+{
+    Utils::do_debug_check(this->min_bit_sz > this->max_bit_sz,
+        fmt::format("Given lower bit size bound {} larger than max {}!",
+            this->min_bit_sz, this->max_bit_sz));
+
+    this->results.reserve(this->max_bit_sz - this->min_bit_sz);
+    for (bit_sz_t b = _min_bit_sz; b <= _max_bit_sz; ++b)
+    {
+        this->results.emplace_back(b, this->max_bit_sz);
+    }
+}
+
+EvalData::Results::~Results(void) { this->results.clear(); }
+
+void
+EvalData::Results::add_result(res_t res, bit_sz_t bs)
+{
+    bs = std::max(bs, this->min_bit_sz);
+
+    Utils::do_debug_check(bs > this->max_bit_sz,
+        fmt::format("Given bit size {} higher than top bound {}!", bs,
+            this->max_bit_sz));
+    Utils::do_debug_check(res >= this->get_max_res_val(),
+        fmt::format("Tried to log value {} (bit size {}) larger than expected "
+                    "max value {} with max bit size {}!",
+            fmt::group_digits(res), bs,
+            fmt::group_digits(this->get_max_res_val()), this->max_bit_sz));
+
+    this->results[bs - this->min_bit_sz].add_result(res);
 }
 
 void
-EvalResult::swap_instances(decltype(instances)& other)
+EvalData::Results::combine_results(const EvalData::Results& other)
 {
-    std::swap(this->instances, other);
+    Utils::do_check(!(this->max_bit_sz <= other.max_bit_sz
+                        || this->min_bit_sz >= other.min_bit_sz),
+        fmt::format(
+            "Invalid `EvalData::Results` combination: attempting to combine "
+            "results with bit range [{}, {}] into bit range [{}, {}]!",
+            other.min_bit_sz, other.max_bit_sz, this->min_bit_sz,
+            this->max_bit_sz));
+
+    for (const auto& other_res : other.get_results())
+    {
+        this->results[other_res.bs].combine_results(other_res);
+    }
 }
 
 auto
-EvalResult::move_instances(void) -> decltype(this->instances)
+EvalData::Results::get_results(void) const -> const decltype(this->results)&
 {
-    return std::exchange(this->instances, nullptr);
-}
-
-void
-EvalResult::print(void) const
-{
-    std::cout << "== EvalResult\n";
-
-    std::ostringstream raw_instances_oss;
-    size_t total_insts = 0;
-    for (res_t i = 0; i < this->get_max_res_val(); ++i)
-    {
-        if (this->instances[i] != 0)
-        {
-            raw_instances_oss
-                << fmt::format("\t{0} -- {1}\n", i, this->instances[i]);
-            total_insts += this->instances[i];
-        }
-    }
-
-    std::cout << fmt::format("  - Total instances :: {0}", total_insts);
-    std::cout << "\n" << raw_instances_oss.str();
-}
-
-EvalResultCache::~EvalResultCache(void)
-{
-    if (this->active)
-    {
-        free(this->res);
-    }
-}
-
-void
-EvalResultCache::set_results(EvalResult& res)
-{
-    this->res = res.move_instances();
-    this->instance_count = res.get_instance_count();
-    this->active = true;
+    return this->results;
 }
 
 auto
-EvalResultCache::move_instances(void) -> decltype(this->res)
+EvalData::Results::get_results_for_bitsize(EvalData::bit_sz_t b) const
+    -> const EvalData::Counter&
 {
-    auto ptr = this->res;
-    this->res = nullptr;
-    this->instance_count = 0;
-    this->active = false;
-    return ptr;
+    return this->results.at(b - this->min_bit_sz);
+}
+
+auto
+EvalData::Results::get_results_count(void) const
+    -> decltype(EvalData::Counter::instance_count)
+{
+    decltype(EvalData::Counter::instance_count) counts = 0;
+    for (const auto& c : this->results)
+    {
+        counts += c.instance_count;
+    }
+    return counts;
+}
+
+auto
+EvalData::Results::get_max_res_val(void) const -> res_t
+{
+    return std::pow(2, this->max_bit_sz);
+}
+
+std::string
+EvalData::Results::to_str(void) const
+{
+    std::ostringstream oss;
+    oss << "== EvalData::Results\n";
+
+    for (const auto& c : this->results)
+    {
+        oss << c.to_str();
+    }
+
+    return oss.str();
 }

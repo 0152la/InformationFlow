@@ -74,6 +74,26 @@ private:
             { "half", def_ty::F16 },
         };
 
+    enum def_ty_type
+    {
+        INT,
+        FLOAT,
+    };
+
+    inline static std::unordered_map<def_ty_type, std::vector<def_ty>>
+        def_ty_types { { def_ty_type::INT,
+                           {
+                               def_ty::I64,
+                               def_ty::I32,
+                               def_ty::I16,
+                               def_ty::I1,
+                           } },
+            { def_ty_type::FLOAT,
+                {
+                    def_ty::F32,
+                    def_ty::F16,
+                } } };
+
 public:
     inline static const std::unordered_map<def_ty, uint8_t> def_ty_fl_bitsizes {
         { def_ty::F16, 16 },
@@ -92,6 +112,18 @@ public:
     static def_ty from_str(const std::string_view& s)
     {
         return def_ty_names.at(s);
+    }
+
+    static bool is_def_ty_int(const def_ty& dt)
+    {
+        auto ty_vec = def_ty_types.at(def_ty_type::INT);
+        return std::find(ty_vec.begin(), ty_vec.end(), dt) != ty_vec.end();
+    }
+
+    static bool is_def_ty_float(const def_ty& dt)
+    {
+        auto ty_vec = def_ty_types.at(def_ty_type::FLOAT);
+        return std::find(ty_vec.begin(), ty_vec.end(), dt) != ty_vec.end();
     }
 };
 
@@ -180,22 +212,25 @@ struct InputData
 
 struct EvalRunInfo
 {
-    const uint8_t out_bit_sz;
-    const uint64_t max_val;
-
+    const uint8_t bit_sz_in_min;
+    const uint8_t bit_sz_in_max;
+    const uint8_t bit_sz_out_min;
+    const uint8_t bit_sz_out_max;
     bool is_div = false;
 
-    EvalRunInfo(uint8_t, bool);
+    EvalRunInfo(const RunInfo&);
+
+private:
+    EvalData::bit_sz_t get_out_bit_sz(const RunInfo&, bool);
 };
 
 struct ThreadRunInfo
 {
-    EvalRunInfo* eri;
-    EvalResult local_results;
+    const EvalRunInfo* eri;
+    EvalData::Results local_results;
     std::thread thr;
-    bool used_cache;
 
-    ThreadRunInfo(EvalRunInfo&, bool);
+    ThreadRunInfo(const EvalRunInfo&);
 };
 
 class Runner
@@ -214,12 +249,14 @@ private:
     void logs_os_init(void);
     void logs_os_close(void);
     void log_one_run(const EntropyResult&, const DefInfo&);
-    template <typename T, typename R> void log_result(EvalResult&, R&) const;
+    template <typename T, typename R>
+    void log_result(EvalData::Results&, R&, EvalData::bit_sz_t) const;
 
     template <typename T, typename R, typename... As>
     std::span<ThreadRunInfo> eval_threads_start(
-        EvalRunInfo&, bool, const std::function<R(As...)>&) const;
-    void eval_threads_join(EvalResult&, const std::span<ThreadRunInfo>&) const;
+        const EvalRunInfo&, const std::function<R(As...)>&) const;
+    void eval_threads_join(
+        EvalData::Results&, const std::span<ThreadRunInfo>&) const;
     template <typename T, typename R, typename... As>
     void do_eval_thread_init(
         ThreadRunInfo&, InputData, const std::function<R(As...)>&) const;
@@ -228,12 +265,12 @@ private:
     void do_eval_thread(ThreadRunInfo&, const InputData&,
         const std::function<R(As...)>&, std::tuple<As...>&) const;
     template <size_t I, typename T, typename R, typename... As>
-    void do_eval(EvalResult&, const InputData&, const std::function<R(As...)>&,
-        std::tuple<As...>&) const;
+    void do_eval(EvalData::Results&, const InputData&,
+        const std::function<R(As...)>&, std::tuple<As...>&) const;
 
     template <typename T, typename R, typename... As>
-    const EvalResult dispatch_eval(
-        EvalRunInfo&, EvalResultCache&, const std::function<R(As...)>&) const;
+    const EvalData::Results dispatch_eval(
+        const EvalRunInfo&, const std::function<R(As...)>&) const;
     template <typename T, typename R, typename... Args>
     const EntropyResult exhaust_eval(const RunInfo&) const;
 
