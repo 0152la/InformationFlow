@@ -1,6 +1,7 @@
 #ifndef _EEVAL_RUNNER_HPP
 #define _EEVAL_RUNNER_HPP
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -139,12 +140,21 @@ struct DefInfo
     std::vector<def_ty_enum::def_ty> params_ty;
     std::string params_str;
 
+    using sv = std::string_view;
+    inline static constexpr std::array div_names { sv("udiv"), sv("sdiv"),
+        sv("urem"), sv("srem") };
+    inline static constexpr std::array fop_names { sv("fadd"), sv("fmul"),
+        sv("fsub"), sv("fdiv"), sv("frem"), sv("fcmp"), sv("fpto") };
+    inline static constexpr std::array overflow_insts { sv("add"), sv("sub"),
+        sv("mul") };
+
     DefInfo(const std::string&);
     std::string get_fn_name(void) const;
     std::string get_extra(void) const;
     std::string get_full_name(void) const;
-    bool check_div(void) const;
-    bool check_fop(void) const;
+
+    template <typename T, size_t N>
+    bool check_name_within(const std::array<T, N>&) const;
     std::string to_str(void) const;
 
 private:
@@ -214,14 +224,13 @@ struct EvalRunInfo
 {
     const uint8_t bit_sz_in_min;
     const uint8_t bit_sz_in_max;
-    const uint8_t bit_sz_out_min;
-    const uint8_t bit_sz_out_max;
+    const uint8_t bit_sz_out;
     bool is_div = false;
 
     EvalRunInfo(const RunInfo&);
 
 private:
-    EvalData::bit_sz_t get_out_bit_sz(const RunInfo&, bool);
+    EvalData::bit_sz_t get_out_bit_sz(const RunInfo&);
 };
 
 struct ThreadRunInfo

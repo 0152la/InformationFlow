@@ -58,39 +58,6 @@ DefInfo::get_full_name(void) const
     return full_name;
 }
 
-bool
-DefInfo::check_div(void) const
-{
-    using namespace std::string_view_literals;
-
-    constexpr std::array div_names { "udiv"sv, "sdiv"sv, "urem"sv, "srem"sv };
-    const auto name_sv = std::string_view { this->llvm_fn_name };
-    if (std::any_of(div_names.begin(), div_names.end(),
-            [&name_sv](const std::string_view& s)
-            { return name_sv.find(s) != std::string::npos; }))
-    {
-        return true;
-    }
-    return false;
-}
-
-bool
-DefInfo::check_fop(void) const
-{
-    using namespace std::string_view_literals;
-
-    constexpr std::array fop_names { "fadd"sv, "fmul"sv, "fsub"sv, "fdiv"sv,
-        "frem"sv, "fcmp"sv, "fpto"sv };
-    const auto name_sv = std::string_view { this->llvm_fn_name };
-    if (std::any_of(fop_names.begin(), fop_names.end(),
-            [&name_sv](const std::string_view& s)
-            { return name_sv.find(s) != std::string::npos; }))
-    {
-        return true;
-    }
-    return false;
-}
-
 std::string
 DefInfo::to_str(void) const
 {
@@ -118,9 +85,9 @@ DefInfo::to_str(void) const
 RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
     di(&_di),
     fn_ptr(_fn_ptr),
-    is_div(di->check_div())
+    is_div(di->check_name_within(DefInfo::div_names))
 {
-    if (di->check_fop())
+    if (di->check_name_within(DefInfo::fop_names))
     {
         this->bit_sz_min
             = def_ty_enum::def_ty_fl_bitsizes.at(di->params_ty.front());
@@ -140,16 +107,15 @@ RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
 EvalRunInfo::EvalRunInfo(const RunInfo& ri) :
     bit_sz_in_min(ri.bit_sz_min),
     bit_sz_in_max(ri.bit_sz_max),
-    bit_sz_out_min(EvalRunInfo::get_out_bit_sz(ri, true)),
-    bit_sz_out_max(EvalRunInfo::get_out_bit_sz(ri, false)),
+    bit_sz_out(EvalRunInfo::get_out_bit_sz(ri)),
     is_div(ri.is_div) { };
 
 EvalData::bit_sz_t
-EvalRunInfo::get_out_bit_sz(const RunInfo& ri, bool get_min)
+EvalRunInfo::get_out_bit_sz(const RunInfo& ri)
 {
     if (def_ty_enum::is_def_ty_int(ri.di->ret_ty))
     {
-        return (get_min ? ri.bit_sz_min : ri.bit_sz_max);
+        return ri.bit_sz_max;
     }
     else if (def_ty_enum::is_def_ty_float(ri.di->ret_ty))
     {
@@ -204,7 +170,7 @@ InputData::get_input_range(uint8_t param) const
 
 ThreadRunInfo::ThreadRunInfo(const EvalRunInfo& _eri) :
     eri(&_eri),
-    local_results(_eri.bit_sz_out_min, _eri.bit_sz_out_max) { };
+    local_results(_eri.bit_sz_in_min, _eri.bit_sz_in_max, _eri.bit_sz_out) { };
 
 /*******************************************************************************
  * Runner

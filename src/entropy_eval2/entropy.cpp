@@ -6,24 +6,29 @@
  ******************************************************************************/
 
 double
-EntropyCalcs::compute_entropy(
-    const EvalData::Counter& counts)
+EntropyCalcs::compute_entropy(const EvalData::Counter& counts, bool overflow)
 {
     double h_o = 0.0;
     double prob;
-    const EvalData::res_t max_val_curr = std::pow(2, counts.bs);
-    const EvalData::res_t max_val = std::pow(2, counts.max_bs);
+    const EvalData::res_t max_val = counts.get_max_res_val();
+    const EvalData::res_t max_val_curr
+        = overflow ? std::pow(2, counts.bit_sz_in) : max_val;
 
     EvalData::instance_t seen_instances = 0;
     EvalData::instance_t curr_instances;
     for (EvalData::instance_t i = 0;
-        i < max_val_curr || seen_instances < counts.instance_count; ++i)
+        i < max_val_curr && seen_instances < counts.instance_count; ++i)
     {
         curr_instances = 0;
 
-        for (EvalData::instance_t j = i; j < max_val; j += max_val_curr)
+        curr_instances += counts.instances[i];
+        if (overflow)
         {
-            curr_instances += counts.instances[j];
+            for (EvalData::instance_t j = i + max_val_curr; j < max_val;
+                j += max_val_curr)
+            {
+                curr_instances += counts.instances[j];
+            }
         }
 
         if (curr_instances == 0)
@@ -41,13 +46,6 @@ EntropyCalcs::compute_entropy(
 }
 
 double
-EntropyCalcs::compute_uncertainty_coef(const EvalData::Counter& counts)
-{
-    return compute_uncertainty_coef_given_entropy(
-        EntropyCalcs::compute_entropy(counts), counts);
-}
-
-double
 EntropyCalcs::compute_uncertainty_coef_given_entropy(
     double entropy, const EvalData::Counter& counts)
 {
@@ -58,11 +56,12 @@ EntropyCalcs::compute_uncertainty_coef_given_entropy(
  * EntropyResultEntry
  ******************************************************************************/
 
-EntropyResultEntry::EntropyResultEntry(//const EntropyCalcs::data_t& _results,
-    const EvalData::Counter& _counts) :
-    bit_sz(_counts.bs)
+EntropyResultEntry::EntropyResultEntry(
+    const EvalData::Counter& _counts, bool _overflow) :
+    bit_sz(_counts.bit_sz_in),
+    overflow(_overflow)
 {
-    this->entropy = EntropyCalcs::compute_entropy(_counts);
+    this->entropy = EntropyCalcs::compute_entropy(_counts, this->overflow);
     this->uncertainty_coef
         = EntropyCalcs::compute_uncertainty_coef_given_entropy(
             this->entropy, _counts);
@@ -93,14 +92,15 @@ EntropyResultEntry::to_str_csv(std::string_view llvm_fn_name) const
  ******************************************************************************/
 
 void
-EntropyResult::parse_evalresults(const EvalData::Results& er)
+EntropyResult::parse_evalresults(const EvalData::Results& er, bool overflow)
 {
-    auto scaled_res = EvalData::Counter { er.min_bit_sz, er.max_bit_sz };
-    for (EvalData::bit_sz_t b = er.min_bit_sz; b <= er.max_bit_sz; ++b)
+    auto scaled_res = EvalData::Counter { er.bit_sz_in_min, er.bit_sz_out,
+        er.bit_sz_in_max };
+    for (EvalData::bit_sz_t b = er.bit_sz_in_min; b <= er.bit_sz_in_max; ++b)
     {
         scaled_res.combine_results(er.get_results_for_bitsize(b));
-        scaled_res.bs = b;
-        this->data.emplace(scaled_res);
+        scaled_res.bit_sz_in = b;
+        this->data.emplace(scaled_res, overflow);
     }
 }
 

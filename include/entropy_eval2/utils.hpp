@@ -9,6 +9,7 @@
 namespace Utils
 {
 void debug_print(std::string_view);
+void test_print(std::string_view);
 
 void
 do_check(bool, std::string_view);

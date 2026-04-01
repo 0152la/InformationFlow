@@ -11,6 +11,13 @@ debug_print(std::string_view msg)
 }
 
 void
+test_print(std::string_view msg)
+{
+    fmt::print(fmt::fg(fmt::color::light_sky_blue) | fmt::emphasis::bold, "[TEST] ");
+    std::cout << msg << std::endl;
+}
+
+void
 do_check(bool cond, std::string_view msg)
 {
     if (cond)

@@ -18,8 +18,7 @@
 class EntropyCalcs
 {
 public:
-    static double compute_entropy(const EvalData::Counter&);
-    static double compute_uncertainty_coef(const EvalData::Counter&);
+    static double compute_entropy(const EvalData::Counter&, bool);
     static double compute_uncertainty_coef_given_entropy(
         double, const EvalData::Counter&);
 };
@@ -29,8 +28,9 @@ struct EntropyResultEntry
     EvalData::bit_sz_t bit_sz;
     double entropy;
     double uncertainty_coef;
+    bool overflow;
 
-    EntropyResultEntry(const EvalData::Counter&);
+    EntropyResultEntry(const EvalData::Counter&, bool);
 
     const std::string to_str(void) const;
     const std::string to_str_csv(std::string_view) const;
@@ -63,7 +63,7 @@ public:
         return this->data;
     };
 
-    void parse_evalresults(const EvalData::Results&);
+    void parse_evalresults(const EvalData::Results&, bool);
     std::string to_str(void) const;
     std::string to_str_csv(std::string_view) const;
 };

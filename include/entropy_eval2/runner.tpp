@@ -1,6 +1,10 @@
-// Helper templates
+/*******************************************************************************
+ * Helper templates
+ ******************************************************************************/
 
 // Get the first type of a tuple
+#include <chrono>
+#include <type_traits>
 template <typename... As>
 using first_t = std::tuple_element_t<0, std::tuple<As...>>;
 
@@ -67,6 +71,26 @@ convert_arg(From init_val)
     return conv_u<From, To>(init_val).get();
 }
 
+/*******************************************************************************
+ * DefInfo
+ ******************************************************************************/
+
+template <typename T, size_t N>
+bool
+DefInfo::check_name_within(const std::array<T, N>& within) const
+{
+    if (std::any_of(within.begin(), within.end(), [this](std::string_view s)
+            { return this->llvm_fn_name.find(s) != std::string::npos; }))
+    {
+        return true;
+    }
+    return false;
+}
+
+/*******************************************************************************
+ * Runner
+ ******************************************************************************/
+
 template <typename T, typename R>
 void
 Runner::log_result(
@@ -91,9 +115,11 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
     if constexpr (I == sizeof...(As))
     {
         R res = std::apply(fn, curr_args);
-        EvalData::bit_sz_t bs
-            = (res == R { } ? 0
-                            : std::floor(std::log2(tuple_max(curr_args))) + 1);
+        EvalData::bit_sz_t bs = (res == R { }
+                ? 0
+                : (std::is_floating_point_v<first_t<As...>>
+                          ? sizeof(first_t<As...>) * CHAR_BIT
+                          : std::floor(std::log2(tuple_max(curr_args))) + 1));
         this->log_result<T, R>(tri.local_results, res, bs);
     }
     else
@@ -155,9 +181,10 @@ Runner::dispatch_eval(
     const EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
     auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.is_div };
-    auto results = EvalData::Results { eri.bit_sz_out_min, eri.bit_sz_out_max };
+    auto results = EvalData::Results { eri.bit_sz_in_min, eri.bit_sz_in_max,
+        eri.bit_sz_out };
 
-    if (results.max_bit_sz >= Config::min_par_bit_sz)
+    if (eri.bit_sz_in_max >= Config::min_par_bit_sz)
     {
         auto thrs = this->eval_threads_start<T, R, As...>(eri, fn);
         this->eval_threads_join(results, thrs);
@@ -188,7 +215,7 @@ Runner::do_eval(EvalData::Results& results, const InputData& inputs,
         R res = std::apply(fn, curr_args);
         EvalData::bit_sz_t bs
             = (res == R { } ? 0
-                          : std::floor(std::log2(tuple_max(curr_args))) + 1);
+                            : std::floor(std::log2(tuple_max(curr_args))) + 1);
         this->log_result<T, R>(results, res, bs);
     }
     else
@@ -222,7 +249,7 @@ Runner::exhaust_eval(const RunInfo& ri) const
         bool check = true;
         check &= ri.bit_sz_min == ri.bit_sz_max;
         check &= ri.bit_sz_min == sizeof(T) * CHAR_BIT;
-        Utils::do_debug_check(check,
+        Utils::do_debug_check(!check,
             fmt::format("Expected bit range of single size {}; got [{}, {}]!",
                 sizeof(T) * CHAR_BIT, ri.bit_sz_min, ri.bit_sz_max));
     }
@@ -234,22 +261,24 @@ Runner::exhaust_eval(const RunInfo& ri) const
             std::chrono::system_clock::now()),
         ri.di->llvm_fn_name)
               << std::flush;
-    std::cout << '\r';
+    std::cout << '\n';
     auto time_start = Config::clock_ty::now();
     auto results = this->dispatch_eval<T, R, Args...>(eval_run_info, fn);
     auto time_end = Config::clock_ty::now();
     auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
         time_end - time_start);
-    std::cout << fmt::format("[{}] == End `{}` - Duration {} ==",
+    std::cout << fmt::format("[{}] == End `{}` - Duration {} - {} ==",
         std::chrono::round<std::chrono::seconds>(
             std::chrono::system_clock::now()),
-        ri.di->llvm_fn_name, time_dur)
+        ri.di->llvm_fn_name, time_dur,
+        std::chrono::duration_cast<std::chrono::seconds>(time_dur))
               << std::flush;
     std::cout << '\n';
 
-    std::cout << results.to_str() << std::endl;
+    // Utils::debug_print(results.to_str(true));
     EntropyResult entropy_res;
-    entropy_res.parse_evalresults(results);
+    entropy_res.parse_evalresults(
+        results, ri.di->check_name_within(DefInfo::overflow_insts));
 
     std::cout << '\r';
     return entropy_res;

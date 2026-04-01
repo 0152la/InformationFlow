@@ -11,7 +11,10 @@ main(int argc, char** argv)
 
     auto runner = Runner {};
     runner.init_all();
-    runner.run_one("llvm_impl_sitofp_f16");
+    runner.eval_all();
+
+    //const EntropyResult res = runner.run_one("llvm_impl_fadd");
+    //std::cout << res.to_str() << std::endl;
 
     return 0;
 }

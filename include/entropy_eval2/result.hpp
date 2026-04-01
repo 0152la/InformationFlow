@@ -33,15 +33,17 @@ using bit_sz_t = uint8_t;
 
 struct Counter
 {
-    bit_sz_t bs;
-    bit_sz_t max_bs;
+    EvalData::bit_sz_t bit_sz_in;
+    EvalData::bit_sz_t bit_sz_out;
+    EvalData::bit_sz_t bit_sz_in_max;
 
     // `instances` is where the instance counts are held. The indices are of
     // type `res_t`, up to a max of 2^n bitsize
     instance_t* instances;
     uint64_t instance_count;
 
-    Counter(bit_sz_t, bit_sz_t);
+    Counter(EvalData::bit_sz_t _in, EvalData::bit_sz_t _out,
+        EvalData::bit_sz_t _in_max);
     Counter(const Counter&);
     Counter(Counter&&) noexcept;
     ~Counter(void);
@@ -49,38 +51,38 @@ struct Counter
     Counter& operator=(const Counter&);
     Counter& operator=(Counter&&) noexcept;
 
-    void add_result(res_t);
+    void add_result(EvalData::res_t);
     void combine_results(const Counter&);
     res_t get_max_res_val(void) const;
 
-    std::string to_str(void) const;
+    std::string to_str(bool = false) const;
 };
 
-class Results
+struct Results
 {
 private:
     std::vector<Counter> results;
 
 public:
-    bit_sz_t min_bit_sz;
-    bit_sz_t max_bit_sz;
+    bit_sz_t bit_sz_in_min;
+    bit_sz_t bit_sz_in_max;
+    bit_sz_t bit_sz_out;
 
-    Results(bit_sz_t, bit_sz_t);
+    Results(EvalData::bit_sz_t _in_min, EvalData::bit_sz_t _in_max,
+        EvalData::bit_sz_t _out);
     ~Results(void);
 
     void add_result(res_t, bit_sz_t);
     void combine_results(const EvalData::Results&);
 
     auto get_results(void) const -> const decltype(this->results)&;
-
     auto get_results_for_bitsize(bit_sz_t) const -> const Counter&;
-
     auto get_results_count(void) const
-        -> decltype(EvalData::Counter::instance_count);
+        -> decltype(std::declval<EvalData::Counter>().instance_count);
 
     auto get_max_res_val(void) const -> res_t;
 
-    std::string to_str(void) const;
+    std::string to_str(bool = false) const;
 };
 
 };
