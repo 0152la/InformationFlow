@@ -1,4 +1,23 @@
 #include "runner.hpp"
+#include "config.hpp"
+
+/*******************************************************************************
+ * DefInfoFlags
+ ******************************************************************************/
+
+DefInfoFlags::DefInfoFlags(std::string_view _di_fn_name) :
+    is_div(this->check_name_within(this->div_insts, _di_fn_name)),
+    is_fop(this->check_name_within(this->fop_insts, _di_fn_name)),
+    is_overflow(this->check_name_within(this->overflow_insts, _di_fn_name)),
+    is_shift(this->check_name_within(this->shift_insts, _di_fn_name))
+{
+}
+
+DefInfoFlags::DefInfoFlags(const DefInfoFlags& other) :
+    is_div(other.is_div),
+    is_fop(other.is_fop),
+    is_overflow(other.is_overflow),
+    is_shift(other.is_shift) {};
 
 /*******************************************************************************
  * DefInfo
@@ -33,6 +52,47 @@ DefInfo::DefInfo(const std::string& line)
     {
         this->params_ty.emplace_back(def_ty_enum::from_str(p));
     }
+
+    this->di_flags = new DefInfoFlags(this->llvm_fn_name);
+}
+
+DefInfo::~DefInfo(void) { delete (this->di_flags); }
+
+DefInfo::DefInfo(const DefInfo& other) :
+    llvm_opcode(other.llvm_opcode),
+    cmp_opcode(other.cmp_opcode),
+    extra_fn_name(other.extra_fn_name),
+    llvm_fn_name(other.llvm_fn_name),
+    ret_ty(other.ret_ty),
+    ret_str(other.ret_str),
+    params_ty(other.params_ty)
+{
+    this->di_flags = new DefInfoFlags(*other.di_flags);
+}
+
+DefInfo::DefInfo(DefInfo&& other) noexcept :
+    llvm_opcode(other.llvm_opcode),
+    cmp_opcode(other.cmp_opcode),
+    extra_fn_name(other.extra_fn_name),
+    llvm_fn_name(other.llvm_fn_name),
+    ret_ty(other.ret_ty),
+    ret_str(other.ret_str),
+    params_ty(other.params_ty)
+{
+    this->di_flags = std::exchange(other.di_flags, nullptr);
+}
+
+DefInfo&
+DefInfo::operator=(const DefInfo& other)
+{
+    return *this = DefInfo(other);
+}
+
+DefInfo&
+DefInfo::operator=(DefInfo&& other) noexcept
+{
+    std::swap(this->di_flags, other.di_flags);
+    return *this;
 }
 
 std::string
@@ -84,10 +144,9 @@ DefInfo::to_str(void) const
 
 RunInfo::RunInfo(const DefInfo& _di, void* _fn_ptr) :
     di(&_di),
-    fn_ptr(_fn_ptr),
-    is_div(di->check_name_within(DefInfo::div_names))
+    fn_ptr(_fn_ptr)
 {
-    if (di->check_name_within(DefInfo::fop_names))
+    if (di->di_flags->is_fop)
     {
         this->bit_sz_min
             = def_ty_enum::def_ty_fl_bitsizes.at(di->params_ty.front());
@@ -108,7 +167,7 @@ EvalRunInfo::EvalRunInfo(const RunInfo& ri) :
     bit_sz_in_min(ri.bit_sz_min),
     bit_sz_in_max(ri.bit_sz_max),
     bit_sz_out(EvalRunInfo::get_out_bit_sz(ri)),
-    is_div(ri.is_div) { };
+    di_flags(ri.di->di_flags) { };
 
 EvalData::bit_sz_t
 EvalRunInfo::get_out_bit_sz(const RunInfo& ri)
@@ -130,7 +189,8 @@ EvalRunInfo::get_out_bit_sz(const RunInfo& ri)
  * InputData
  ******************************************************************************/
 
-InputData::InputData(uint8_t _p_count, uint8_t _bit_sz, bool is_div_op) :
+InputData::InputData(
+    uint8_t _p_count, uint8_t _bit_sz, const DefInfoFlags* _di_flags) :
     parameter_count(_p_count)
 {
     this->parameter_ranges.reserve(this->parameter_count);
@@ -140,9 +200,13 @@ InputData::InputData(uint8_t _p_count, uint8_t _bit_sz, bool is_div_op) :
             0, static_cast<uint64_t>(std::pow(2, _bit_sz)) - 1 });
     }
 
-    if (is_div_op)
+    if (_di_flags->is_div)
     {
         this->parameter_ranges.at(Config::divisor_idx).set_start(1);
+    }
+    else if (_di_flags->is_shift)
+    {
+        this->parameter_ranges.at(Config::divisor_idx).set_end(_bit_sz - 1);
     }
 }
 

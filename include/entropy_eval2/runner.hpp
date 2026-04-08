@@ -128,7 +128,34 @@ public:
     }
 };
 
+struct DefInfoFlags
+{
+private:
+    using sv = std::string_view;
+    inline static constexpr std::array div_insts { sv("udiv"), sv("sdiv"),
+        sv("urem"), sv("srem") };
+    inline static constexpr std::array fop_insts { sv("fadd"), sv("fmul"),
+        sv("fsub"), sv("fdiv"), sv("frem"), sv("fcmp"), sv("fpto") };
+    inline static constexpr std::array overflow_insts { sv("add"), sv("sub"),
+        sv("mul") };
+    inline static constexpr std::array shift_insts { sv("shl"), sv("ashr"),
+        sv("lshr") };
+
+    template <typename T, size_t N>
+    bool check_name_within(const std::array<T, N>&, std::string_view) const;
+
+public:
+    bool is_div;
+    bool is_fop;
+    bool is_overflow;
+    bool is_shift;
+
+    DefInfoFlags(std::string_view);
+    DefInfoFlags(const DefInfoFlags&);
+};
+
 struct DefInfo
+
 {
     unsigned int llvm_opcode;
     unsigned int cmp_opcode;
@@ -140,21 +167,19 @@ struct DefInfo
     std::vector<def_ty_enum::def_ty> params_ty;
     std::string params_str;
 
-    using sv = std::string_view;
-    inline static constexpr std::array div_names { sv("udiv"), sv("sdiv"),
-        sv("urem"), sv("srem") };
-    inline static constexpr std::array fop_names { sv("fadd"), sv("fmul"),
-        sv("fsub"), sv("fdiv"), sv("frem"), sv("fcmp"), sv("fpto") };
-    inline static constexpr std::array overflow_insts { sv("add"), sv("sub"),
-        sv("mul") };
+    DefInfoFlags* di_flags;
 
     DefInfo(const std::string&);
+    ~DefInfo(void);
+    DefInfo(const DefInfo&);
+    DefInfo(DefInfo&&) noexcept;
+    DefInfo& operator=(const DefInfo&);
+    DefInfo& operator=(DefInfo&&) noexcept;
+
     std::string get_fn_name(void) const;
     std::string get_extra(void) const;
     std::string get_full_name(void) const;
 
-    template <typename T, size_t N>
-    bool check_name_within(const std::array<T, N>&) const;
     std::string to_str(void) const;
 
 private:
@@ -167,7 +192,6 @@ struct RunInfo
     void* fn_ptr;
     uint8_t bit_sz_min;
     uint8_t bit_sz_max;
-    bool is_div;
 
     RunInfo(const DefInfo&, void*);
 };
@@ -214,7 +238,7 @@ struct InputData
     uint8_t parameter_count;
     std::vector<InputDataRange> parameter_ranges;
 
-    InputData(uint8_t, uint8_t, bool);
+    InputData(uint8_t, uint8_t, const DefInfoFlags*);
     uint64_t get_input_count(void);
     auto get_input_range(uint8_t) const
         -> decltype(this->parameter_ranges)::const_reference;
@@ -225,7 +249,7 @@ struct EvalRunInfo
     const uint8_t bit_sz_in_min;
     const uint8_t bit_sz_in_max;
     const uint8_t bit_sz_out;
-    bool is_div = false;
+    const DefInfoFlags* di_flags;
 
     EvalRunInfo(const RunInfo&);
 

@@ -3,8 +3,6 @@
  ******************************************************************************/
 
 // Get the first type of a tuple
-#include <chrono>
-#include <type_traits>
 template <typename... As>
 using first_t = std::tuple_element_t<0, std::tuple<As...>>;
 
@@ -72,15 +70,16 @@ convert_arg(From init_val)
 }
 
 /*******************************************************************************
- * DefInfo
+ * DefInfoFlags
  ******************************************************************************/
 
 template <typename T, size_t N>
 bool
-DefInfo::check_name_within(const std::array<T, N>& within) const
+DefInfoFlags::check_name_within(
+    const std::array<T, N>& _within, std::string_view _name) const
 {
-    if (std::any_of(within.begin(), within.end(), [this](std::string_view s)
-            { return this->llvm_fn_name.find(s) != std::string::npos; }))
+    if (std::any_of(_within.begin(), _within.end(), [_name](std::string_view s)
+            { return _name.find(s) != std::string::npos; }))
     {
         return true;
     }
@@ -115,11 +114,9 @@ Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
     if constexpr (I == sizeof...(As))
     {
         R res = std::apply(fn, curr_args);
-        EvalData::bit_sz_t bs = (res == R { }
-                ? 0
-                : (std::is_floating_point_v<first_t<As...>>
-                          ? sizeof(first_t<As...>) * CHAR_BIT
-                          : std::floor(std::log2(tuple_max(curr_args))) + 1));
+        EvalData::bit_sz_t bs = std::is_floating_point_v<first_t<As...>>
+            ? sizeof(first_t<As...>) * CHAR_BIT
+            : std::floor(std::log2(tuple_max(curr_args))) + 1;
         this->log_result<T, R>(tri.local_results, res, bs);
     }
     else
@@ -162,7 +159,7 @@ Runner::eval_threads_start(
     for (uint8_t t = 0; t < thread_count; ++t)
     {
         new (&thrs_raw[t]) ThreadRunInfo { eri };
-        auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.is_div };
+        auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.di_flags };
         auto& outer_param = id.parameter_ranges.front();
         outer_param.set_start(t);
         outer_param.step = thread_count;
@@ -180,7 +177,7 @@ const EvalData::Results
 Runner::dispatch_eval(
     const EvalRunInfo& eri, const std::function<R(As...)>& fn) const
 {
-    auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.is_div };
+    auto id = InputData { sizeof...(As), eri.bit_sz_in_max, eri.di_flags };
     auto results = EvalData::Results { eri.bit_sz_in_min, eri.bit_sz_in_max,
         eri.bit_sz_out };
 
@@ -213,9 +210,9 @@ Runner::do_eval(EvalData::Results& results, const InputData& inputs,
     if constexpr (I == sizeof...(As))
     {
         R res = std::apply(fn, curr_args);
-        EvalData::bit_sz_t bs
-            = (res == R { } ? 0
-                            : std::floor(std::log2(tuple_max(curr_args))) + 1);
+        EvalData::bit_sz_t bs = std::is_floating_point_v<first_t<As...>>
+            ? sizeof(first_t<As...>) * CHAR_BIT
+            : std::floor(std::log2(tuple_max(curr_args))) + 1;
         this->log_result<T, R>(results, res, bs);
     }
     else
@@ -277,8 +274,7 @@ Runner::exhaust_eval(const RunInfo& ri) const
 
     // Utils::debug_print(results.to_str(true));
     EntropyResult entropy_res;
-    entropy_res.parse_evalresults(
-        results, ri.di->check_name_within(DefInfo::overflow_insts));
+    entropy_res.parse_evalresults(results, ri.di->di_flags->is_overflow);
 
     std::cout << '\r';
     return entropy_res;
