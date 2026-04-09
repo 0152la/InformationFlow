@@ -106,39 +106,14 @@ Runner::log_result(
     }
 }
 
-template <size_t I, typename T, typename R, typename... As>
-void
-Runner::do_eval_thread(ThreadRunInfo& tri, const InputData& inputs,
-    const std::function<R(As...)>& fn, std::tuple<As...>& curr_args) const
-{
-    if constexpr (I == sizeof...(As))
-    {
-        R res = std::apply(fn, curr_args);
-        EvalData::bit_sz_t bs = std::is_floating_point_v<first_t<As...>>
-            ? sizeof(first_t<As...>) * CHAR_BIT
-            : std::floor(std::log2(tuple_max(curr_args))) + 1;
-        this->log_result<T, R>(tri.local_results, res, bs);
-    }
-    else
-    {
-        const auto& curr_input = inputs.get_input_range(I);
-        for (size_t x = curr_input.start; x <= curr_input.end;
-            x += curr_input.step)
-        {
-            using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
-            std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
-            do_eval_thread<I + 1, T, R, As...>(tri, inputs, fn, curr_args);
-        }
-    }
-}
-
 template <typename T, typename R, typename... As>
 void
 Runner::do_eval_thread_init(ThreadRunInfo& tri, InputData inputs,
     const std::function<R(As...)>& fn) const
 {
     auto tr_args = std::tuple<As...> { };
-    this->do_eval_thread<0, T, R, As...>(tri, inputs, fn, tr_args);
+    this->do_eval<0, T, R, As...>(
+        tri.local_results, inputs, fn, tr_args, tri.eri->di_flags);
 }
 
 template <typename T, typename R, typename... As>
@@ -190,7 +165,7 @@ Runner::dispatch_eval(
     else
     {
         auto curr_args = std::tuple<As...> { };
-        this->do_eval<0, T, R, As...>(results, id, fn, curr_args);
+        this->do_eval<0, T, R, As...>(results, id, fn, curr_args, eri.di_flags);
     }
 
     Utils::do_debug_check(results.get_results_count() != id.get_input_count(),
@@ -205,14 +180,26 @@ Runner::dispatch_eval(
 template <size_t I, typename T, typename R, typename... As>
 void
 Runner::do_eval(EvalData::Results& results, const InputData& inputs,
-    const std::function<R(As...)>& fn, std::tuple<As...>& curr_args) const
+    const std::function<R(As...)>& fn, std::tuple<As...>& curr_args,
+    const DefInfoFlags* _di_flags) const
 {
     if constexpr (I == sizeof...(As))
     {
         R res = std::apply(fn, curr_args);
-        EvalData::bit_sz_t bs = std::is_floating_point_v<first_t<As...>>
-            ? sizeof(first_t<As...>) * CHAR_BIT
-            : std::floor(std::log2(tuple_max(curr_args))) + 1;
+        EvalData::bit_sz_t bs;
+        if constexpr (std::is_floating_point_v<first_t<As...>>)
+        {
+            bs = sizeof(first_t<As...>) * CHAR_BIT;
+        }
+        else
+        {
+            bs = std::floor(std::log2(tuple_max(curr_args))) + 1;
+        }
+
+        if (_di_flags->is_shift)
+        {
+            bs = std::max(bs, static_cast<EvalData::bit_sz_t>(std::get<I-1>(curr_args) + 1));
+        }
         this->log_result<T, R>(results, res, bs);
     }
     else
@@ -223,7 +210,8 @@ Runner::do_eval(EvalData::Results& results, const InputData& inputs,
         {
             using x_arg_t = std::tuple_element_t<I, std::tuple<As...>>;
             std::get<I>(curr_args) = convert_arg<T, x_arg_t>(x);
-            do_eval<I + 1, T, R, As...>(results, inputs, fn, curr_args);
+            do_eval<I + 1, T, R, As...>(
+                results, inputs, fn, curr_args, _di_flags);
         }
     }
 }

@@ -295,11 +295,9 @@ private:
         ThreadRunInfo&, InputData, const std::function<R(As...)>&) const;
 
     template <size_t I, typename T, typename R, typename... As>
-    void do_eval_thread(ThreadRunInfo&, const InputData&,
-        const std::function<R(As...)>&, std::tuple<As...>&) const;
-    template <size_t I, typename T, typename R, typename... As>
     void do_eval(EvalData::Results&, const InputData&,
-        const std::function<R(As...)>&, std::tuple<As...>&) const;
+        const std::function<R(As...)>&, std::tuple<As...>&,
+        const DefInfoFlags*) const;
 
     template <typename T, typename R, typename... As>
     const EvalData::Results dispatch_eval(

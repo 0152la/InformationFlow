@@ -11,6 +11,7 @@ DefInfoFlags::DefInfoFlags(std::string_view _di_fn_name) :
     is_overflow(this->check_name_within(this->overflow_insts, _di_fn_name)),
     is_shift(this->check_name_within(this->shift_insts, _di_fn_name))
 {
+    this->is_overflow |= this->is_shift;
 }
 
 DefInfoFlags::DefInfoFlags(const DefInfoFlags& other) :
