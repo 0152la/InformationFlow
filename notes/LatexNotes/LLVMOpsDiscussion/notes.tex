@@ -1,0 +1,301 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newcommand{\entropy}[1]{\mathcal{H}(#1)}
+\newcommand{\inst}[1]{\texttt{#1}}
+
+\newcommand{\cmnt}[2]{{\color{red}{\textbf{#1:} #2}}}
+\newcommand{\AL}[1]{\cmnt{AL}{#1}}
+
+\begin{document}
+
+The following is a discussion of how we handle low-level LLVM operations. The
+semantics and grouping are taken from the online reference
+manual~\cite{llvmref}.
+
+\section*{Uncertainty Coefficient}
+We aim to compute the uncertainty coefficient~\cite{press2007numerical} for
+each LLVM IR instruction, in order to later use it to provide a program-level
+view of the information flow in the program. There is one limitation we will
+impose on our analysis, and one assumption. First, we shall limit ourselves to
+a stateless view of the program. That is, we provide a static analysis, and
+(mostly) do not care what the actual possible inputs to an LLVM instruction
+are. If a binary operation takes a pair of registers as inputs, we shall assume
+the values are unconstrained, even if at some point in the code, for example,
+one of the variables associated with a register was constrained to a constant.
+Furthermore, we shall assume all inputs are uniformly distributed. This goes
+hand in hand with the previous limitation, and also simplifies the computation.
+As such, for some LLVM IR instruction \texttt{inst}, which takes some input
+\texttt{I} and returns some output \texttt{O}, we can define the
+entropy~(\autoref{eq:squeez}) and the uncertainty
+coefficient~(\autoref{eq:unc_coef}) as~\cite{clark2012squeeziness}:
+
+\begin{equation}\label{eq:squeez}
+    \entropy{I|O} = \entropy{I} - \entropy{O}
+\end{equation}
+
+\begin{equation}\label{eq:unc_coef}
+    U(I|O) = \frac{\entropy{I} - \entropy{I|O}}{\entropy{I}} = 1 -
+    \frac{\entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I} -
+    \entropy{O}}{\entropy{I}} = \frac{\entropy{O}}{\entropy{I}}
+\end{equation}
+
+With this as basis, we now turn our attention to the available LLVM IR
+instructions, and how we can apply the above formulas to them.
+
+\section*{Computation versus Control Flow}
+As discussed above, we are primarily interested in looking at the inputs and
+outputs of a particular LLVM IR instruction in order to be able to compute its
+uncertainty coefficient. However, first of all, not all instructions have
+inputs (e.g. \texttt{ret void}, \texttt{unreachable}), nor do they return some
+output (e.g. \texttt{br label <dest>}. Nevertheless, we need to consider how
+all instructions might affect information flow in the program.
+
+Thus, we distinguish two overall classes of instructions (outside the taxonomy
+in the reference manual itself): computation instructions, those which do
+return a value, and thus have an uncertainty coefficient value computable
+via~\autoref{eq:unc_coef}, and control flow instructions, which (generally) do
+not return a value, and affect the control flow of the program.
+
+\subsection{Computation instructions}\label{sec:comp_inst}
+These are instructions that take a number of arguments as inputs and yield one
+output. With the assumption that the inputs are uniformly distributed, we can
+compute the input entropy as \(\entropy{I} = log_2(i)\), where \(i\) is the
+total number of inputs. Thus, for a unary operation, \(i\) would be the total
+number of representable bit patterns of size \(b\), where \(b\) is given by the
+type encoded in the instruction. With multiple inputs, we duplicate the
+representable domain as many times as required, and compute the cartesian
+product.
+
+We can thus make our first observation: the maximum uncertainty coefficient of
+an operation with \(n\) unconstrained input arguments will be \(1/n\), as the
+maximal representable input domain would be \(\mathcal{D}_I \times
+\mathcal{D}_I \times ... \times \mathcal{D}_I\), with \(n\) multiplications,
+while the output domain is just \(\mathcal{D}_I\). The domain sizes are equal,
+as the types of both inputs and output are equal across all LLVM IR
+instructions. \AL{Double check}
+
+\subsection{Control flow instructions}
+Control flow instructions are not subject to the usual input to output ratio
+calculation, by the nature of the fact that they do not have outputs. However,
+we believe the information flow in the program is affected by such operations.
+Consider a conditional \inst{br} instruction, where the condition is always
+false. This makes the code in the target unreachable via that instruction, and
+if no other other instruction jumps to it, then that is dead code. By this
+measure, we believe we can evaluate the uncertainty coefficient of a control
+flow operation.
+
+Let's assume that there are \(n\) states entering the conditional instruction.
+Suppose the condition has a \(p\) probability of holding, assuming uniform
+input distribution. Thus, \(p*n\) states will follow the \texttt{true} branch,
+with \(1-p*n\) in the \texttt{false} branch. By considering these states as
+outputs of the instruction, we can then apply our usual entropy calculations.
+Thus, the ``output entropy'' over the \texttt{true} branch will be
+\(log_2(p*n)\), and over the \texttt{false} branch \(log_2(1-p*n)\). This will
+allow us to compute the uncertainty coefficient as normal.
+
+Now, this does mean we need to record some state. The \inst{br} instruction,
+for example, in its conditional form, (normally) takes a register as the
+conditional argument. We expect that the register is assigned to very closely
+to it being used in a conditional instruction, therefore we can record
+instructions likely to be used as conditional predicates, such as \inst{icmp}
+and \inst{fcmp}, and note the target register. Therefore, the idea is, for each
+boolean-returning instruction, we compute the probability of it returning
+\texttt{true} or \texttt{false}, by exhaustive evaluation, assuming uniformly
+distributed inputs. Then, when we observe a instruction using a recorded
+boolean variable, we can use the probability to compute the expected output
+state proportions, and assign that as the uncertainty coefficient.
+
+\section{Computing the uncertainty coefficient}
+While mathematically, the uncertainty coefficient is computed via the formula
+above, we can short-circuit the logic sometimes by considering the semantics of
+certain instructions. Thus, we distinguish three further categories of LLVM IR
+instructions.
+
+\subsubsection*{Set instructions}
+These instructions have a set value for their uncertainty coefficient. For
+example, \inst{unreachable} has no defined semantics, aside from saying this
+piece of code is unreachable. As such, we set its information flow to 0, as the
+expectation is no information should flow beyond this point. Another example is
+\inst{fcmp false} (and conversely, \inst{fcmp true}). While both these
+instructions take arguments, and the overall semantics intends to perform a
+comparison over those arguments, the conditional keyword determines the type of
+the comparison. Particularly, \texttt{false} indicates that the operation
+always returns \texttt{false}. Therefore, we know that the uncertainty
+coefficient is 0, as the output entropy is 0. \AL{Double check}
+
+\subsubsection*{Estimated instructions}
+This category of instructions allow us to compute the uncertainty value based
+on the arguments passed. For example, \texttt{trunc ... to} takes an argument
+of some type, and a secondary type. We can use the bitsizes of the two types in
+order to compute the expected entropy loss. Thus, truncating a type of 2 bits
+to 1 bit yields an expected uncertainty coefficient value of \(\entropy{O} /
+\entropy{I} = log_2{2^1} / log_2{2^2} = 0.5\) \AL{Double check}. This
+generalises to \(log_2{2^{bs_o}} / log_2{2^{bs_i}}\).
+
+\subsubsection*{Evaluated instructions}
+The final set of instructions are evaluated instructions. For these, we cannot
+find a simpler way to compute the uncertainty coefficient than experimental
+evaluation. All arithmetic (that is, binary and bitwise binary) operations are
+included here, along with a few others (certain comparison predicates).
+
+Since types in LLVM IR are represented by discrete bitsizes, and since large
+bit size values yield too big an input space to tractably compute the
+uncertainty coefficient values experimentally, we set an arbitrary bit size
+limit up to which we perform the evaluation, do an exhaustive evaluation up to
+the limit, and then extrapolate the results up to a maximum bit size (in modern
+architectures, this would mean 64 bits, albeit 128 bits could be considered).
+
+Regarding the extrapolation, we assume that every LLVM IR operation, supposing
+it could have an infinite input space, has some fixed point value as its
+corresponding uncertainty coefficient. We further suppose that the experimental
+evaluation would approach this fixed point value the higher the bit size, and
+that this value cannot be higher than a maximum value (as discussed
+in~\autoref{sec:comp_inst}).
+
+We thus perform a naive linear extrapolation process. We compute the difference
+between the last two experimentally evaluated bit sizes. We assume, since the
+difference between the fixed point value decreases as the bit size increases,
+the difference between computed uncertainty coefficients also decreases, thus
+making this difference between the last two computed data points the smallest.
+Then, we add up this difference as many times as required from the last data
+point onwards, in order to reach the maximum bit size under consideration (e.g.
+if we evaluated up to a bit size of 20, and would like to extrapolate to a bit
+size of 64, we add up 44 times the difference between the computed value for 19
+and 20 bits). If this expected maximum bit size value is higher \AL{Lower, for
+decaying functions} that the theoretical limit, we simply clamp the maximum
+uncertainty coefficient value to the computed limit. Finally, for each discrete
+bit size between the last compute bit size and the maximal bit size, we
+linearly derive an approximate uncertainty coefficient value.
+
+\section*{Specific instruction discussion}
+In the following, we look at specific instructions, split into groups as per
+the reference manual.
+
+%\subsection{Unary and Binary operations}
+%We combine these together, as the single unary operation available is
+%\inst{fneg}. All of these are computation operations. For most of these, we are
+%unable to come up with an
+
+\subsection{\inst{add} instruction}\label{sec:discuss_add}
+The \inst{add} (and conversely, \inst{sub}) instruction is a good baseline to
+compare our uncertainty coefficient analysis against. Assuming no flags are
+passed, the basic form of the instruction allows for over- (respectively,
+under-) flow. When thinking about how the outputs are distributed, we take note
+of two properties. First, as a binary instruction, it takes two operands as
+input, and returns one value. Thus, the input space size is \(n^2\), and the
+output space size is \(n\), where \(n\) is the total number of representable
+values given the type encoded in the instruction. Second, the output is
+uniform. That is, each output is present an equal amount of times. \AL{Will
+need to discuss a proof here. Probably.}
+
+With these in mind, we conclude that the uncertainty coefficient of \inst{add}
+(and \inst{sub}) is the maximum it can be, 0.5.
+
+However, let us now consider the case where one of the operands is constant.
+Now, our input space for calculations is reduced to \(n\), the same as the
+output space. At the same time, there are no clashes at all in the outputs -
+due to wrap-around semantics, the output space is simply returned in its
+entirety, with each output value appearing once. Again, we note the uniformity
+in the outputs, but since the input space is now smaller, having lost one of
+the unbound input variables, the instruction in the form of adding one constant
+to a variable does not lose any entropy (i.e. its uncertainty coefficient is
+1.0).
+
+Thus, we must consider operations where certain arguments might be set, or have
+certain values, as they might greatly affect the computed uncertainty
+coefficient in our analysis. At the same time, the presence (or absence) of
+certain flags, such as \texttt{nsw} or \texttt{nuw} to yield a \texttt{poison}
+value if wrapping occurs also affects the output value. However, in the
+interest of time, we currently ignore these flags, as computing the expected
+uncertainty values is just extra experimental work, and not much novel
+interest.
+
+\subsection{\inst{getelementpointer} instruction}
+The form of \inst{getelementpointer} (or \inst{gep} for short) is
+\texttt{<result> = getelementptr <ty>, ptr <ptrval>{, <ty> <idx>}*}. That is,
+the first type is the type of the given pointer, and indicates how the indexing
+should be done. The list of indices are then indices to iteratively dig into
+the type, to extract a specific address, corresponding to the object indicated
+by the index list.
+
+Normally, looking at the output and considering it is a pointer in stack space,
+we could assume the output space is as big as possible stack addresses.
+However, the list of indices are encoded in each \inst{gep} call, as well as
+the type to interpret the main pointer as. With these two ingredients, if we
+consider the pointer offset computed by \inst{gep}, it will be constant, as it
+is fully determined by the type and the indices. Thus, a well-defined program
+will have no clashes in the output of an instance of a \inst{gep} instruction,
+as the output is variable only on the pointer value, and is essentially a fixed
+offset from it. This mirrors the constant \inst{add} case
+(\autoref{sec:discuss_add}), where we return an output with a constant added to
+the input. And similarly, with the input and output spaces equal (the number of
+addresses in the stack space), we can conclude that the uncertainty coefficient
+is 1.0, i.e. it doesn't lose any entropy.
+
+\subsection{Call instructions}\label{sec:insts_call}
+This set of instructions, comprising of \inst{invoke}, \inst{callbr}, and
+\inst{call}, all change the control flow to a given function pointer. There are
+subtle differences in how to call each of the instructions, but with seemingly
+major effects:
+\begin{itemize}
+    \item [\inst{callbr}] Generally, this should be a rarely appearing
+        instruction, used either for a \texttt{goto} or for calling intrinsics.
+        The control flow after entering the \inst{callbr} function must then
+        continue into one of the provided indirect labels. We shouldn't expect
+        this function to appear when compiling normal user-code.
+    \item [\inst{call}] This is the usual function calling mechanism we are
+        used to: jump and execute the specified instruction, then, on a
+        \inst{ret}, come back to the instruction after the \inst{call};
+    \item [\inst{invoke}] Similar to \inst{call}, with the main difference that
+        a \inst{ret} will not return to the instruction succeeding the
+        \inst{invoke}, but rather to the label specified in the arguments of
+        the invoke.
+\end{itemize}
+
+For the purposes of our analysis, we shall assume that there is no observable
+entropy loss at the point of calling, and that any entropy loss calculations
+will be done when analysis the code inside the called functions. Of course,
+what this means is that if we are calling external functions, then that entropy
+loss will not be part of the analysis, but that is a limitation of having a
+static analysis tool. A dynamic analyser would be able to ``build up'' entropy
+loss as the program executes, by looking at the currently executing
+instruction, including from external libraries.
+
+\subsection{\inst{ptrtoaddr} instruction}
+This seems to be a fairly new addition to LLVM~\cite{popov2025thisyear}, and is
+only slightly different than \inst{ptrtoint}. The difference doesn't seem to
+affect functionality \emph{that} much, and it's a very subtle semantic
+difference due to the emergence of CHERI, which distinguishes between
+provenance and address. At this stage, we handle this instruction similar to
+\inst{ptrtoint}, although this seems slightly incorrect\AL{Discuss}.
+
+\subsection{\inst{phi} instruction}
+This instruction doesn't perform any computation itself, but rather selects
+which value should be returned based on the basic block executed prior to the
+current invocation. In terms of inputs / outputs though, this means we have a
+list of inputs, with associated basic blocks, and the outputs will be
+determined by the prior basic block at runtime. Statically, this means we don't
+lose any entropy, as there is a one-to-one mapping for inputs to outputs: the
+basic block that was previously executed fully determines the output.
+
+\subsection{Exception handling instruction}
+A few instructions deal exclusively with exception handling: \inst{resume},
+\inst{catchswitch}, \inst{catchret}, \inst{cleanupret}, \inst{landingpad},
+\inst{catchpad}, \inst{cleanuppad}. All of these instructions primarily deal
+with handling control flow. Similar to the call
+instruction~\ref{sec:insts_call} (and due to time pressure), we shall ignore
+analysing the exception handling mechanism, and assume there is no entropy loss
+in the functions themselves. There might be information flowing in how the
+exceptions and handled which might require special handling in terms of
+information flow, but at this stage of the project, there is likely little gain
+of handling these particularities compared to analysing the information flow in
+the rest of the compiled code.
+
+\bibliographystyle{plain}
+\bibliography{notes}
+
+\end{document}

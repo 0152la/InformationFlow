@@ -1,0 +1,51 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\newcommand{\entropy}[1]{\mathcal{H}(#1)}
+\newcommand{\fnin}[2]{\((#1, #2)\)}
+
+\newcommand{\cmnt}[2]{{\color{red}{\textbf{#1:} #2}}}
+\newcommand{\AL}[1]{\cmnt{AL}{#1}}
+
+\begin{document}
+
+Suppose we have a binary branch in a deterministic, self-contained (no external
+inputs) piece of code, similar to an \texttt{if} statement present in most, if
+not all, programming languages. In this document, we aim to compute how does
+this affect the Uncertainty Coefficient~\cite{press2007numerical} in terms of
+information flowing through either branches.
+
+The formula for computing the uncertainty coefficient formula is given
+in~\autoref{eq:unc_coef}. As the code is deterministic, we can further simplify
+this formula by using Squeeziness~\cite{clark2012squeeziness}, as
+per~\autoref{eq:squeez}. The final equation we use is given
+in~\autoref{eq:uc_simple}.
+
+\begin{equation}\label{eq:unc_coef}
+    U(I|O) = \frac{\entropy{I} - \entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I|O}}{\entropy{I}}
+\end{equation}
+
+\begin{equation}\label{eq:squeez}
+    \entropy{I|O} = \entropy{I} - \entropy{O}
+\end{equation}
+
+\begin{equation}\label{eq:uc_simple}
+    U(I|O) = 1 - \frac{\entropy{I|O}}{\entropy{I}} = 1 - \frac{\entropy{I} - \entropy{O}}{\entropy{I}} = \frac{\entropy{O}}{\entropy{I}}
+\end{equation}
+
+Suppose at the entry of the conditional branch, there are \(\mathcal{U}^N\)
+states, equivalent to \(N\) distinct states. Further suppose the condition in
+the branch has a probability of \(p\) of being \texttt{true} (and thus a
+probability of \(1-p\) of being \texttt{false}). Thus, out of the
+\(\mathcal{U}^N\) total possible states entering the conditional,
+\(p*\mathcal{U}^N\) will follow the \texttt{true} branch, with \((1-p) *
+\mathcal{U}^N\) following the \texttt{false} branch.
+
+\bibliographystyle{plain}
+\bibliography{notes}
+
+\end{document}
