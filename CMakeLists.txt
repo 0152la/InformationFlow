@@ -5,7 +5,11 @@ project(InformationFlow LANGUAGES CXX C)
 set(CMAKE_CXX_STANDARD 20)
 
 # Build third party dependencies
-add_subdirectory(${CMAKE_SOURCE_DIR}/third_party)
+set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/third_party)
+add_subdirectory(${THIRD_PARTY_DIR})
+
+# Set `tomlplusplus` include path
+set(TOMLPLUSPLUS_INCLUDE_DIR ${THIRD_PARTY_DIR}/tomlplusplus/include)
 
 # Set global compilation options
 add_compile_options(-pedantic -Wextra)

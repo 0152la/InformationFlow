@@ -8,10 +8,16 @@ else
     export CC=${LLVM_DIR}/../../../bin/clang
     export CXX=${LLVM_DIR}/../../../bin/clang++
 fi
-export CMAKE_BUILD_TYPE=Debug
 
 src_dir=$(realpath "$(dirname "$0")"/..)
-build_dir=$src_dir/build
+if [ "$1" == "rel" ]
+then
+    export CMAKE_BUILD_TYPE=Release
+    build_dir=$src_dir/build-rel
+else
+    export CMAKE_BUILD_TYPE=Debug
+    build_dir=$src_dir/build
+fi
 
 cmake -G Ninja -B "$build_dir" -S "$src_dir"
 cmake --build "$build_dir"
