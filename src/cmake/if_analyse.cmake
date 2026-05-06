@@ -13,7 +13,6 @@ set(flow_sources
     entropy_map_path_printer.cpp
     instr_emulator.cpp
     const_inst_emulator.cpp
-    ${LLVM_GEN_SRC_DIR}/llvm_gen-names.cpp
     reader.cpp
 )
 
@@ -31,8 +30,6 @@ target_include_directories(if_analyse PRIVATE ${ALL_INCLUDES} ${LLVM_INCLUDE_DIR
 target_include_directories(if_analyse PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(if_analyse PUBLIC ${TOMLPLUSPLUS_INCLUDE_DIR})
 target_link_libraries(if_analyse PRIVATE ${LINK_LIBS})
-#target_link_libraries(if_analyse PRIVATE ${llvm_snippets})
-#add_dependencies(if_analyse llvm_snippets)
 add_dependencies(if_analyse lgen_make_snippets)
 
 ################################################################################

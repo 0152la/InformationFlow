@@ -77,19 +77,11 @@ namespace IF_Entropy_Vals
 class IF_Emulator
 {
 private:
-    static constexpr std::string snippet_prefix = "llvm_impl_";
-
-    void* ll_snippet_handler;
-
-    template <typename T, typename Tc> void populate_fn_def(const fn_def&);
     void populate_ops(void);
 
 public:
-    IF_Emulator(const std::string&);
+    IF_Emulator();
     ~IF_Emulator();
-
-    static std::string complete_fn_name(const std::string&);
-    static std::string make_emulated_fn_name(const llvm::Instruction&);
 
     /* Estimated operations
      * These operations do not need to be fuzzed to compute their entropy, but

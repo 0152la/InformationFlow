@@ -132,72 +132,6 @@ do_snippet_entropy(std::function<T(T, T)> fn)
     return;
 }
 
-static int
-test_snippet()
-{
-    void* dl_handler = dlopen(snippets_lib_path.c_str(), RTLD_NOW);
-    if (!dl_handler)
-    {
-        throw std::runtime_error(
-            "Error `dlopen` :: " + std::string { dlerror() });
-    }
-    dlerror();
-
-    {
-        std::cout << "===== add_i64\n";
-        std::function<uint64_t(uint64_t, uint64_t)> add_64 { (uint64_t (*)(
-            uint64_t, uint64_t)) dlsym(dl_handler, "llvm_impl_add_i64") };
-        if (const char* err = dlerror())
-        {
-            throw std::runtime_error(
-                "> dlsym i64 :: " + std::string { err } + "\n");
-        }
-        do_snippet_entropy(add_64);
-    }
-
-    {
-        std::cout << "===== add_i64_nuw\n";
-        std::function<uint64_t(uint64_t, uint64_t)> add_64_nuw { (uint64_t (*)(
-            uint64_t, uint64_t)) dlsym(dl_handler, "llvm_impl_add_i64_nuw") };
-        if (const char* err = dlerror())
-        {
-            throw std::runtime_error(
-                "> dlsym i64 :: " + std::string { err } + "\n");
-        }
-        uint64_t p = add_64_nuw(std::numeric_limits<uint64_t>::max(), 2222);
-        std::cout << "POISON :: " << p << '\n';
-        do_snippet_entropy(add_64_nuw);
-    }
-
-    {
-        std::cout << "===== add_i64_nsw\n";
-        std::function<int64_t(int64_t, int64_t)> add_64_nsw { (int64_t (*)(
-            int64_t, int64_t)) dlsym(dl_handler, "llvm_impl_add_i64_nsw") };
-        if (const char* err = dlerror())
-        {
-            throw std::runtime_error(
-                "> dlsym i64 :: " + std::string { err } + "\n");
-        }
-        do_snippet_entropy(add_64_nsw);
-    }
-
-    {
-        std::cout << "===== add_i8\n";
-        std::function<uint8_t(uint8_t, uint8_t)> add_8 { (uint8_t (*)(
-            uint8_t, uint8_t)) dlsym(dl_handler, "llvm_impl_add_i8") };
-        if (const char* err = dlerror())
-        {
-            throw std::runtime_error(
-                "> dlsym i8 :: " + std::string { err } + "\n");
-        }
-        do_snippet_entropy(add_8);
-    }
-
-    dlclose(dl_handler);
-
-    return 0;
-}
-
 // Need to test that the calculated entropy values are right
 static int
 entropy_dev(void)
@@ -218,7 +152,7 @@ reader_dev(void)
     const std::string ll_path = "/home/andreilascu/Documents/Repos/"
                                 "InformationFlow/tmp/snip_add.ll";
 
-    IF_Emulator emu { snippets_lib_path };
+    IF_Emulator emu { };
 
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_module = if_p.parse_ll(ll_path);
@@ -245,7 +179,6 @@ reader_dev(void)
 int
 main()
 {
-    // return test_snippet();
     return test_entropies();
     //  return test_emulator();
 

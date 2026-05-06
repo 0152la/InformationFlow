@@ -37,7 +37,6 @@ do_if_entropy(std::string file_path)
     IF_Parser if_p;
     std::unique_ptr<IF_LLVM_Module> if_m = if_p.parse_ll(file_path);
 
-    IF_Emulator if_emu(llvm_snippet_lib_path);
     std::unique_ptr<IF_EntropyMap::Map> if_em
         = if_p.make_entropy_map(*if_m->get_module());
     if_em->set_verbose(true);

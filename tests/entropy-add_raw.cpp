@@ -24,7 +24,8 @@ main()
     std::cout << "Batches : " << sample_batch_count << '\n';
     std::cout << "Batch size : " << sample_batch_size << '\n';
     std::cout << "Batch expected : " << samples * progress_percent << '\n';
-    std::cout << "Total real : " << sample_batch_count * sample_batch_size << '\n';
+    std::cout << "Total real : " << sample_batch_count * sample_batch_size
+              << '\n';
     std::cout << "Total expected : " << samples << '\n';
     std::cout << "================\n";
 
@@ -35,8 +36,8 @@ main()
             in1 = harness.gen<add_t>();
             in2 = harness.gen<add_t>();
             out = test_func(in1, in2);
-            harness.log_results(
-                std::hash<std::pair<add_t, add_t>> {}(std::make_pair(in1, in2)),
+            harness.log_results(std::hash<std::pair<add_t, add_t>> { }(
+                                    std::make_pair(in1, in2)),
                 out);
         }
         std::cout << "\rProgress " << (i + 1) * progress_percent * 100 << "%";
@@ -45,15 +46,15 @@ main()
     }
     std::cout << "\nDone\n";
 
-    // for (size_t i = 0; i < harness.get_sample_count(); ++i)
-    //{
-    // in1 = harness.gen<add_t>();
-    // in2 = harness.gen<add_t>();
-    // out = test_func(in1, in2);
-    // harness.log_results(std::hash<std::pair<add_t, add_t>> {}(
-    // std::make_pair(in1, in2)),
-    // out);
-    //}
+    for (size_t i = 0; i < harness.get_sample_count(); ++i)
+    {
+        in1 = harness.gen<add_t>();
+        in2 = harness.gen<add_t>();
+        out = test_func(in1, in2);
+        harness.log_results(
+            std::hash<std::pair<add_t, add_t>> { }(std::make_pair(in1, in2)),
+            out);
+    }
 
     harness.print_measures();
     return 0;

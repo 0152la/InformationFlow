@@ -9,6 +9,9 @@
 #include <llvm/IR/Instructions.h>
 #pragma clang diagnostic pop
 
+const std::string llvm_snippet_prefix = "llvm_impl";
+constexpr char llvm_snippet_delim = '_';
+
 const std::string
 make_llvm_snippet_name(const std::string&, const std::string&);
 const std::string

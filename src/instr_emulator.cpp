@@ -204,40 +204,12 @@ IF_Emulator::populate_ops(void)
     // TODO get the entropy values
 }
 
-IF_Emulator::IF_Emulator(const std::string& lib_path)
+IF_Emulator::IF_Emulator()
 {
-    this->ll_snippet_handler = dlopen(lib_path.c_str(), RTLD_NOW);
-    if (!this->ll_snippet_handler)
-    {
-        throw std::runtime_error(
-            "Error `dlopen` :: " + std::string { dlerror() });
-    }
-
-    // Clear `dlerror`
-    dlerror();
-
     this->populate_ops();
 }
 
-IF_Emulator::~IF_Emulator() { dlclose(this->ll_snippet_handler); }
-
-std::string
-IF_Emulator::complete_fn_name(const std::string& base)
-{
-    return IF_Emulator::snippet_prefix + base;
-}
-
-std::string
-IF_Emulator::make_emulated_fn_name(const llvm::Instruction& inst)
-{
-    std::string fn_name = IF_Emulator::snippet_prefix + inst.getOpcodeName();
-    if (const llvm::CmpInst* cmp_inst = llvm::dyn_cast<llvm::CmpInst>(&inst))
-    {
-        fn_name += "_"
-            + llvm::CmpInst::getPredicateName(cmp_inst->getPredicate()).str();
-    }
-    return fn_name;
-}
+IF_Emulator::~IF_Emulator() { }
 
 /*******************************************************************************
  * Entropy estimation functions

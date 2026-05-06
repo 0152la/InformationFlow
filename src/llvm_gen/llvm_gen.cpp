@@ -1,8 +1,13 @@
 #include "llvm_gen.hpp"
-#include <llvm/IR/IRBuilder.h>
 
-const std::string snippet_prefix = "llvm_impl_"; // TODO
 static std::vector<llvm_impl_def> fn_defs;
+
+static const std::string snippets_lib_path = "libllvm_snippets.so";
+
+static const std::unordered_map<std::string, std::string> extension_map {
+    { "def", "def" }, { "header", "h" }, { "header_cpp", "hpp" },
+    { "llvm_impl", "ll" }, { "lib", "so" }
+};
 
 /* Map from ranges of llvm opcodes to functions to produce LLVM snippets
  * <<llvm_opcode_begin, llvm_opcode_end>, snippet_gen_function>
@@ -66,6 +71,24 @@ static const std::vector<cast_op_data> cast_ops {
 /*******************************************************************************
  * Utility functions
  ******************************************************************************/
+
+const std::string
+make_path(const std::string& target)
+{
+    if (extension_map.count(target) == 0)
+    {
+        std::ostringstream err_msg_ss;
+        err_msg_ss << "Invalid target `" << target
+                   << "` for path change given!";
+        throw std::runtime_error(err_msg_ss.str());
+    }
+
+    std::filesystem::path new_path(snippets_lib_path);
+    new_path.replace_extension(extension_map.at(target));
+    new_path.replace_filename(
+        new_path.filename().string().substr(strlen("lib")));
+    return new_path.string();
+}
 
 llvm::Function*
 make_llvm_fn(const std::string& fn_name, llvm::FunctionType* fn_ty,
@@ -204,9 +227,8 @@ emit_conversion_fns(llvm_pack& lp)
 
         llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
         lp.ir_build.SetInsertPoint(bb);
-        llvm::Value* ret_val
-            = (cast_op_create_fn.at(co.opcode))(
-                lp.ir_build, fn->getArg(0), ret_ty, "");
+        llvm::Value* ret_val = (cast_op_create_fn.at(co.opcode))(
+            lp.ir_build, fn->getArg(0), ret_ty, "");
         lp.ir_build.CreateRet(ret_val);
     }
 }
@@ -285,7 +307,7 @@ emit_impl_header_cpp(const std::string& header_path)
     hss << "#include <cstdint>\n\n";
     hss << "extern \"C\"\n";
     hss << "{\n";
-    hss << "#include \"" << config::make_path("header") << "\"\n";
+    hss << "#include \"" << make_path("header") << "\"\n";
     hss << "}";
 
     std::ofstream header_out;
@@ -370,12 +392,12 @@ main()
 
     llvm::verifyModule(*mod);
     std::error_code ec;
-    llvm::raw_fd_ostream snip_out(config::make_path("llvm_impl"), ec);
+    llvm::raw_fd_ostream snip_out(make_path("llvm_impl"), ec);
     mod->print(snip_out, nullptr);
 
-    emit_impl_def(config::make_path("def"));
-    emit_impl_header(config::make_path("header"));
-    emit_impl_header_cpp(config::make_path("header_cpp"));
+    emit_impl_def(make_path("def"));
+    emit_impl_header(make_path("header"));
+    emit_impl_header_cpp(make_path("header_cpp"));
 
     return 0;
 }

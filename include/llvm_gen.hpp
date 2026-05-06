@@ -31,6 +31,8 @@
 
 /* Helper functions ***********************************************************/
 
+const std::string make_path(const std::string&);
+
 llvm::Function*
 make_llvm_fn(const std::string&, llvm::FunctionType*, unsigned int,
     const std::string&, llvm::Module&);

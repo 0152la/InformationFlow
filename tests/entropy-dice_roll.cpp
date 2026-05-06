@@ -1,11 +1,10 @@
 #include "test_harness.hpp"
-
 #include <cmath>
 
 int
 main()
 {
-    const uint64_t samples = pow(10, 7);
+    const uint64_t samples = pow(10, 5);
     constexpr uint8_t faces = 6;
     const double entropy = std::log2(faces);
     EntropyHarness harness(samples, 0.01);

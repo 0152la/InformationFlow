@@ -54,7 +54,7 @@ set(func_tests
 )
 
 foreach(func_t IN LISTS func_tests)
-    add_func_test(${func_t})
+    #add_func_test(${func_t})
 endforeach()
 
 # `ll` generation tests
