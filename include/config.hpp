@@ -3,12 +3,20 @@
 
 #include <cstring>
 #include <filesystem>
+#include <iostream>
+#include <sstream>
 #include <string>
+#include <unordered_map>
+
+#include "fmt/base.h"
+#include "fmt/color.h"
 
 namespace config
 {
 const std::string llvm_snippet_prefix = "llvm_impl";
 constexpr char llvm_snippet_delim = '_';
+
+const std::string make_path(const std::string&);
 
 const std::string
 make_snippets_def_path(void);
@@ -20,6 +28,11 @@ const std::string
 make_snippets_ll_path(void);
 
 };
+
+namespace Utils
+{
+    void debug_print(std::string_view);
+}
 
 constexpr unsigned long initial_tests = 10000;
 constexpr unsigned long extra_step = 1000;

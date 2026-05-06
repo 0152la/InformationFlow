@@ -19,7 +19,6 @@ function(add_entropy_test test_name)
     add_executable(${test_name}
         ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE ${ENTROPY_TEST_LIBS})
-    target_include_directories(${test_name} PRIVATE ${INCLUDE_DIR})
     add_binary_test(${test_name})
 endfunction()
 
@@ -44,7 +43,6 @@ function(add_func_test test_name)
     add_executable(${test_name}
         ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE lflow)
-    target_include_directories(${test_name} PRIVATE ${INCLUDE_DIR})
     add_binary_test(${test_name})
 endfunction()
 

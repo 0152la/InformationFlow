@@ -204,10 +204,7 @@ emit_conversion_fns(llvm_pack& lp)
 
         llvm::BasicBlock* bb(llvm::BasicBlock::Create(lp.ctx, "", fn));
         lp.ir_build.SetInsertPoint(bb);
-        // llvm::Value* ret_val = lp.ir_build.CreateFPToSI(fn->getArg(0),
-        // ret_ty);
         llvm::Value* ret_val
-            //= create_fn(lp.ir_build, fn->getArg(0), ret_ty, "");
             = (cast_op_create_fn.at(co.opcode))(
                 lp.ir_build, fn->getArg(0), ret_ty, "");
         lp.ir_build.CreateRet(ret_val);
@@ -288,7 +285,7 @@ emit_impl_header_cpp(const std::string& header_path)
     hss << "#include <cstdint>\n\n";
     hss << "extern \"C\"\n";
     hss << "{\n";
-    hss << "#include \"" << config::make_snippets_header_path() << "\"\n";
+    hss << "#include \"" << config::make_path("header") << "\"\n";
     hss << "}";
 
     std::ofstream header_out;
@@ -373,12 +370,12 @@ main()
 
     llvm::verifyModule(*mod);
     std::error_code ec;
-    llvm::raw_fd_ostream snip_out(config::make_snippets_ll_path(), ec);
+    llvm::raw_fd_ostream snip_out(config::make_path("llvm_impl"), ec);
     mod->print(snip_out, nullptr);
 
-    emit_impl_def(config::make_snippets_def_path());
-    emit_impl_header(config::make_snippets_header_path());
-    emit_impl_header_cpp(config::make_snippets_header_path_cpp());
+    emit_impl_def(config::make_path("def"));
+    emit_impl_header(config::make_path("header"));
+    emit_impl_header_cpp(config::make_path("header_cpp"));
 
     return 0;
 }
