@@ -3,7 +3,7 @@
 
 #include "config.hpp"
 #include "llvm_gen-names.hpp"
-#include "llvm_snippets.hpp"
+//#include "llvm_snippets.hpp"
 
 #include <climits>
 #include <cmath>
@@ -38,6 +38,9 @@
 #pragma clang diagnostic pop
 
 #include "fmt/base.h"
+#include "fmt/format.h"
+
+#include "toml++/toml.hpp"
 
 using entropy_map_key_t = unsigned int;
 using set_entropy_t = std::unordered_map<entropy_map_key_t, double>;
@@ -59,6 +62,16 @@ struct fn_def
 
     fn_def(const std::string);
     const std::string to_str(void);
+};
+
+namespace IF_Entropy_Vals
+{
+    struct Parser
+    {
+        std::unordered_map<std::string, double> parsed_entropy;
+
+        Parser(std::string_view);
+    };
 };
 
 class IF_Emulator

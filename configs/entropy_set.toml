@@ -1,0 +1,30 @@
+exception_insts = ["resume", "catchswitch", "catchret", "cleanupret", "landingpad", "catchpad", "cleanuppad"]
+call_insts = ["invoke", "callbr", "call"]
+mem_insts = ["alloca", "load", "store", "fence"]
+
+[[entropies]]
+value = 1.0
+insts = [
+    "ret", "indirectbr", # Terminator
+    "fneg", # Unary
+    "insertelement", # Vector
+    "extractvalue", "insertvalue", # Aggregate
+    "getelementptr", # Memory
+    "zext", "sext", "fpext", # Conversion
+    "phi", "freeze", "va_arg", # Other
+    ]
+
+[[entropies]]
+value = 0.5
+insts = [
+    "add", "sub", # Binary
+    "shufflevector", # Vector
+    ]
+
+[[entropies]]
+value = 0.405639
+insts = ["and", "or"]
+
+[[entropies]]
+value = 0.0
+insts = ["unreachable"]

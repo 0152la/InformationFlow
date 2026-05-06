@@ -1,4 +1,4 @@
-# Executable for `entropy_eval2`
+# Executable for `entropy_eval`
 add_executable(ee2)
 
 set(SOURCE_FILE_NAMES

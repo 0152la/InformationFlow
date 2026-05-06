@@ -164,6 +164,37 @@ fn_def::to_str(void)
 }
 
 /*******************************************************************************
+ * IF_Entropy_Vals::Parser
+ ******************************************************************************/
+
+IF_Entropy_Vals::Parser::Parser(std::string_view file_path)
+{
+    try
+    {
+        toml::table uc_tab = toml::parse_file(file_path);
+        auto ucs_arr = *uc_tab.get_as<toml::array>("entropies");
+        for (const auto& uc : ucs_arr)
+        {
+            auto ucs_arr_entry = *uc.as_table();
+            for (const auto& fn_name_node :
+                *ucs_arr_entry.get_as<toml::array>("insts"))
+            {
+                auto fn_name = *fn_name_node.value<std::string>();
+                auto uc_val = *ucs_arr_entry.get("value")->value<double>();
+                this->parsed_entropy[fn_name] = uc_val;
+                Utils::debug_print(
+                    fmt::format("ADDED FN {} VAL {}", fn_name, uc_val));
+            }
+        }
+    }
+    catch (const toml::parse_error& err)
+    {
+        std::cerr << "TOML entropy value parsing failed:\n" << err << "\n";
+        throw err;
+    }
+}
+
+/*******************************************************************************
  * Initialisation functions
  ******************************************************************************/
 
