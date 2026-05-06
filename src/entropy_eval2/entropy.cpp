@@ -81,10 +81,11 @@ EntropyResultEntry::to_str(void) const
 }
 
 const std::string
-EntropyResultEntry::to_str_csv(std::string_view llvm_fn_name) const
+EntropyResultEntry::to_str_csv(
+    std::string_view llvm_fn_name, uint8_t _param_count) const
 {
-    return fmt::format(
-        "{},{},{}", llvm_fn_name, this->bit_sz, this->uncertainty_coef);
+    return fmt::format("{},{},{},{}", llvm_fn_name, _param_count, this->bit_sz,
+        this->uncertainty_coef);
 }
 
 /*******************************************************************************
@@ -117,12 +118,13 @@ EntropyResult::to_str(void) const
 }
 
 std::string
-EntropyResult::to_str_csv(std::string_view llvm_fn_name) const
+EntropyResult::to_str_csv(
+    std::string_view llvm_fn_name, uint8_t _param_count) const
 {
     auto oss = std::ostringstream { };
     for (const auto& erd : this->data)
     {
-        oss << erd.to_str_csv(llvm_fn_name) << '\n';
+        oss << erd.to_str_csv(llvm_fn_name, _param_count) << '\n';
     }
     return oss.str();
 }

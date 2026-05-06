@@ -198,7 +198,9 @@ Runner::do_eval(EvalData::Results& results, const InputData& inputs,
 
         if (_di_flags->is_shift)
         {
-            bs = std::max(bs, static_cast<EvalData::bit_sz_t>(std::get<I-1>(curr_args) + 1));
+            bs = std::max(bs,
+                static_cast<EvalData::bit_sz_t>(
+                    std::get<I - 1>(curr_args) + 1));
         }
         this->log_result<T, R>(results, res, bs);
     }
@@ -240,7 +242,9 @@ Runner::exhaust_eval(const RunInfo& ri) const
     }
 
     auto eval_run_info = EvalRunInfo { ri };
-    // std::cout << '\r';
+    // std::cout << "BITSZ " << (unsigned int) eval_run_info.bit_sz_in_max <<
+    // std::endl;
+    //  std::cout << '\r';
     std::cout << fmt::format("[{}] Running {} ...",
         std::chrono::round<std::chrono::seconds>(
             std::chrono::system_clock::now()),
@@ -252,7 +256,7 @@ Runner::exhaust_eval(const RunInfo& ri) const
     auto time_end = Config::clock_ty::now();
     auto time_dur = std::chrono::duration_cast<std::chrono::microseconds>(
         time_end - time_start);
-    std::cout << fmt::format("[{}] == End `{}` - Duration {} - {} ==",
+    std::cout << fmt::format("[{}] Done Eval `{}` - Duration {} - {} ==",
         std::chrono::round<std::chrono::seconds>(
             std::chrono::system_clock::now()),
         ri.di->llvm_fn_name, time_dur,
@@ -264,7 +268,12 @@ Runner::exhaust_eval(const RunInfo& ri) const
     EntropyResult entropy_res;
     entropy_res.parse_evalresults(results, ri.di->di_flags->is_overflow);
 
-    std::cout << '\r';
+    std::cout << fmt::format(
+        "[{}] == End -- Done Parse `{}`",
+        std::chrono::round<std::chrono::seconds>(
+            std::chrono::system_clock::now()), ri.di->llvm_fn_name)
+              << std::flush;
+    std::cout << '\n';
     return entropy_res;
 }
 

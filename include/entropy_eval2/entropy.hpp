@@ -33,7 +33,7 @@ struct EntropyResultEntry
     EntropyResultEntry(const EvalData::Counter&, bool);
 
     const std::string to_str(void) const;
-    const std::string to_str_csv(std::string_view) const;
+    const std::string to_str_csv(std::string_view, uint8_t) const;
 };
 
 struct EntropyResultEntry_cmp
@@ -65,7 +65,7 @@ public:
 
     void parse_evalresults(const EvalData::Results&, bool);
     std::string to_str(void) const;
-    std::string to_str_csv(std::string_view) const;
+    std::string to_str_csv(std::string_view, uint8_t) const;
 };
 
 #endif // _EEVAL_ENTROPY_HPP

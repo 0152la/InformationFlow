@@ -18,7 +18,7 @@ DefInfoFlags::DefInfoFlags(const DefInfoFlags& other) :
     is_div(other.is_div),
     is_fop(other.is_fop),
     is_overflow(other.is_overflow),
-    is_shift(other.is_shift) {};
+    is_shift(other.is_shift) { };
 
 /*******************************************************************************
  * DefInfo
@@ -117,6 +117,12 @@ DefInfo::get_full_name(void) const
         full_name += this->extra_delim + this->extra_fn_name;
     }
     return full_name;
+}
+
+uint8_t
+DefInfo::get_param_count(void) const
+{
+    return this->params_ty.size();
 }
 
 std::string
@@ -253,7 +259,8 @@ Runner::logs_os_init(void)
 
     this->log_fs = std::ofstream { this->log_fs_path };
     this->csv_fs = std::ofstream { this->csv_fs_path };
-    this->csv_fs << "llvm_opcode,cmp_opcode,bit_size,uncertainty_coef\n";
+    this->csv_fs
+        << "llvm_opcode,param_count,cmp_opcode,bit_size,uncertainty_coef\n";
 }
 
 void
@@ -272,7 +279,7 @@ Runner::log_one_run(const EntropyResult& res, const DefInfo& def)
     this->log_fs << res.to_str();
     this->log_fs.flush();
 
-    this->csv_fs << res.to_str_csv(def.llvm_fn_name);
+    this->csv_fs << res.to_str_csv(def.llvm_fn_name, def.get_param_count());
     this->csv_fs.flush();
 }
 

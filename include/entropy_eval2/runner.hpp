@@ -179,6 +179,7 @@ struct DefInfo
     std::string get_fn_name(void) const;
     std::string get_extra(void) const;
     std::string get_full_name(void) const;
+    uint8_t get_param_count(void) const;
 
     std::string to_str(void) const;
 

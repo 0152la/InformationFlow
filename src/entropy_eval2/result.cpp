@@ -122,7 +122,6 @@ EvalData::Counter::to_str(bool filtered) const
  * EvalData::Results
  ******************************************************************************/
 
-// EvalData::Results::Results(const EvalRunInfo& _eri) :
 EvalData::Results::Results(EvalData::bit_sz_t _bit_sz_in_min,
     EvalData::bit_sz_t _bit_sz_in_max, EvalData::bit_sz_t _bit_sz_out) :
     bit_sz_in_min(_bit_sz_in_min),
