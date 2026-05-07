@@ -2,8 +2,6 @@
 #define _IF_INSTR_EMULATOR_HPP
 
 #include "config.hpp"
-#include "llvm_gen-names.hpp"
-//#include "llvm_snippets.hpp"
 
 #include <climits>
 #include <cmath>

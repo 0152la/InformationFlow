@@ -35,6 +35,9 @@ static const std::array binops_float { llvm::Instruction::FAdd,
     llvm::Instruction::FRem };
 static const std::array ignored_other_ops { llvm::Instruction::PHI };
 
+static const std::array ignored_fcmp_preds { llvm::CmpInst::FCMP_FALSE,
+    llvm::CmpInst::FCMP_TRUE };
+
 static const std::unordered_map<unsigned int, cast_op_create_fn_ty>
     cast_op_create_fn {
         { llvm::Instruction::FPToSI,
@@ -172,7 +175,7 @@ emit_cmp_fn(
     {
         cmp_opcode = llvm::Instruction::FCmp;
         llvm::DataLayout dl = llvm::DataLayout(&lp.mod);
-        cmp_extra = std::to_string(dl.getTypeSizeInBits(op_ty));
+        cmp_extra = "f" + std::to_string(dl.getTypeSizeInBits(op_ty));
     }
     else
     {
@@ -204,6 +207,12 @@ emit_cmp_fn_int(unsigned int pred, llvm_pack& lp)
 void
 emit_cmp_fn_flt(unsigned int pred, llvm_pack& lp)
 {
+    if (std::find(ignored_fcmp_preds.begin(), ignored_fcmp_preds.end(), pred)
+        != ignored_fcmp_preds.end())
+    {
+        return;
+    }
+
     emit_cmp_fn(
         (llvm::CmpInst::Predicate) pred, llvm::Type::getHalfTy(lp.ctx), lp);
     emit_cmp_fn(

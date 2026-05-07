@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <string_view>
 
 #define DEBUG_PRINT fmt::print
@@ -29,22 +30,12 @@ inline constexpr uint8_t other_free_threads = 0;
 // the same size of that type by this amount
 inline constexpr uint64_t nan_default_offset = -2;
 
-inline constexpr auto def_path
-    = std::string_view { "/home/andreilascu/Documents/Repos/InformationFlow/"
-                         "build/src/llvm_snippets.def" };
-
 inline constexpr auto def_header_start = std::string_view { "opcode" };
-
-inline constexpr auto lib_path
-    = std::string_view { "/home/andreilascu/Documents/Repos/InformationFlow/"
-                         "build/src/libllvm_snippets.so" };
 
 inline constexpr auto out_log_path
     = std::string_view { "entropy_out-{:%Y%m%d-%H%M%S}.log" };
-
 inline constexpr auto out_csv_path
     = std::string_view { "entropy_out-{:%Y%m%d-%H%M%S}.csv" };
-
 }
 
 #endif // _EEVAL_CONFIG_HPP

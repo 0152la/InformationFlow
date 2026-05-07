@@ -25,7 +25,7 @@ check_sitofp_f16(const Runner&);
 void
 do_one_test(const Runner&, std::string_view, Testing::test_fn_ty);
 void
-do_all_tests(void);
+do_all_tests(const Runner&);
 };
 
 #include "tests.tpp"

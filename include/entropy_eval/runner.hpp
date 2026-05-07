@@ -276,6 +276,9 @@ private:
     std::ofstream log_fs;
     std::ofstream csv_fs;
 
+    const std::string lib_path;
+    const std::string def_path;
+
     std::vector<DefInfo> defs;
 
     const DefInfo& get_def_info(std::string_view) const;
@@ -312,7 +315,7 @@ private:
     const EntropyResult eval_ret(const RunInfo&) const;
 
 public:
-    Runner(void);
+    Runner(const std::string&, const std::string&);
     ~Runner(void);
 
     void init_all(void);

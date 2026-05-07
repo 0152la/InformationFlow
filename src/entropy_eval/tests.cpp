@@ -62,10 +62,8 @@ do_one_test(const Runner& eval_runner, std::string_view test_name,
 }
 
 void
-do_all_tests(void)
+do_all_tests(const Runner& runner)
 {
-    auto runner = Runner { };
-    runner.init_all();
     do_one_test(runner, "check_add", check_add);
     do_one_test(runner, "check_sitofp_f16", check_sitofp_f16);
     do_one_test(runner, "check_shl", check_shl);

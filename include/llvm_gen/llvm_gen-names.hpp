@@ -1,5 +1,3 @@
-#include "config.hpp"
-
 #include <string>
 
 #pragma clang diagnostic push

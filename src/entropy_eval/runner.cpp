@@ -1,5 +1,4 @@
 #include "runner.hpp"
-#include "config.hpp"
 
 /*******************************************************************************
  * DefInfoFlags
@@ -295,9 +294,11 @@ Runner::eval_threads_join(
     }
 }
 
-Runner::Runner(void)
+Runner::Runner(const std::string& _lib_path, const std::string& _def_path) :
+    lib_path(_lib_path),
+    def_path(_def_path)
 {
-    this->dl_hdl = dlopen((Config::lib_path).data(), RTLD_NOW);
+    this->dl_hdl = dlopen(_lib_path.c_str(), RTLD_NOW);
     if (!this->dl_hdl)
     {
         std::cout << "Error opening library :: " << dlerror() << '\n';
@@ -311,7 +312,7 @@ void
 Runner::init_all(void)
 {
     auto buf = std::string { };
-    auto def_ifs = std::ifstream { (Config::def_path).data() };
+    auto def_ifs = std::ifstream { this->def_path };
     this->logs_os_init();
 
     while (std::getline(def_ifs, buf))
@@ -352,7 +353,7 @@ Runner::run_one(const DefInfo& di) const
     void* fn = dlsym(this->dl_hdl, di.get_fn_name().c_str());
     Utils::do_check(fn == nullptr,
         fmt::format("Couldn't find function `{}` in compiled library at `{}`!",
-            di.get_fn_name(), Config::lib_path));
+            di.get_fn_name(), this->lib_path));
 
     auto ri = RunInfo { di, fn };
     return this->eval_ret(ri);
