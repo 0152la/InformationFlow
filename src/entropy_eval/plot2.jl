@@ -6,8 +6,10 @@ import LsqFit
 
 csv_path_default = "./entropy_out-20260409-142539.csv"
 out_dir_default = "./graphs"
+out_csv_name = "all.csv"
 
-max_bit_sz = 64
+bit_szs_int = 2:64
+bit_szs_flt = [16, 32, 64]
 
 ################################################################################
 # Function Uncertainty Coefficient Data struct
@@ -26,7 +28,7 @@ end
 function init_fndata_interp(d::FuncUCData)
     d.all_same = all_vals_same(d)
     if !d.all_same
-        ex_data = sort(merge(d.data, Dict([(max_bit_sz, approx_max_val(d))])), by=x->x[1])
+        ex_data = sort(merge(d.data, Dict([(maximum(bit_szs_int), approx_max_val(d))])), by=x->x[1])
         d.interp = Interpolations.linear_interpolation(collect(keys(ex_data)), collect(values(ex_data)); extrapolation_bc = Interpolations.Line())
     end
 end
@@ -38,7 +40,7 @@ end
 function approx_max_val(d::Dict{UInt16, Float64}, p::UInt16)
     last_val = maximum(d)
     last_diff = last_val[2] - d[last_val[1] - 1]
-    approx_lim = last_val[2] + (max_bit_sz - last_val[1]) * last_diff
+    approx_lim = last_val[2] + (maximum(bit_szs_int) - last_val[1]) * last_diff
 
     println("LAST_VAL $last_val[2] -- DIFF $last_diff -- APPROX LIM $approx_lim -- CLAMPED $(clamp(approx_lim, 0.0, 1.0 / p))")
     return clamp(approx_lim, 0.0, 1.0 / p)
@@ -68,7 +70,7 @@ function linear_extrapolate(d::FuncUCData, bit_sz::UInt16)
         return d.data[bit_sz]
     end
 
-    if bit_sz < minimum(d.data)[1] || bit_sz > max_bit_sz
+    if bit_sz < minimum(d.data)[1] || bit_sz > maximum(bit_szs_int)
         throw(BoundsError("given bit_sz `$bit_sz` outside expected bounds"))
     end
 
@@ -110,15 +112,36 @@ function draw_data(data)
     Base.Filesystem.mkdir(out_dir)
 
     for one_fn in data
+        skip_extrap = false
+        const_unc_coef = 0.0
+
         if length(one_fn.data) < 2
             println("Skipping function `$(one_fn.name)` with insufficient samples.")
+            skip_extrap = true
+        elseif all_vals_same(one_fn)
+            println("Skipping function `$(one_fn.name)` with constant value.")
+            skip_extrap = true
+        end
+
+        if skip_extrap
+            const_unc_coef = collect(values(one_fn.data))[1]
+            open("$(out_dir_default)/$(out_csv_name)", "a") do all_fd
+                float_suffix = "_f16"
+                if endswith(one_fn.name, float_suffix) # TODO shoddy work, but works for now - will break if we have 32-bit float empirical data
+                    name = replace(one_fn.name, float_suffix => "")
+                    range = bit_szs_flt
+                else
+                    name = one_fn.name
+                    range = bit_szs_int
+                end
+
+                for bit_sz in range
+                    println(all_fd, "$(name),$(bit_sz),$(const_unc_coef)")
+                end
+            end
             continue
         end
 
-        if all_vals_same(one_fn)
-            println("Skipping function `$(one_fn.name)` with constant value.")
-            continue
-        end
 
         # Raw data, scattered
         xs = collect(keys(one_fn.data))
@@ -127,7 +150,7 @@ function draw_data(data)
         Plots.plot(xs, ys; seriestype=:scatter)
 
         # Linear interpolated data
-        bit_sz_lim = max_bit_sz
+        bit_sz_lim = maximum(bit_szs_int) # TODO consider float extrapolation if/when we get there
         xs_interp = (maximum(one_fn.data)[1] + 1):bit_sz_lim
         ys_interp = [linear_extrapolate(one_fn, UInt16(b)) for b in xs_interp]
         Plots.plot!(xs_interp, ys_interp; seriestype=:scatter, label="Linear interpolation")
@@ -152,7 +175,6 @@ function draw_data(data)
         ys_extrap = model(xs_extrap, fn_fit.param)
         Plots.plot!(xs_extrap, ys_extrap, label="Exponential decay")
 
-
         # General settings
         Plots.plot!(title = one_fn.name, xlabel = "Bit size", ylabel = "Uncertainty coefficient", size=(1500, 1000))
         Plots.plot!(xlims = ([minimum(keys(one_fn.data)), bit_sz_lim] + [-1, 1]), ylims = (-0.1, 1.1))
@@ -163,20 +185,25 @@ function draw_data(data)
         # break
 
         # Emit csv with extrapolations
-        open("./graphs/$(one_fn.name)-out.csv", "w") do out_fd
-            curr_idx = minimum(one_fn.data)[1]
-            while curr_idx <= bit_sz_lim
-                if curr_idx in keys(one_fn.data)
-                    val = one_fn.data[curr_idx]
-                else
-                    val = model(curr_idx, fn_fit.param)
-                    val = "$val, $(linear_extrapolate(one_fn, UInt16(curr_idx)))"
+        open("$(out_dir_default)/$(out_csv_name)", "a") do all_fd
+            open("$(out_dir_default)/$(one_fn.name)-out.csv", "w") do out_fd
+                println(out_fd, "bit_size,gradient_descent,dumb_linear")
+                curr_idx = minimum(one_fn.data)[1]
+                while curr_idx <= bit_sz_lim
+                    if curr_idx in keys(one_fn.data)
+                        val = one_fn.data[curr_idx]
+                        println(out_fd, "$(curr_idx),$(val)")
+                        println(all_fd, "$(one_fn.name),$(curr_idx),$(val)")
+                    else
+                        val_model = model(curr_idx, fn_fit.param)
+                        val_dumb = linear_extrapolate(one_fn, UInt16(curr_idx))
+                        println(out_fd, "$(curr_idx),$(val_model),$(val_dumb)")
+                        println(all_fd, "$(one_fn.name),$(curr_idx),$(val_dumb)")
+                    end
+                    curr_idx += 1
                 end
-                println(out_fd, "$(curr_idx),$(val)")
-                curr_idx += 1
             end
         end
-
     end
 end
 
