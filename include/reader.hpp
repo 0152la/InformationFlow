@@ -10,6 +10,7 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 #pragma clang diagnostic push
@@ -27,6 +28,7 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #pragma clang diagnostic pop
+
 
 class IF_LLVM_Module
 {
@@ -47,8 +49,6 @@ public:
 
 class IF_Parser
 {
-private:
-    double compute_instr_entropy(const llvm::Instruction&) const;
 
 public:
     IF_Parser() = default;

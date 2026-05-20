@@ -1,7 +1,6 @@
 #ifndef _IF_ENTROPYMAP_HPP
 #define _IF_ENTROPYMAP_HPP
 
-// #include <format>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -10,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -22,6 +22,9 @@
 #include "llvm/IR/Module.h"
 #pragma clang diagnostic pop
 
+#include "fmt/base.h"
+#include "fmt/format.h"
+
 namespace IF_EntropyMap
 {
 
@@ -31,9 +34,13 @@ public:
     using idx_t = uint32_t;
     using succs_t = std::unordered_set<const Instruction*>;
 
+    friend class Map;
+
 private:
     idx_t idx;
     unsigned int opcode;
+    unsigned int ret_ty_bit_sz;
+    std::set<llvm::Value*> insts_in;
 
     const Instruction* succ_natural = nullptr;
     succs_t succs_instr;
@@ -45,15 +52,18 @@ private:
 public:
     /* Constructors ***********************************************************/
 
-    Instruction(uint32_t _idx, const llvm::Instruction& _instr) :
-        idx(_idx),
-        opcode(_instr.getOpcode()) { };
+    Instruction(uint32_t, const llvm::Instruction&);
 
     /* Getters ****************************************************************/
 
     idx_t get_idx(void) const { return this->idx; };
 
     unsigned int get_opcode(void) const { return this->opcode; };
+
+    auto get_reg_uses(void) const -> decltype(this->insts_in)
+    {
+        return this->insts_in;
+    };
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
@@ -108,6 +118,10 @@ public:
         return this->idx == o.get_idx();
     };
 };
+
+using insts_t = std::vector<const IF_EntropyMap::Instruction*>;
+using insts_llvm_mapping_t = std::unordered_map<const llvm::Instruction*,
+    const IF_EntropyMap::Instruction*>;
 
 class Function
 {
@@ -220,6 +234,42 @@ public:
 
     const std::string to_str(void) const;
     void print(void) const;
+};
+
+class UseMap
+{
+    struct Node
+    {
+        const IF_EntropyMap::Instruction* inst;
+        std::vector<const IF_EntropyMap::UseMap::Node*> preds;
+
+        Node(const IF_EntropyMap::Instruction*);
+
+        void add_pred(const IF_EntropyMap::UseMap::Node*);
+        double get_unc_coef(void);
+    };
+
+    struct Path
+    {
+        using path_unc_coef_t = std::pair<std::string, double>;
+        using path_ucs_t = std::vector<path_unc_coef_t>;
+        IF_EntropyMap::UseMap::Node* start_node;
+
+        Path(const IF_EntropyMap::Instruction*);
+
+        path_ucs_t compute_unc_coef(void);
+        //void combine(
+            //IF_EntropyMap::UseMap::Path*, const IF_EntropyMap::Instruction*);
+        //void add_pred(const IF_EntropyMap::Instruction*,
+            //const IF_EntropyMap::Instruction*);
+        std::string to_str(const path_ucs_t&); // TODO
+    };
+
+private:
+    IF_EntropyMap::UseMap::Path* use_path;
+
+public:
+    UseMap(const insts_t&, const insts_llvm_mapping_t&);
 };
 
 }; // namespace IF_EntropyMap

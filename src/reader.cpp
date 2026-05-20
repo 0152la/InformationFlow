@@ -1,4 +1,7 @@
 #include "reader.hpp"
+#include "entropy_map.hpp"
+#include "instr_emulator.hpp"
+#include <memory>
 
 extern set_entropy_t set_entropy;
 extern estimate_entropy_t estimate_entropy;
@@ -6,34 +9,6 @@ extern estimate_entropy_t estimate_entropy;
 /*******************************************************************************
  * IF_Parser
  ******************************************************************************/
-
-double
-IF_Parser::compute_instr_entropy(const llvm::Instruction& inst) const
-{
-    unsigned int inst_opcode = inst.getOpcode();
-
-    // We first search whether this instruction is one we have a
-    // default entropy for. If we do, then we simply set the entropy to
-    // that value.
-    if (auto fn_set_entropy = set_entropy.find(inst_opcode);
-        fn_set_entropy != set_entropy.end())
-    {
-        return fn_set_entropy->second;
-    }
-
-    // Then we check whether we can estimate the entropy, without having
-    // to fuzz
-    // TODO decltype?
-    if (auto fn_est_entropy = estimate_entropy.find(inst_opcode);
-        fn_est_entropy != estimate_entropy.end())
-    {
-        return (fn_est_entropy->second)(inst);
-    }
-
-    llvm::outs() << "Unhandled instructions\n";
-    inst.print(llvm::outs());
-    exit(1);
-}
 
 std::unique_ptr<IF_EntropyMap::Map>
 IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
@@ -48,8 +23,9 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
 
     // Map holding which `LLVM Instruction` maps to which
     // `IF_EntropyMap::Instruction`. Used in resolving other dependencies
-    std::map<const llvm::Instruction*, const IF_EntropyMap::Instruction*>
-        em_instr_map;
+    IF_EntropyMap::insts_llvm_mapping_t em_instr_map;
+    // std::map<const llvm::Instruction*, const IF_EntropyMap::Instruction*>
+    // em_instr_map;
 
     // Map holding `llvm::Function`s and their `LLVM::ReturnInst`s (in
     // `IF_EntropyMap::Instruction` format). When we call a function, we need to
@@ -63,6 +39,10 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
     // resolve `return` dependencies.
     std::map<const IF_EntropyMap::Instruction*, const llvm::Function*>
         func_calls;
+
+    IF_EntropyMap::insts_t em_insts;
+
+    auto unc_coef_getter = IF_Entropy_Vals::Getter { };
 
     // Iterate over functions ...
     for (const auto& fn : llvm_module.getFunctionList())
@@ -80,7 +60,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         {
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
-            double retained_entropy = compute_instr_entropy(fn_inst);
+            double retained_entropy
+                = unc_coef_getter.get_entropy_for_inst(fn_inst);
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
                 std::ostringstream err;
@@ -90,6 +71,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 llvm::errs() << "Warning: " << err.str() << '\n';
             }
             em_instr_map.emplace(&fn_inst, em_instr.get());
+            em_insts.push_back(em_instr.get());
 
             // Record special instruction successors, such as from calls or
             // branch instructions
@@ -152,6 +134,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         em->insert(std::move(em_fn));
     }
     em->set_instruction_count(instr_idx);
+    auto use_em
+        = std::make_unique<IF_EntropyMap::UseMap>(em_insts, em_instr_map);
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)
@@ -191,7 +175,7 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         }
     }
 
-    em->init_stats();
+    // em->init_stats();
     return em;
 }
 
@@ -232,13 +216,16 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
 
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            llvm::outs() << "\t Instruction " << fn_inst.getOpcodeName() << " ";
+            // llvm::outs() << "\t Instruction " << fn_inst.getOpcodeName() << "
+            // ";
+            llvm::outs() << fmt::format("\tInstruction {} (op {}) ",
+                fn_inst.getOpcodeName(), fn_inst.getOpcode());
             for (const auto& fn_inst_arg : fn_inst.operand_values())
             {
                 if (const llvm::Value* v
                     = llvm::dyn_cast<llvm::Value>(fn_inst_arg))
                 {
-                    llvm::outs() << "[ ";
+                    llvm::outs() << "VALUE [ ";
                     v->printAsOperand(llvm::outs());
                     llvm::outs() << " --- ";
                     v->printAsOperand(llvm::outs(), false, &llvm_module);
@@ -251,12 +238,13 @@ IF_Parser::print_instrs(const llvm::Module& llvm_module)
                 // This is a function (TODO check)
                 if (fn_inst_arg->hasName())
                 {
-                    llvm::outs() << fn_inst_arg->getName();
+                    llvm::outs() << "NAME " << fn_inst_arg->getName();
                 }
                 // This is a constant
                 else if (const llvm::ConstantData* cd
                     = llvm::dyn_cast<llvm::ConstantData>(fn_inst_arg))
                 {
+                    llvm::outs() << "CONST ";
                     if (const llvm::ConstantInt* ci
                         = llvm::dyn_cast<llvm::ConstantInt>(fn_inst_arg))
                     {
