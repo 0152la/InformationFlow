@@ -12,19 +12,28 @@ const std::string instr_simple_prefix = "i";
  ******************************************************************************/
 
 IF_EntropyMap::Instruction::Instruction(
-    uint32_t _idx, const llvm::Instruction& _instr) :
+    uint32_t _idx, const llvm::Instruction& _inst) :
     idx(_idx),
-    opcode(_instr.getOpcode()),
-    ret_ty_bit_sz(_instr.getType()->getPrimitiveSizeInBits().getFixedValue())
+    opcode(_inst.getOpcode()),
+    ret_ty_bit_sz(_inst.getType()->getPrimitiveSizeInBits().getFixedValue()),
+    llvm_no_uses(_inst.use_empty()),
+    llvm_is_terminator(_inst.isTerminator())
 {
-    for (const llvm::Use& u : _instr.operands())
+    llvm::outs() << "IDX " << idx << '\n';
+    _inst.print(llvm::outs());
+    llvm::outs() << '\n';
+    for (const llvm::Use& u : _inst.operands())
     {
         llvm::Value* v = u.get();
         if (llvm::isa<llvm::Instruction>(v))
         {
             this->insts_in.insert(v);
+            llvm::outs() << "ADD OPERAND ";
+            v->print(llvm::outs());
+            llvm::outs() << '\n';
         }
     }
+    llvm::outs() << "---------------\n";
 };
 
 void
@@ -221,87 +230,145 @@ IF_EntropyMap::Map::print(void) const
 /* Node ***********************************************************************/
 
 IF_EntropyMap::UseMap::Node::Node(const Instruction* _inst) :
-    inst(_inst) { };
+    em_inst(_inst) { };
 
 void
 IF_EntropyMap::UseMap::Node::add_pred(
-    const IF_EntropyMap::Instruction* _new_pred)
+    const IF_EntropyMap::UseMap::Node* _new_pred)
 {
     this->preds.push_back(_new_pred);
 }
 
-/* Path ***********************************************************************/
-
-IF_EntropyMap::UseMap::Path::Path(const IF_EntropyMap::UseMap::Node* _node)
+double
+IF_EntropyMap::UseMap::Node::get_unc_coef(void) const
 {
-    this->start_node = _node;
+    return this->em_inst->get_retained_entropy();
 }
 
-//void
-//IF_EntropyMap::UseMap::Path::combine(IF_EntropyMap::UseMap::Path* _other,
-    //const IF_EntropyMap::Instruction* _inst)
-//{
-    //auto insert_node = std::find_if(this->sequence.begin(),
-        //this->sequence.end(), [&_inst](decltype(this->sequence)::value_type n)
-        //{ return n.inst == _inst; });
-    //if (insert_node == this->sequence.end())
-    //{
-        //throw std::runtime_error(fmt::format(
-            //"Couldn't find node for combination for `{}`!", _inst->to_str()));
-    //}
-
-    //this->sequence.insert(
-        //insert_node, _other->sequence.begin(), _other->sequence.end());
-//}
-
-//void
-//IF_EntropyMap::UseMap::Path::add_pred(const IF_EntropyMap::Instruction* _inst,
-    //const IF_EntropyMap::Instruction* _new_pred)
-//{
-    //for (auto n : this->sequence)
-    //{
-        //if (n.inst == _inst)
-        //{
-            //n.add_pred(_new_pred);
-            //return;
-        //}
-    //}
-    //throw std::runtime_error(fmt::format(
-        //"Couldn't find node for instruction `{}`!", _inst->to_str()));
-//}
-
-IF_EntropyMap::UseMap::Path::path_ucs_t
-IF_EntropyMap::UseMap::Path::compute_unc_coef(void)
+auto
+IF_EntropyMap::UseMap::Node::get_idx(void) const
+    -> IF_EntropyMap::Instruction::idx_t
 {
-    auto ucs = IF_EntropyMap::UseMap::Path::path_ucs_t { };
-    auto curr_uc_path = IF_EntropyMap::UseMap::Path::path_unc_coef_t { "", 1.0 };
-
-    auto curr_node = this->sequence.front();
-    while (true)
-    {
-        curr_uc_path.first += std::to_string(curr_node.inst->get_idx()) + '-';
-        curr_uc_path.second *= curr_node.inst->get_retained_entropy();
-
-        if (curr_node.preds.empty())
-        {
-            break;
-        }
-        curr_node = curr_node.preds.front(); // TODO
-    }
-
-    ucs.push_back(curr_uc_path);
-    return ucs;
+    return this->em_inst->get_idx();
 }
 
 std::string
-IF_EntropyMap::UseMap::Path::to_str(const IF_EntropyMap::UseMap::Path::path_ucs_t& ucs)
+IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent) const
 {
-    std::ostringstream res;
-    for (const auto& p : ucs)
+    const auto indent_str = std::string(_indent, '-');
+    std::ostringstream oss;
+    oss << fmt::format("{}NODE {}\n", indent_str, this->get_idx());
+    for (const auto& pred : this->preds)
     {
-        res << fmt::format("PATH {} -- UC {}\n", p.first, p.second);
+        oss << pred->to_str_path(_indent + 1);
     }
-    return res.str();
+    return oss.str();
+}
+
+/* Path ***********************************************************************/
+
+IF_EntropyMap::UseMap::Path::Path(void) :
+    root_nodes(std::vector<const IF_EntropyMap::UseMap::Node*>()) { };
+
+// void
+// IF_EntropyMap::UseMap::Path::combine(IF_EntropyMap::UseMap::Path* _other,
+// const IF_EntropyMap::Instruction* _inst)
+//{
+// auto insert_node = std::find_if(this->sequence.begin(),
+// this->sequence.end(), [&_inst](decltype(this->sequence)::value_type n)
+//{ return n.inst == _inst; });
+// if (insert_node == this->sequence.end())
+//{
+// throw std::runtime_error(fmt::format(
+//"Couldn't find node for combination for `{}`!", _inst->to_str()));
+//}
+
+// this->sequence.insert(
+// insert_node, _other->sequence.begin(), _other->sequence.end());
+//}
+
+// void
+// IF_EntropyMap::UseMap::Path::add_pred(const IF_EntropyMap::Instruction*
+// _inst, const IF_EntropyMap::Instruction* _new_pred)
+//{
+// for (auto n : this->sequence)
+//{
+// if (n.inst == _inst)
+//{
+// n.add_pred(_new_pred);
+// return;
+//}
+//}
+// throw std::runtime_error(fmt::format(
+//"Couldn't find node for instruction `{}`!", _inst->to_str()));
+//}
+
+IF_EntropyMap::UseMap::Path::uc_paths_t
+IF_EntropyMap::UseMap::Path::compute_unc_coef(void) const
+{
+    std::queue<IF_EntropyMap::UseMap::UC_Path> incomplete;
+    std::vector<IF_EntropyMap::UseMap::UC_Path> complete;
+
+    for (const auto& root : this->root_nodes)
+    {
+        incomplete.push(UC_Path(root));
+    }
+
+    while (!incomplete.empty())
+    {
+        auto curr_path = incomplete.front();
+        incomplete.pop();
+
+        while (curr_path.last_node->preds.size() == 1)
+        {
+            auto next_node = curr_path.last_node->preds.front();
+            curr_path.unc_coef *= next_node->get_unc_coef();
+            curr_path.node_path = fmt::format(
+                "{} - {}", curr_path.node_path, next_node->get_idx());
+            curr_path.last_node = next_node;
+        }
+
+        if (curr_path.last_node->preds.empty())
+        {
+            complete.emplace_back(curr_path);
+        }
+
+        for (const auto pred : curr_path.last_node->preds)
+        {
+            auto new_path = curr_path;
+            new_path.unc_coef *= pred->get_unc_coef();
+            new_path.last_node = pred;
+            incomplete.push(new_path);
+        }
+    }
+
+    return complete;
+}
+
+std::string
+IF_EntropyMap::UseMap::Path::to_str(void) const
+{
+    std::ostringstream oss;
+    for (const auto& root : this->root_nodes)
+    {
+        oss << root->to_str_path(0);
+        oss << "----------\n";
+    }
+    return oss.str();
+}
+
+/* UC_Path ********************************************************************/
+
+IF_EntropyMap::UseMap::UC_Path::UC_Path(
+    const IF_EntropyMap::UseMap::Node* _node) :
+    last_node(_node),
+    node_path(std::to_string(_node->get_idx())),
+    unc_coef(1.0) { };
+
+std::string
+IF_EntropyMap::UseMap::UC_Path::to_str(void) const
+{
+    return fmt::format("PATH {} -- UC {}", this->node_path, this->unc_coef);
 }
 
 /* UseMap *********************************************************************/
@@ -310,57 +377,57 @@ IF_EntropyMap::UseMap::UseMap(const IF_EntropyMap::insts_t& _insts,
     const IF_EntropyMap::insts_llvm_mapping_t& _llvm_mapping)
 {
     auto seen_insts = std::vector<bool>(_insts.size(), false);
-    auto inst_to_path_map
+    auto inst_to_node_map
         = std::unordered_map<const IF_EntropyMap::Instruction*,
-            IF_EntropyMap::UseMap::Path*> { };
-    auto use_path = IF_EntropyMap::UseMap::Path(
-    for (const auto& inst : _insts)
+            IF_EntropyMap::UseMap::Node*> { };
+    auto use_path = new IF_EntropyMap::UseMap::Path();
+    for (auto inst_it = _insts.rbegin(); inst_it != _insts.rend(); ++inst_it)
     {
-        if (seen_insts[inst->get_idx()])
+        const auto inst = *inst_it;
+
+        if (inst->llvm_no_uses && !inst->llvm_is_terminator)
         {
+            fmt::println("Skipping unused non-terminator instruction idx {}!",
+                inst->get_idx());
             continue;
         }
 
-        seen_insts.at(inst->get_idx()) = true;
-        auto curr_path = [&]() -> IF_EntropyMap::UseMap::Path*
+        auto curr_node = [&]() -> IF_EntropyMap::UseMap::Node*
         {
-            if (auto path_it = inst_to_path_map.find(inst);
-                path_it != inst_to_path_map.end())
+            if (seen_insts[inst->get_idx()])
             {
-                return path_it->second;
+                return inst_to_node_map[inst];
             }
             else
             {
-                return new IF_EntropyMap::UseMap::Path(inst);
+                auto new_node = new IF_EntropyMap::UseMap::Node(inst);
+                inst_to_node_map.emplace(inst, new_node);
+                use_path->root_nodes.push_back(new_node);
+                seen_insts[inst->get_idx()] = true;
+                return new_node;
             }
         }();
-
-        inst_to_path_map.insert(std::make_pair(inst, curr_path));
-        paths.insert(curr_path);
 
         for (const auto& pred_inst : inst->get_reg_uses())
         {
             auto pred = _llvm_mapping.at(
                 llvm::dyn_cast<llvm::Instruction>(pred_inst));
-            if (seen_insts[pred->get_idx()])
+            if (!seen_insts[pred->get_idx()])
             {
-                auto other_path = inst_to_path_map.at(pred);
-                curr_path->combine(other_path, inst);
-                paths.erase(other_path);
-                delete other_path;
+                auto pred_node = new IF_EntropyMap::UseMap::Node(pred);
+                curr_node->add_pred(pred_node);
+                inst_to_node_map.emplace(pred, pred_node);
+                seen_insts[pred->get_idx()] = true;
             }
-            curr_path->add_pred(inst, pred);
-            inst_to_path_map[pred] = curr_path;
-            seen_insts.at(pred->get_idx()) = true;
         }
     }
 
     // TODO
-    for (const auto& p : paths)
-    {
-        auto p_ucs = p->compute_unc_coef();
-        p->to_str(p_ucs);
-    }
-
     this->use_path = use_path;
+    std::cout << this->use_path->to_str() << std::endl;
+
+    // for (const auto& uc_p : this->use_path->compute_unc_coef())
+    //{
+    // std::cout << uc_p.to_str() << std::endl;
+    //}
 }

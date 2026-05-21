@@ -64,12 +64,40 @@ struct fn_def
 
 namespace IF_Entropy_Vals
 {
-    struct Parser
-    {
-        std::unordered_map<std::string, double> parsed_entropy;
+using set_map_t = std::unordered_map<std::string, double>;
+using emu_map_t
+    = std::unordered_map<std::string, std::unordered_map<uint16_t, double>>;
 
-        Parser(std::string_view);
-    };
+namespace Parser
+{
+    set_map_t parse_set_entropy(std::string_view);
+    emu_map_t parse_emulated_entropy(std::string_view);
+
+    void print_set_entropy(const set_map_t&);
+    void print_emu_entropy(const emu_map_t&);
+};
+
+namespace Estimator
+{
+    template <typename T> double estimate_control_flow(const T&);
+    template <typename T> double estimate(const T&);
+
+    // double cast_inst(const llvm::CastInst&);
+    // double trunc(const llvm::Instruction&);
+    // double fptrunc(const llvm::Instruction&);
+
+    // double ptrtoint(const llvm::Instruction&);
+};
+
+struct Getter
+{
+    set_map_t set_entropy;
+    emu_map_t emulated_entropy;
+
+    Getter(void);
+
+    double get_entropy_for_inst(const llvm::Instruction&);
+};
 };
 
 class IF_Emulator
@@ -98,7 +126,6 @@ public:
     static double estimate_gep(const llvm::Instruction&);
 
     /* Conversion Operations *************************************************/
-    static double estimate_trunc(const llvm::Instruction&);
     static double estimate_ptrtoint(const llvm::Instruction&);
 
     /* Other Operations ******************************************************/

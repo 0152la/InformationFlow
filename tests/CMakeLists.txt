@@ -49,12 +49,12 @@ endfunction()
 set(func_tests
     llvm-parse
     llvm-entropy_map
-    llvm-entropy_graph
-    llvm-entropy_map_path_printer
+    #llvm-entropy_graph
+    #llvm-entropy_map_path_printer
 )
 
 foreach(func_t IN LISTS func_tests)
-    #add_func_test(${func_t})
+    add_func_test(${func_t})
 endforeach()
 
 # `ll` generation tests
@@ -86,6 +86,7 @@ set(ll_srcs
     simple-cycle-double
     simple-vector
     sample
+    minimal
     entropy-func_loss-exec
 )
 

@@ -58,6 +58,11 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
+            //fn_inst.print(llvm::outs());
+            //llvm::outs() << "\n";
+            //llvm::outs() << fn_inst.getName();
+            //llvm::outs() << "\n----------\n";
+
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
             double retained_entropy
@@ -134,6 +139,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         em->insert(std::move(em_fn));
     }
     em->set_instruction_count(instr_idx);
+
+    // TODO untangle EntropyMap and UseMap from this
     auto use_em
         = std::make_unique<IF_EntropyMap::UseMap>(em_insts, em_instr_map);
 

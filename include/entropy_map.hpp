@@ -38,8 +38,8 @@ public:
 
 private:
     idx_t idx;
-    unsigned int opcode;
-    unsigned int ret_ty_bit_sz;
+    const unsigned int opcode;
+    const unsigned int ret_ty_bit_sz;
     std::set<llvm::Value*> insts_in;
 
     const Instruction* succ_natural = nullptr;
@@ -49,7 +49,12 @@ private:
     double retained_entropy;
     bool trivial = false;
 
+
 public:
+
+    const bool llvm_no_uses;
+    const bool llvm_is_terminator;
+
     /* Constructors ***********************************************************/
 
     Instruction(uint32_t, const llvm::Instruction&);
@@ -240,29 +245,42 @@ class UseMap
 {
     struct Node
     {
-        const IF_EntropyMap::Instruction* inst;
+        const IF_EntropyMap::Instruction* em_inst;
         std::vector<const IF_EntropyMap::UseMap::Node*> preds;
 
         Node(const IF_EntropyMap::Instruction*);
 
         void add_pred(const IF_EntropyMap::UseMap::Node*);
-        double get_unc_coef(void);
+        double get_unc_coef(void) const;
+        auto get_idx(void) const -> IF_EntropyMap::Instruction::idx_t;
+
+        std::string to_str_path(uint32_t) const;
+    };
+
+    struct UC_Path
+    {
+        const IF_EntropyMap::UseMap::Node* last_node;
+        std::string node_path;
+        double unc_coef;
+
+        UC_Path(const IF_EntropyMap::UseMap::Node*);
+
+        std::string to_str(void) const;
     };
 
     struct Path
     {
-        using path_unc_coef_t = std::pair<std::string, double>;
-        using path_ucs_t = std::vector<path_unc_coef_t>;
-        IF_EntropyMap::UseMap::Node* start_node;
+        using uc_paths_t = std::vector<UC_Path>;
+        std::vector<const IF_EntropyMap::UseMap::Node*> root_nodes;
 
-        Path(const IF_EntropyMap::Instruction*);
+        Path(void);
 
-        path_ucs_t compute_unc_coef(void);
-        //void combine(
-            //IF_EntropyMap::UseMap::Path*, const IF_EntropyMap::Instruction*);
-        //void add_pred(const IF_EntropyMap::Instruction*,
-            //const IF_EntropyMap::Instruction*);
-        std::string to_str(const path_ucs_t&); // TODO
+        uc_paths_t compute_unc_coef(void) const;
+        std::string to_str(void) const;
+        // void combine(
+        // IF_EntropyMap::UseMap::Path*, const IF_EntropyMap::Instruction*);
+        // void add_pred(const IF_EntropyMap::Instruction*,
+        // const IF_EntropyMap::Instruction*);
     };
 
 private:

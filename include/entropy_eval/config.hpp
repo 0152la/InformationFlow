@@ -3,7 +3,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <cstdlib>
 #include <string_view>
 
 #define DEBUG_PRINT fmt::print

@@ -1,69 +1,78 @@
 #include "instr_emulator.hpp"
+#include "fmt/base.h"
+#include <limits>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 /* For certain instructions, we can directly calculate the entropy, as they
  * either affect only control flow, or move data around.
  */
-set_entropy_t set_entropy {
-    /* This seems like a `Call` instruction in most cases, but consider
-       edge cases */
-    { llvm::Instruction::Invoke, 1.0 },
-    { llvm::Instruction::Resume, 1.0 },
-    { llvm::Instruction::Unreachable, 0.0 },
-    { llvm::Instruction::CleanupRet, 1.0 },
-    { llvm::Instruction::CatchRet, 1.0 },
-    { llvm::Instruction::CallBr, 1.0 },
+// set_entropy_t set_entropy {
+//[> This seems like a `Call` instruction in most cases, but consider
+// edge cases */
+//{ llvm::Instruction::Invoke, 1.0 },
+//{ llvm::Instruction::Resume, 1.0 },
+//{ llvm::Instruction::Unreachable, 0.0 },
+//{ llvm::Instruction::CleanupRet, 1.0 },
+//{ llvm::Instruction::CatchRet, 1.0 },
+//{ llvm::Instruction::CallBr, 1.0 },
 
-    // Unary Instructions
-    /* The entropy here is actually off by one sample, due to two's
-       complement and negating the maximum representable value; however, we
-       estimate it to 1.0 */
-    { llvm::Instruction::FNeg, 1.0 },
+//// Unary Instructions
+//[> The entropy here is actually off by one sample, due to two's
+// complement and negating the maximum representable value; however, we
+// estimate it to 1.0 */
+//{ llvm::Instruction::FNeg, 1.0 },
 
-    // Binary Instructions
-    { llvm::Instruction::Add, 0.5 },
-    { llvm::Instruction::Sub, 0.5 },
-    { llvm::Instruction::And, 0.405639 },
-    { llvm::Instruction::Or, 0.405639 },
-    { llvm::Instruction::Xor, 0.5 },
+//// Binary Instructions
+//{ llvm::Instruction::Add, 0.5 },
+//{ llvm::Instruction::Sub, 0.5 },
+//{ llvm::Instruction::And, 0.405639 },
+//{ llvm::Instruction::Or, 0.405639 },
+//{ llvm::Instruction::Xor, 0.5 },
 
-    // Vector Operations
-    { llvm::Instruction::InsertElement, 1.0 },
-    { llvm::Instruction::ShuffleVector, 0.5 },
+//// Vector Operations
+//{ llvm::Instruction::InsertElement, 1.0 },
+//{ llvm::Instruction::ShuffleVector, 0.5 },
 
-    // Aggregate Operations
-    { llvm::Instruction::InsertValue, 1.0 },
+//// Aggregate Operations
+//{ llvm::Instruction::InsertValue, 1.0 },
 
-    // Memory Operations
-    { llvm::Instruction::Alloca, 1.0 },
-    { llvm::Instruction::Load, 1.0 },
-    { llvm::Instruction::Store, 1.0 },
-    { llvm::Instruction::Fence, 1.0 },
-    { llvm::Instruction::AtomicCmpXchg, 1.0 },
-    /* Only computes an address, doesn't dereference any memory */
-    { llvm::Instruction::GetElementPtr, 1.0 },
+//// Memory Operations
+//{ llvm::Instruction::Alloca, 1.0 },
+//{ llvm::Instruction::Load, 1.0 },
+//{ llvm::Instruction::Store, 1.0 },
+//{ llvm::Instruction::Fence, 1.0 },
+//{ llvm::Instruction::AtomicCmpXchg, 1.0 },
+//[> Only computes an address, doesn't dereference any memory <]
+//{ llvm::Instruction::GetElementPtr, 1.0 },
 
-    // Conversion Operations
-    { llvm::Instruction::ZExt, 1.0 },
-    { llvm::Instruction::SExt, 1.0 },
-    { llvm::Instruction::FPExt, 1.0 },
-    /* TODO might be fine to approximate
-       to 1, but I think there is quite a bit of lost entropy from rounding
-       */
-    // { llvm::Instruction::fptoui, 1.0
-    // },
-    { llvm::Instruction::UIToFP, 1.0 },
-    { llvm::Instruction::SIToFP, 1.0 },
-    { llvm::Instruction::IntToPtr, 1.0 },
-    { llvm::Instruction::BitCast, 1.0 },
-    { llvm::Instruction::AddrSpaceCast, 1.0 },
+//// Conversion Operations
+//{ llvm::Instruction::ZExt, 1.0 },
+//{ llvm::Instruction::SExt, 1.0 },
+//{ llvm::Instruction::FPExt, 1.0 },
+//[> TODO might be fine to approximate
+// to 1, but I think there is quite a bit of lost entropy from rounding
+//*/
+//// { llvm::Instruction::fptoui, 1.0
+//// },
+//{ llvm::Instruction::UIToFP, 1.0 },
+//{ llvm::Instruction::SIToFP, 1.0 },
+//{ llvm::Instruction::IntToPtr, 1.0 },
+//{ llvm::Instruction::BitCast, 1.0 },
+//{ llvm::Instruction::AddrSpaceCast, 1.0 },
 
-    // Other Operations
-    // TODO handle constant case?
-    { llvm::Instruction::Select, 1.0 },
-    { llvm::Instruction::LandingPad, 1.0 },
-    /* TODO */
-    { llvm::Instruction::Freeze, 1.0 },
-};
+//// Other Operations
+//// TODO handle constant case?
+//{ llvm::Instruction::Select, 1.0 },
+//{ llvm::Instruction::LandingPad, 1.0 },
+//[> TODO <]
+//{ llvm::Instruction::Freeze, 1.0 },
+//};
 
 /* For certain instructions, we can estimate the amount of retained entropy by
  * looking at just the data contained within the instructions themselves, rather
@@ -79,7 +88,7 @@ estimate_entropy_t estimate_entropy {
     { llvm::Instruction::ExtractValue, IF_Emulator::estimate_extract_value },
 
     // Converstion Operations
-    { llvm::Instruction::Trunc, IF_Emulator::estimate_trunc },
+    //{ llvm::Instruction::Trunc, IF_Emulator::estimate_trunc },
     { llvm::Instruction::PtrToInt, IF_Emulator::estimate_ptrtoint },
 
     // Other Operations
@@ -167,11 +176,14 @@ fn_def::to_str(void)
  * IF_Entropy_Vals::Parser
  ******************************************************************************/
 
-IF_Entropy_Vals::Parser::Parser(std::string_view file_path)
+IF_Entropy_Vals::set_map_t
+IF_Entropy_Vals::Parser::parse_set_entropy(
+    std::string_view set_entropy_toml_path)
 {
+    auto res = set_map_t { };
     try
     {
-        toml::table uc_tab = toml::parse_file(file_path);
+        toml::table uc_tab = toml::parse_file(set_entropy_toml_path);
         auto ucs_arr = *uc_tab.get_as<toml::array>("entropies");
         for (const auto& uc : ucs_arr)
         {
@@ -181,9 +193,24 @@ IF_Entropy_Vals::Parser::Parser(std::string_view file_path)
             {
                 auto fn_name = *fn_name_node.value<std::string>();
                 auto uc_val = *ucs_arr_entry.get("value")->value<double>();
-                this->parsed_entropy[fn_name] = uc_val;
-                Utils::debug_print(
-                    fmt::format("ADDED FN {} VAL {}", fn_name, uc_val));
+                res.emplace(fn_name, uc_val);
+                // Utils::debug_print(
+                // fmt::format("ADDED SET -- FN {} VAL {}", fn_name, uc_val));
+            }
+        }
+
+        double simplified_fn_uc_val = 1.0;
+        auto ucs_simplified
+            = *uc_tab.get_as<toml::table>("simplified_entropies");
+        for (const auto& fn_set : ucs_simplified)
+        {
+            auto fn_set_arr = *fn_set.second.as_array();
+            for (const auto& fn_name_node : fn_set_arr)
+            {
+                auto fn_name = *fn_name_node.value<std::string>();
+                res.emplace(fn_name, simplified_fn_uc_val);
+                // Utils::debug_print(fmt::format("ADDED SIMPLE -- FN {} VAL
+                // {}", fn_name, simplified_fn_uc_val));
             }
         }
     }
@@ -192,6 +219,224 @@ IF_Entropy_Vals::Parser::Parser(std::string_view file_path)
         std::cerr << "TOML entropy value parsing failed:\n" << err << "\n";
         throw err;
     }
+
+    return res;
+}
+
+IF_Entropy_Vals::emu_map_t
+IF_Entropy_Vals::Parser::parse_emulated_entropy(
+    std::string_view emu_entropy_csv_path)
+{
+    auto res = emu_map_t { };
+
+    auto csv_stream = std::ifstream { std::string { emu_entropy_csv_path } };
+    auto data_row = std::vector<std::string> { };
+
+    const char delim = ',';
+    const std::string prefix = "llvm_impl_";
+
+    // TODO
+    for (std::string line; std::getline(csv_stream, line);)
+    {
+        auto line_ss = std::istringstream { line };
+        data_row.clear();
+        for (std::string data; std::getline(line_ss, data, delim);)
+        {
+            data_row.emplace_back(data);
+        }
+
+        std::string fn_name = data_row[0];
+        fn_name.erase(0, prefix.length());
+        if (res.find(fn_name) == res.end())
+        {
+            res.emplace(fn_name, IF_Entropy_Vals::emu_map_t::mapped_type { });
+        }
+        res[fn_name].emplace(std::stoul(data_row[1]), std::stod(data_row[2]));
+    }
+
+    return res;
+}
+
+void
+IF_Entropy_Vals::Parser::print_set_entropy(const set_map_t& _data)
+{
+    for (const auto& [fn_name, uc_val] : _data)
+    {
+        fmt::println("== FN {} == UC {}", fn_name, uc_val);
+    }
+}
+
+void
+IF_Entropy_Vals::Parser::print_emu_entropy(const emu_map_t& _data)
+{
+    for (const auto& [fn_name, bit_sz_data] : _data)
+    {
+        fmt::println("== FN {}", fn_name);
+        for (const auto& [bit_sz, uc_val] : bit_sz_data)
+        {
+            fmt::println("\t-- BS {} -- UC {}", bit_sz, uc_val);
+        }
+    }
+}
+
+/*******************************************************************************
+ * IF_Entropy_Vals::Estimator
+ ******************************************************************************/
+
+template <>
+double
+IF_Entropy_Vals::Estimator::estimate_control_flow(const llvm::CmpInst& ci)
+{
+    uint8_t ty_width = ci.getType()->getIntegerBitWidth();
+    uint64_t val_count = ty_width == 64 ? std::numeric_limits<uint64_t>::max()
+                                        : std::pow(2, ty_width);
+
+    switch (ci.getPredicate())
+    {
+        case llvm::CmpInst::Predicate::ICMP_EQ:
+        case llvm::CmpInst::Predicate::FCMP_UEQ:
+        case llvm::CmpInst::Predicate::FCMP_OEQ:
+        {
+            return 1.0 / val_count;
+        }
+        case llvm::CmpInst::Predicate::ICMP_NE:
+        case llvm::CmpInst::Predicate::FCMP_UNE:
+        case llvm::CmpInst::Predicate::FCMP_ONE:
+        {
+            return (val_count - 1.0) / val_count;
+        }
+        default:
+        {
+            throw std::runtime_error(
+                fmt::format("Unhandled CmpInst predicate `{}`!",
+                    ci.getPredicateName(ci.getPredicate()).str()));
+        }
+    }
+}
+
+template <>
+double
+IF_Entropy_Vals::Estimator::estimate(const llvm::CastInst& ci)
+{
+    ci.print(llvm::outs());
+    llvm::outs() << '\n';
+    // uint8_t from_sz = ci.getSrcTy()->getIntegerBitWidth();
+    // uint8_t to_sz = ci.getDestTy()->getIntegerBitWidth();
+    uint8_t from_sz = ci.getSrcTy()->getPrimitiveSizeInBits().getFixedValue();
+    uint8_t to_sz = ci.getDestTy()->getPrimitiveSizeInBits().getFixedValue();
+
+    fmt::println("WIDTH -- FROM {} -- TO {}", from_sz, to_sz);
+
+    if (to_sz >= from_sz)
+    {
+        return 1.0;
+    }
+    return std::pow(2, to_sz - from_sz);
+}
+
+template <>
+double
+IF_Entropy_Vals::Estimator::estimate(const llvm::CmpInst& ci)
+{
+    return IF_Entropy_Vals::Estimator::estimate_control_flow<llvm::CmpInst>(ci);
+}
+
+// double
+// IF_Entropy_Vals::Estimator::trunc(const llvm::Instruction& inst)
+//{
+// const llvm::CastInst* ci = llvm::dyn_cast<llvm::CastInst>(&inst);
+// if (!ti)
+//{
+// throw std::runtime_error(
+//"Could not cast expected `TruncInst` to `CastInst`!");
+//}
+// return IF_Entropy_Vals::Estimator::cast_inst(ci);
+//}
+
+// double
+// IF_Entropy_Vals::Estimator::fptrunc(const llvm::Instruction& inst)
+//{
+// const llvm::CastInst* ci = llvm::dyn_cast<llvm::CastInst>(&inst);
+// if (!ti)
+//{
+// throw std::runtime_error(
+//"Could not cast expected `FPTruncInst` to `CastInst`!");
+//}
+// return IF_Entropy_Vals::Estimator::cast_inst(ci);
+//}
+
+// double IF_Entropy_Vals::Estimator::ptrtoint(const llvm::Instruction& inst)
+//{
+
+//}
+
+/*******************************************************************************
+ * IF_Entropy_Vals::Getter
+ ******************************************************************************/
+
+IF_Entropy_Vals::Getter::Getter(void)
+{
+    auto get_env_guarded = [](const std::string& _env_var)
+    {
+        auto env_val = std::getenv(_env_var.c_str());
+        if (env_val == nullptr)
+        {
+            throw std::runtime_error(
+                fmt::format("Couldn't open path in env var `{}`!", _env_var));
+        }
+        return env_val;
+    };
+
+    this->set_entropy = std::move(IF_Entropy_Vals::Parser::parse_set_entropy(
+        get_env_guarded("IF_SET_ENTROPY_FILE")));
+    this->emulated_entropy
+        = std::move(IF_Entropy_Vals::Parser::parse_emulated_entropy(
+            get_env_guarded("IF_EMULATED_ENTROPY_FILE")));
+
+    //IF_Entropy_Vals::Parser::print_set_entropy(this->set_entropy);
+    //IF_Entropy_Vals::Parser::print_emu_entropy(this->emulated_entropy);
+}
+
+double
+IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& inst)
+{
+    if (const auto fn_set_entropy
+        = this->set_entropy.find(inst.getOpcodeName());
+        fn_set_entropy != this->set_entropy.end())
+    {
+        return fn_set_entropy->second;
+    }
+
+    if (const auto fn_emu_entropy
+        = this->emulated_entropy.find(inst.getOpcodeName());
+        fn_emu_entropy != this->emulated_entropy.end())
+    {
+        if (const auto bit_sz_uc_val = fn_emu_entropy->second.find(
+                inst.getType()->getPrimitiveSizeInBits());
+            bit_sz_uc_val != fn_emu_entropy->second.end())
+        {
+            return bit_sz_uc_val->second;
+        }
+
+        throw std::runtime_error(
+            fmt::format("Didn't find UC val for function `{}` and bit size {}!",
+                inst.getOpcodeName(),
+                inst.getType()->getPrimitiveSizeInBits().getFixedValue()));
+    }
+
+    if (llvm::isa<llvm::CastInst>(inst))
+    {
+        const llvm::CastInst* ci = llvm::dyn_cast<llvm::CastInst>(&inst);
+        return IF_Entropy_Vals::Estimator::estimate<llvm::CastInst>(*ci);
+    }
+    else if (llvm::isa<llvm::CmpInst>(inst))
+    {
+        const llvm::CmpInst* ci = llvm::dyn_cast<llvm::CmpInst>(&inst);
+        return IF_Entropy_Vals::Estimator::estimate<llvm::CmpInst>(*ci);
+    }
+
+    throw std::runtime_error(fmt::format(
+        "Unhandled entropy getting for inst `{}`!", inst.getOpcodeName()));
 }
 
 /*******************************************************************************
@@ -204,10 +449,7 @@ IF_Emulator::populate_ops(void)
     // TODO get the entropy values
 }
 
-IF_Emulator::IF_Emulator()
-{
-    this->populate_ops();
-}
+IF_Emulator::IF_Emulator() { this->populate_ops(); }
 
 IF_Emulator::~IF_Emulator() { }
 
@@ -267,7 +509,8 @@ IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
         : elem_count * 1.0 / (1 << index_width);
 }
 
-/* Aggregate Operations *******************************************************/
+/* Aggregate Operations
+ * *******************************************************/
 
 /* This operation is different than `extractelement`, in three main ways:
  * - the indices *must* be in bounds, therefore we do not care about poison
@@ -276,9 +519,9 @@ IF_Emulator::estimate_extract_element(const llvm::Instruction& instr)
  * recursively index within indexable elements
  *
  * The way we compute entropy is by calculating the number of bits in the
- * indexed data element, then the number of bits in the entire aggregate data
- * value, and computing the ratio. This is guaranteed to be less than one, as
- * the whole is greater than the parts.
+ * indexed data element, then the number of bits in the entire aggregate
+ * data value, and computing the ratio. This is guaranteed to be less than
+ * one, as the whole is greater than the parts.
  */
 double
 IF_Emulator::estimate_extract_value(const llvm::Instruction& instr)
@@ -313,29 +556,8 @@ IF_Emulator::estimate_extract_value(const llvm::Instruction& instr)
     throw std::logic_error("Unrechable - extractvalue");
 }
 
-/* Conversion Operations ******************************************************/
-
-double
-IF_Emulator::estimate_trunc(const llvm::Instruction& instr)
-{
-    const llvm::TruncInst* ti = llvm::dyn_cast<llvm::TruncInst>(&instr);
-    if (!ti)
-    {
-        throw std::runtime_error(
-            "Could not cast instruction to expected `TruncInst`!");
-    }
-
-    uint8_t from_sz = ti->getSrcTy()->getIntegerBitWidth();
-    uint8_t to_sz = ti->getDestTy()->getIntegerBitWidth();
-    if (from_sz <= to_sz)
-    {
-        throw std::logic_error("Found invalid `trunc` type bit-widths!");
-    }
-
-    // TODO double check
-    //return 1.0 / (1 << (from_sz - to_sz));
-    return to_sz / from_sz;
-}
+/* Conversion Operations
+ * ******************************************************/
 
 double
 IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
@@ -360,7 +582,8 @@ IF_Emulator::estimate_ptrtoint(const llvm::Instruction& instr)
     return 1.0;
 }
 
-/* Other Operations ***********************************************************/
+/* Other Operations
+ * ***********************************************************/
 
 double
 IF_Emulator::estimate_icmp_eq(const llvm::Instruction& instr)
@@ -401,16 +624,16 @@ IF_Emulator::estimate_phi(const llvm::Instruction& instr)
 /*******************************************************************************
  * Flow estimation functions
  *
- * These functions estimate how much "flow", as a proportion of entropy, is to
- * be allocated to all possible successor instructions of a given instruction.
- * These functions require a bit of further analysis in order to compute the
- * flow proportion
+ * These functions estimate how much "flow", as a proportion of entropy, is
+ * to be allocated to all possible successor instructions of a given
+ * instruction. These functions require a bit of further analysis in order
+ * to compute the flow proportion
  * ******************************************************************************/
 
-/* There are two cases: whether this is a conditional, or unconditional branch.
- * If it is the latter, then the flow is simply 1.0, as it's essentially a
- * `jmp` instruction. If it is the former, the flow s equivalent to the
- * computed flow value of the variable conditioned on.
+/* There are two cases: whether this is a conditional, or unconditional
+ * branch. If it is the latter, then the flow is simply 1.0, as it's
+ * essentially a `jmp` instruction. If it is the former, the flow s
+ * equivalent to the computed flow value of the variable conditioned on.
  */
 double
 IF_Emulator::estimate_flow_br(const llvm::Instruction& inst)
@@ -434,8 +657,8 @@ IF_Emulator::estimate_flow_switch(const llvm::Instruction& instr)
     return 1.0 / (llvm::dyn_cast<llvm::SwitchInst>(&instr)->getNumCases() + 1);
 }
 
-/* The flow is determined by the proportion of possible valid address values in
- * the `<address>` field. Since this requires heavy dynamic analysis, we
+/* The flow is determined by the proportion of possible valid address values
+ * in the `<address>` field. Since this requires heavy dynamic analysis, we
  * estimate it to be uniformly distributed, i.e. the flow is 1 /
  * <destination_count>
  */
