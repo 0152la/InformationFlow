@@ -1,9 +1,11 @@
 #include "entropy_map.hpp"
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/Instruction.h>
+#include <memory>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 
 const std::string instr_simple_prefix = "i";
 
@@ -17,24 +19,7 @@ IF_EntropyMap::Instruction::Instruction(
     opcode(_inst.getOpcode()),
     ret_ty_bit_sz(_inst.getType()->getPrimitiveSizeInBits().getFixedValue()),
     llvm_no_uses(_inst.use_empty()),
-    llvm_is_terminator(_inst.isTerminator())
-{
-    llvm::outs() << "IDX " << idx << '\n';
-    _inst.print(llvm::outs());
-    llvm::outs() << '\n';
-    for (const llvm::Use& u : _inst.operands())
-    {
-        llvm::Value* v = u.get();
-        if (llvm::isa<llvm::Instruction>(v))
-        {
-            this->insts_in.insert(v);
-            llvm::outs() << "ADD OPERAND ";
-            v->print(llvm::outs());
-            llvm::outs() << '\n';
-        }
-    }
-    llvm::outs() << "---------------\n";
-};
+    llvm_is_terminator(_inst.isTerminator()) { };
 
 void
 IF_EntropyMap::Instruction::add_successor(
@@ -232,13 +217,6 @@ IF_EntropyMap::Map::print(void) const
 IF_EntropyMap::UseMap::Node::Node(const Instruction* _inst) :
     em_inst(_inst) { };
 
-void
-IF_EntropyMap::UseMap::Node::add_pred(
-    const IF_EntropyMap::UseMap::Node* _new_pred)
-{
-    this->preds.push_back(_new_pred);
-}
-
 double
 IF_EntropyMap::UseMap::Node::get_unc_coef(void) const
 {
@@ -257,102 +235,11 @@ IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent) const
 {
     const auto indent_str = std::string(_indent, '-');
     std::ostringstream oss;
-    oss << fmt::format("{}NODE {}\n", indent_str, this->get_idx());
-    for (const auto& pred : this->preds)
+    oss << fmt::format("{}NODE {}{}\n", indent_str, this->get_idx(),
+        this->em_inst->llvm_is_terminator ? " TERM" : "");
+    for (const auto& user : this->users)
     {
-        oss << pred->to_str_path(_indent + 1);
-    }
-    return oss.str();
-}
-
-/* Path ***********************************************************************/
-
-IF_EntropyMap::UseMap::Path::Path(void) :
-    root_nodes(std::vector<const IF_EntropyMap::UseMap::Node*>()) { };
-
-// void
-// IF_EntropyMap::UseMap::Path::combine(IF_EntropyMap::UseMap::Path* _other,
-// const IF_EntropyMap::Instruction* _inst)
-//{
-// auto insert_node = std::find_if(this->sequence.begin(),
-// this->sequence.end(), [&_inst](decltype(this->sequence)::value_type n)
-//{ return n.inst == _inst; });
-// if (insert_node == this->sequence.end())
-//{
-// throw std::runtime_error(fmt::format(
-//"Couldn't find node for combination for `{}`!", _inst->to_str()));
-//}
-
-// this->sequence.insert(
-// insert_node, _other->sequence.begin(), _other->sequence.end());
-//}
-
-// void
-// IF_EntropyMap::UseMap::Path::add_pred(const IF_EntropyMap::Instruction*
-// _inst, const IF_EntropyMap::Instruction* _new_pred)
-//{
-// for (auto n : this->sequence)
-//{
-// if (n.inst == _inst)
-//{
-// n.add_pred(_new_pred);
-// return;
-//}
-//}
-// throw std::runtime_error(fmt::format(
-//"Couldn't find node for instruction `{}`!", _inst->to_str()));
-//}
-
-IF_EntropyMap::UseMap::Path::uc_paths_t
-IF_EntropyMap::UseMap::Path::compute_unc_coef(void) const
-{
-    std::queue<IF_EntropyMap::UseMap::UC_Path> incomplete;
-    std::vector<IF_EntropyMap::UseMap::UC_Path> complete;
-
-    for (const auto& root : this->root_nodes)
-    {
-        incomplete.push(UC_Path(root));
-    }
-
-    while (!incomplete.empty())
-    {
-        auto curr_path = incomplete.front();
-        incomplete.pop();
-
-        while (curr_path.last_node->preds.size() == 1)
-        {
-            auto next_node = curr_path.last_node->preds.front();
-            curr_path.unc_coef *= next_node->get_unc_coef();
-            curr_path.node_path = fmt::format(
-                "{} - {}", curr_path.node_path, next_node->get_idx());
-            curr_path.last_node = next_node;
-        }
-
-        if (curr_path.last_node->preds.empty())
-        {
-            complete.emplace_back(curr_path);
-        }
-
-        for (const auto pred : curr_path.last_node->preds)
-        {
-            auto new_path = curr_path;
-            new_path.unc_coef *= pred->get_unc_coef();
-            new_path.last_node = pred;
-            incomplete.push(new_path);
-        }
-    }
-
-    return complete;
-}
-
-std::string
-IF_EntropyMap::UseMap::Path::to_str(void) const
-{
-    std::ostringstream oss;
-    for (const auto& root : this->root_nodes)
-    {
-        oss << root->to_str_path(0);
-        oss << "----------\n";
+        oss << user->to_str_path(_indent + 1);
     }
     return oss.str();
 }
@@ -373,61 +260,80 @@ IF_EntropyMap::UseMap::UC_Path::to_str(void) const
 
 /* UseMap *********************************************************************/
 
-IF_EntropyMap::UseMap::UseMap(const IF_EntropyMap::insts_t& _insts,
-    const IF_EntropyMap::insts_llvm_mapping_t& _llvm_mapping)
+IF_EntropyMap::UseMap::UseMap(
+    const IF_EntropyMap::UseMap::insts_pair_t& _em_insts,
+    const IF_EntropyMap::UseMap::llvm_to_insts_map_t& _llvm_insts_map)
 {
-    auto seen_insts = std::vector<bool>(_insts.size(), false);
+    auto seen_insts = std::vector<bool>(_em_insts.size(), false);
     auto inst_to_node_map
         = std::unordered_map<const IF_EntropyMap::Instruction*,
-            IF_EntropyMap::UseMap::Node*> { };
-    auto use_path = new IF_EntropyMap::UseMap::Path();
-    for (auto inst_it = _insts.rbegin(); inst_it != _insts.rend(); ++inst_it)
+            IF_EntropyMap::UseMap::Node*>();
+
+    auto get_or_make_node
+        = [&_em_insts = std::as_const(_em_insts), &inst_to_node_map,
+              &seen_insts, this](const IF_EntropyMap::Instruction* _em_inst,
+              bool _start) -> IF_EntropyMap::UseMap::Node*
     {
-        const auto inst = *inst_it;
-
-        if (inst->llvm_no_uses && !inst->llvm_is_terminator)
+        if (seen_insts[_em_inst->get_idx()])
         {
-            fmt::println("Skipping unused non-terminator instruction idx {}!",
-                inst->get_idx());
-            continue;
+            return inst_to_node_map[_em_inst];
         }
-
-        auto curr_node = [&]() -> IF_EntropyMap::UseMap::Node*
+        else
         {
-            if (seen_insts[inst->get_idx()])
+            auto new_node = new IF_EntropyMap::UseMap::Node(_em_inst);
+            inst_to_node_map.emplace(_em_inst, new_node);
+            seen_insts[_em_inst->get_idx()] = true;
+            if (_start)
             {
-                return inst_to_node_map[inst];
+                this->start_nodes.push_back(new_node);
             }
-            else
-            {
-                auto new_node = new IF_EntropyMap::UseMap::Node(inst);
-                inst_to_node_map.emplace(inst, new_node);
-                use_path->root_nodes.push_back(new_node);
-                seen_insts[inst->get_idx()] = true;
-                return new_node;
-            }
-        }();
+            return new_node;
+        }
+    };
 
-        for (const auto& pred_inst : inst->get_reg_uses())
+    for (const auto& [em_inst, llvm_inst] : _em_insts)
+    {
+        auto curr_node = get_or_make_node(em_inst, true);
+        llvm::outs() << "INST ";
+        llvm_inst->print(llvm::outs());
+        llvm::outs() << '\n';
+
+        for (const auto& user : llvm_inst->users())
         {
-            auto pred = _llvm_mapping.at(
-                llvm::dyn_cast<llvm::Instruction>(pred_inst));
-            if (!seen_insts[pred->get_idx()])
+            llvm::outs() << "\tUSER ";
+            user->print(llvm::outs());
+            llvm::outs() << '\n';
+            const auto user_inst = llvm::dyn_cast<llvm::Instruction>(user);
+            if (!user_inst)
             {
-                auto pred_node = new IF_EntropyMap::UseMap::Node(pred);
-                curr_node->add_pred(pred_node);
-                inst_to_node_map.emplace(pred, pred_node);
-                seen_insts[pred->get_idx()] = true;
+                continue;
+            }
+
+            llvm::outs() << "\tINST!!!\n";
+            if (const auto llvm_inst_map_it = _llvm_insts_map.find(user_inst);
+                llvm_inst_map_it != _llvm_insts_map.end())
+            {
+                auto em_user_inst = llvm_inst_map_it->second;
+                auto em_user_node = get_or_make_node(em_user_inst, false);
+                curr_node->users.emplace_back(em_user_node);
             }
         }
     }
 
-    // TODO
-    this->use_path = use_path;
-    std::cout << this->use_path->to_str() << std::endl;
+    std::cout << this->to_str() << std::endl;
+}
 
-    // for (const auto& uc_p : this->use_path->compute_unc_coef())
-    //{
-    // std::cout << uc_p.to_str() << std::endl;
-    //}
+std::string
+IF_EntropyMap::UseMap::UseMap::to_str(void) const
+{
+    std::ostringstream ss;
+    const std::string line_delim = "----------\n";
+
+    ss << "USEMAP\n" << line_delim;
+    for (const auto& n : this->start_nodes)
+    {
+        ss << n->to_str_path(0);
+        ss << line_delim;
+    }
+    return ss.str();
 }

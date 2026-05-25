@@ -40,7 +40,6 @@ private:
     idx_t idx;
     const unsigned int opcode;
     const unsigned int ret_ty_bit_sz;
-    std::set<llvm::Value*> insts_in;
 
     const Instruction* succ_natural = nullptr;
     succs_t succs_instr;
@@ -49,9 +48,7 @@ private:
     double retained_entropy;
     bool trivial = false;
 
-
 public:
-
     const bool llvm_no_uses;
     const bool llvm_is_terminator;
 
@@ -64,11 +61,6 @@ public:
     idx_t get_idx(void) const { return this->idx; };
 
     unsigned int get_opcode(void) const { return this->opcode; };
-
-    auto get_reg_uses(void) const -> decltype(this->insts_in)
-    {
-        return this->insts_in;
-    };
 
     double get_retained_entropy(void) const { return this->retained_entropy; };
 
@@ -246,7 +238,7 @@ class UseMap
     struct Node
     {
         const IF_EntropyMap::Instruction* em_inst;
-        std::vector<const IF_EntropyMap::UseMap::Node*> preds;
+        std::vector<const IF_EntropyMap::UseMap::Node*> users;
 
         Node(const IF_EntropyMap::Instruction*);
 
@@ -268,26 +260,18 @@ class UseMap
         std::string to_str(void) const;
     };
 
-    struct Path
-    {
-        using uc_paths_t = std::vector<UC_Path>;
-        std::vector<const IF_EntropyMap::UseMap::Node*> root_nodes;
-
-        Path(void);
-
-        uc_paths_t compute_unc_coef(void) const;
-        std::string to_str(void) const;
-        // void combine(
-        // IF_EntropyMap::UseMap::Path*, const IF_EntropyMap::Instruction*);
-        // void add_pred(const IF_EntropyMap::Instruction*,
-        // const IF_EntropyMap::Instruction*);
-    };
-
 private:
-    IF_EntropyMap::UseMap::Path* use_path;
+    std::vector<const IF_EntropyMap::UseMap::Node*> start_nodes;
 
 public:
-    UseMap(const insts_t&, const insts_llvm_mapping_t&);
+    using insts_pair_t = std::vector<
+        std::pair<const IF_EntropyMap::Instruction*, const llvm::Instruction*>>;
+    using llvm_to_insts_map_t = std::unordered_map<const llvm::Instruction*,
+        const IF_EntropyMap::Instruction*>;
+
+    UseMap(const insts_pair_t&, const llvm_to_insts_map_t&);
+
+    std::string to_str(void) const;
 };
 
 }; // namespace IF_EntropyMap

@@ -1,6 +1,7 @@
 #include "reader.hpp"
 #include "entropy_map.hpp"
 #include "instr_emulator.hpp"
+#include <llvm/IR/Instruction.h>
 #include <memory>
 
 extern set_entropy_t set_entropy;
@@ -40,7 +41,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
     std::map<const IF_EntropyMap::Instruction*, const llvm::Function*>
         func_calls;
 
-    IF_EntropyMap::insts_t em_insts;
+    IF_EntropyMap::UseMap::insts_pair_t em_usemap_em_insts;
+    IF_EntropyMap::UseMap::llvm_to_insts_map_t em_usemap_llvm_insts_map;
 
     auto unc_coef_getter = IF_Entropy_Vals::Getter { };
 
@@ -58,10 +60,10 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            //fn_inst.print(llvm::outs());
-            //llvm::outs() << "\n";
-            //llvm::outs() << fn_inst.getName();
-            //llvm::outs() << "\n----------\n";
+            // fn_inst.print(llvm::outs());
+            // llvm::outs() << "\n";
+            // llvm::outs() << fn_inst.getName();
+            // llvm::outs() << "\n----------\n";
 
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
@@ -76,7 +78,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
                 llvm::errs() << "Warning: " << err.str() << '\n';
             }
             em_instr_map.emplace(&fn_inst, em_instr.get());
-            em_insts.push_back(em_instr.get());
+            em_usemap_em_insts.emplace_back(em_instr.get(), &fn_inst);
+            em_usemap_llvm_insts_map.emplace(&fn_inst, em_instr.get());
 
             // Record special instruction successors, such as from calls or
             // branch instructions
@@ -141,8 +144,8 @@ IF_Parser::make_entropy_map(const llvm::Module& llvm_module)
     em->set_instruction_count(instr_idx);
 
     // TODO untangle EntropyMap and UseMap from this
-    auto use_em
-        = std::make_unique<IF_EntropyMap::UseMap>(em_insts, em_instr_map);
+    auto use_em = std::make_unique<IF_EntropyMap::UseMap>(
+        em_usemap_em_insts, em_usemap_llvm_insts_map);
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)
