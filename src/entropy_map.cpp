@@ -1,11 +1,4 @@
 #include "entropy_map.hpp"
-#include <llvm/IR/Constant.h>
-#include <llvm/IR/Instruction.h>
-#include <memory>
-#include <numeric>
-#include <sstream>
-#include <stdexcept>
-#include <unordered_map>
 
 const std::string instr_simple_prefix = "i";
 
@@ -237,7 +230,7 @@ IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent) const
     std::ostringstream oss;
     oss << fmt::format("{}NODE {}{}\n", indent_str, this->get_idx(),
         this->em_inst->llvm_is_terminator ? " TERM" : "");
-    for (const auto& user : this->users)
+    for (const auto& user : this->uses)
     {
         oss << user->to_str_path(_indent + 1);
     }
@@ -262,17 +255,20 @@ IF_EntropyMap::UseMap::UC_Path::to_str(void) const
 
 IF_EntropyMap::UseMap::UseMap(
     const IF_EntropyMap::UseMap::insts_pair_t& _em_insts,
-    const IF_EntropyMap::UseMap::llvm_to_insts_map_t& _llvm_insts_map)
+    const IF_EntropyMap::UseMap::llvm_to_insts_map_t& _llvm_insts_map,
+    llvm::MemorySSA& _llvm_mem_ssa)
 {
     auto seen_insts = std::vector<bool>(_em_insts.size(), false);
     auto inst_to_node_map
         = std::unordered_map<const IF_EntropyMap::Instruction*,
             IF_EntropyMap::UseMap::Node*>();
 
+    auto mssa_walker = _llvm_mem_ssa.getWalker();
+
     auto get_or_make_node
         = [&_em_insts = std::as_const(_em_insts), &inst_to_node_map,
-              &seen_insts, this](const IF_EntropyMap::Instruction* _em_inst,
-              bool _start) -> IF_EntropyMap::UseMap::Node*
+              &seen_insts, this](const IF_EntropyMap::Instruction* _em_inst)
+        -> IF_EntropyMap::UseMap::Node*
     {
         if (seen_insts[_em_inst->get_idx()])
         {
@@ -283,44 +279,87 @@ IF_EntropyMap::UseMap::UseMap(
             auto new_node = new IF_EntropyMap::UseMap::Node(_em_inst);
             inst_to_node_map.emplace(_em_inst, new_node);
             seen_insts[_em_inst->get_idx()] = true;
-            if (_start)
+            if (_em_inst->llvm_is_terminator)
             {
-                this->start_nodes.push_back(new_node);
+                this->root_nodes.push_back(new_node);
             }
             return new_node;
         }
     };
 
-    for (const auto& [em_inst, llvm_inst] : _em_insts)
+    auto insert_node_from_llvm_inst
+        = [&_llvm_insts_map = std::as_const(_llvm_insts_map),
+              &get_or_make_node](IF_EntropyMap::UseMap::Node* _curr_node,
+              const llvm::Instruction* _inst) -> void
     {
-        auto curr_node = get_or_make_node(em_inst, true);
-        llvm::outs() << "INST ";
+        auto em_inst = _llvm_insts_map.at(_inst);
+        auto em_node = get_or_make_node(em_inst);
+        _curr_node->uses.emplace_back(em_node);
+    };
+
+    for (const auto& [em_inst, llvm_inst] : _em_insts | std::views::reverse)
+    {
+        auto curr_node = get_or_make_node(em_inst);
+        llvm::outs() << "INST " << em_inst->get_idx();
         llvm_inst->print(llvm::outs());
         llvm::outs() << '\n';
 
-        for (const auto& user : llvm_inst->users())
+        // If this is a `load` instruction, we handle it specially, as we need
+        // to look for the last clobber of the accessed memory address, rather
+        // than just looking at operands
+        if (const auto li = llvm::dyn_cast<llvm::LoadInst>(llvm_inst))
         {
-            llvm::outs() << "\tUSER ";
-            user->print(llvm::outs());
-            llvm::outs() << '\n';
-            const auto user_inst = llvm::dyn_cast<llvm::Instruction>(user);
-            if (!user_inst)
-            {
-                continue;
-            }
+            const auto ma = _llvm_mem_ssa.getMemoryAccess(li);
+            llvm::outs() << "\tMEM ";
+            // TODO check if Instruction
+            ma->getDefiningAccess()->print(llvm::outs());
+            auto md = llvm::dyn_cast<llvm::MemoryDef>(
+                mssa_walker->getClobberingMemoryAccess(ma));
+            llvm::outs() << "\n\t";
+            md->getMemoryInst()->print(llvm::outs());
+            llvm::outs() << "\n";
 
-            llvm::outs() << "\tINST!!!\n";
-            if (const auto llvm_inst_map_it = _llvm_insts_map.find(user_inst);
-                llvm_inst_map_it != _llvm_insts_map.end())
+            insert_node_from_llvm_inst(curr_node, md->getMemoryInst());
+            // auto md_em_inst = _llvm_insts_map.at(md->getMemoryInst());
+            // auto md_em_node = get_or_make_node(md_em_inst);
+            // curr_node->uses.emplace_back(md_em_node);
+        }
+        // If this is a `store` instruction, we only care about using the value
+        // operand, not the pointer one; that is handled by the dependency for
+        // `load` instructions
+        //
+        // XXX this ignores the `alloca`s where the `store` comes from, but we
+        // don't model memory information flow at this stage
+        else if (const auto si = llvm::dyn_cast<llvm::StoreInst>(llvm_inst))
+        {
+            if (const auto si_val_inst
+                = llvm::dyn_cast<llvm::Instruction>(si->getValueOperand()))
             {
-                auto em_user_inst = llvm_inst_map_it->second;
-                auto em_user_node = get_or_make_node(em_user_inst, false);
-                curr_node->users.emplace_back(em_user_node);
+                insert_node_from_llvm_inst(curr_node, si_val_inst);
+            }
+        }
+        // Otherwise, we iterate over operands, to get the `use-def` chain
+        else
+        {
+            for (const auto& op : llvm_inst->operands())
+            {
+                llvm::outs() << "\tOP ";
+                op->print(llvm::outs());
+                llvm::outs() << '\n';
+
+                const auto op_inst = llvm::dyn_cast<llvm::Instruction>(op);
+                if (!op_inst)
+                {
+                    continue;
+                }
+
+                llvm::outs() << "\tINST!!!\n";
+                insert_node_from_llvm_inst(curr_node, op_inst);
             }
         }
     }
 
-    std::cout << this->to_str() << std::endl;
+    llvm::outs() << this->to_str() << '\n';
 }
 
 std::string
@@ -330,7 +369,7 @@ IF_EntropyMap::UseMap::UseMap::to_str(void) const
     const std::string line_delim = "----------\n";
 
     ss << "USEMAP\n" << line_delim;
-    for (const auto& n : this->start_nodes)
+    for (const auto& n : this->root_nodes)
     {
         ss << n->to_str_path(0);
         ss << line_delim;

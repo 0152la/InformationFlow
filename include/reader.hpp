@@ -16,26 +16,30 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Function.h"
 #pragma clang diagnostic pop
-
 
 class IF_LLVM_Module
 {
 private:
     const std::unique_ptr<llvm::LLVMContext> llvm_ctx;
     const std::unique_ptr<llvm::SMDiagnostic> llvm_smd;
-    const std::unique_ptr<llvm::Module> llvm_module;
+    std::unique_ptr<llvm::Module> llvm_module;
 
 public:
     IF_LLVM_Module(llvm::LLVMContext* _ctx, llvm::SMDiagnostic* _smd,
@@ -44,7 +48,7 @@ public:
         llvm_smd(std::unique_ptr<llvm::SMDiagnostic>(_smd)),
         llvm_module(std::move(_mod)) { };
 
-    const llvm::Module* get_module(void) { return this->llvm_module.get(); };
+    llvm::Module* get_module(void) { return this->llvm_module.get(); };
 };
 
 class IF_Parser
@@ -53,7 +57,7 @@ class IF_Parser
 public:
     IF_Parser() = default;
 
-    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(const llvm::Module&);
+    std::unique_ptr<IF_EntropyMap::Map> make_entropy_map(llvm::Module&);
 
     static std::unique_ptr<IF_LLVM_Module> parse_ll(const std::string&);
     static void print_instrs(const llvm::Module&);

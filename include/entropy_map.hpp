@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <queue>
+#include <ranges>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -16,9 +17,12 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #pragma clang diagnostic pop
 
@@ -238,7 +242,7 @@ class UseMap
     struct Node
     {
         const IF_EntropyMap::Instruction* em_inst;
-        std::vector<const IF_EntropyMap::UseMap::Node*> users;
+        std::vector<const IF_EntropyMap::UseMap::Node*> uses;
 
         Node(const IF_EntropyMap::Instruction*);
 
@@ -261,7 +265,7 @@ class UseMap
     };
 
 private:
-    std::vector<const IF_EntropyMap::UseMap::Node*> start_nodes;
+    std::vector<const IF_EntropyMap::UseMap::Node*> root_nodes;
 
 public:
     using insts_pair_t = std::vector<
@@ -269,7 +273,8 @@ public:
     using llvm_to_insts_map_t = std::unordered_map<const llvm::Instruction*,
         const IF_EntropyMap::Instruction*>;
 
-    UseMap(const insts_pair_t&, const llvm_to_insts_map_t&);
+    UseMap(const insts_pair_t&, const llvm_to_insts_map_t&,
+        llvm::MemorySSA&);
 
     std::string to_str(void) const;
 };
