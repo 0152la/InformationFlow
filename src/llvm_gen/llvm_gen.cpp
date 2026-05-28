@@ -174,7 +174,7 @@ emit_cmp_fn(
     else if (llvm::CmpInst::isFPPredicate(cmp_pred))
     {
         cmp_opcode = llvm::Instruction::FCmp;
-        llvm::DataLayout dl = llvm::DataLayout(&lp.mod);
+        const auto& dl = lp.mod.getDataLayout();
         cmp_extra = "f" + std::to_string(dl.getTypeSizeInBits(op_ty));
     }
     else
@@ -382,7 +382,8 @@ main()
     auto ctx = std::make_unique<llvm::LLVMContext>();
     auto bld = std::make_unique<llvm::IRBuilder<>>(*ctx);
     auto mod = std::make_unique<llvm::Module>("Snippet", *ctx);
-    mod->setTargetTriple("x86_64-unknown-linux-gnu");
+    auto triple = llvm::Triple("x86_64-unknown-linux-gnu");
+    mod->setTargetTriple(triple);
     llvm_pack lp { *ctx, *mod, *bld };
 
     unsigned int op_int;

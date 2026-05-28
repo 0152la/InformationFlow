@@ -38,7 +38,11 @@
 #include "fmt/base.h"
 #include "fmt/format.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
+#pragma clang diagnostic ignored "-Wdeprecated-literal-operator"
 #include "toml++/toml.hpp"
+#pragma clang diagnostic pop
 
 using entropy_map_key_t = unsigned int;
 using set_entropy_t = std::unordered_map<entropy_map_key_t, double>;
