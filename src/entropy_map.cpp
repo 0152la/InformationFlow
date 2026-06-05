@@ -11,8 +11,7 @@ IF_EntropyMap::Instruction::Instruction(
     idx(_idx),
     opcode(_inst.getOpcode()),
     ret_ty_bit_sz(_inst.getType()->getPrimitiveSizeInBits().getFixedValue()),
-    llvm_no_uses(_inst.use_empty()),
-    llvm_is_terminator(_inst.isTerminator()) { };
+    llvm_no_uses(_inst.use_empty()) { };
 
 void
 IF_EntropyMap::Instruction::add_successor(
@@ -208,7 +207,8 @@ IF_EntropyMap::Map::print(void) const
 /* Node ***********************************************************************/
 
 IF_EntropyMap::UseMap::Node::Node(const Instruction* _inst) :
-    em_inst(_inst) { };
+    em_inst(_inst),
+    is_used(false) { };
 
 double
 IF_EntropyMap::UseMap::Node::get_unc_coef(void) const
@@ -224,12 +224,27 @@ IF_EntropyMap::UseMap::Node::get_idx(void) const
 }
 
 std::string
+IF_EntropyMap::UseMap::Node::to_str(void) const
+{
+    auto oss = std::ostringstream { };
+    oss << fmt::format("NODE {}\n", this->get_idx());
+    if (!this->uses.empty())
+    {
+        oss << fmt::format("\tUSES {}\n",
+            std::accumulate(std::next(this->uses.begin()), this->uses.end(),
+                std::to_string((*this->uses.begin())->get_idx()),
+                [](std::string s, const IF_EntropyMap::UseMap::Node* n)
+                { return s + ", " + std::to_string(n->get_idx()); }));
+    }
+    return oss.str();
+}
+
+std::string
 IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent) const
 {
     const auto indent_str = std::string(_indent, '-');
     std::ostringstream oss;
-    oss << fmt::format("{}NODE {}{}\n", indent_str, this->get_idx(),
-        this->em_inst->llvm_is_terminator ? " TERM" : "");
+    oss << fmt::format("{}NODE {}\n", indent_str, this->get_idx());
     for (const auto& user : this->uses)
     {
         oss << user->to_str_path(_indent + 1);
@@ -251,19 +266,144 @@ IF_EntropyMap::UseMap::UC_Path::to_str(void) const
     return fmt::format("PATH {} -- UC {}", this->node_path, this->unc_coef);
 }
 
+/* MemDeps ********************************************************************/
+
+void
+IF_EntropyMap::UseMap::MemDeps::log_mem_deps(
+    const llvm::Instruction* _inst, llvm::MemorySSA& _llvm_mssa)
+{
+    if (const auto* inst_ma = _llvm_mssa.getMemoryAccess(_inst))
+    {
+        if (!llvm::isa<llvm::MemoryUse>(inst_ma))
+        {
+            llvm::outs() << "IGNORE NON USE MEM ACCESS " << *inst_ma << '\n';
+            return;
+        }
+
+        auto* llvm_mssa_walker = _llvm_mssa.getWalker();
+        if (const auto* inst_ma_clobber
+            = llvm_mssa_walker->getClobberingMemoryAccess(_inst))
+        {
+            if (_llvm_mssa.isLiveOnEntryDef(inst_ma_clobber))
+            {
+                return;
+            }
+
+            llvm::outs() << "INST " << *_inst << " /// ACCESS " << *inst_ma
+                         << '\n';
+
+            this->mem_deps.emplace(_inst,
+                IF_EntropyMap::UseMap::MemDeps::mem_deps_t::mapped_type { });
+            const auto& clobbers
+                //= this->get_mem_acc_local_defs(inst_ma_clobber);
+                = this->get_mem_acc_defs(inst_ma_clobber);
+
+            for (const auto* dep : clobbers)
+            {
+                llvm::outs() << "\tDEP " << dep << "\n";
+                this->mem_deps[_inst].insert(dep->getMemoryInst());
+            }
+            llvm::outs() << "--------------------\n";
+        }
+    }
+}
+
+const std::unordered_set<const llvm::MemoryDef*>
+IF_EntropyMap::UseMap::MemDeps::get_mem_acc_local_defs(
+    const llvm::MemoryAccess* _ma) const
+{
+    auto res = std::unordered_set<const llvm::MemoryDef*> { };
+    auto to_process = std::queue<const llvm::MemoryAccess*> { };
+    to_process.push(_ma);
+
+    while (!to_process.empty())
+    {
+        auto* curr_ma = to_process.front();
+        to_process.pop();
+
+        // Handle `MemoryPhi`s
+        if (const auto* curr_mphi = llvm::dyn_cast<llvm::MemoryPhi>(curr_ma))
+        {
+            for (size_t i = 0; i < curr_mphi->getNumIncomingValues(); ++i)
+            {
+                to_process.push(curr_mphi->getIncomingValue(i));
+            }
+        }
+
+        // Handle external function call clobbers
+        else if (const auto* curr_md = llvm::dyn_cast<llvm::MemoryDef>(curr_ma))
+        {
+            bool is_external = false;
+            // llvm::outs() << "INST " << *curr_md->getMemoryInst() << '\n';
+            if (const auto* cb_inst
+                = llvm::dyn_cast<llvm::CallBase>(curr_md->getMemoryInst()))
+            {
+                const auto* cb_inst_fn = cb_inst->getCalledFunction();
+                // llvm::outs() << "CALLED " << *cb_inst_fn << '\n';
+                if (!cb_inst_fn || cb_inst_fn->isDeclaration())
+                {
+                    is_external = true;
+                    to_process.push(curr_md->getDefiningAccess());
+                }
+            }
+
+            if (!is_external)
+            {
+                res.insert(curr_md);
+            }
+        }
+    }
+
+    return res;
+}
+
+const std::unordered_set<const llvm::MemoryDef*>
+IF_EntropyMap::UseMap::MemDeps::get_mem_acc_defs(
+    const llvm::MemoryAccess* _ma) const
+{
+    auto res = std::unordered_set<const llvm::MemoryDef*> { };
+    auto to_process = std::queue<const llvm::MemoryAccess*> { };
+    to_process.push(_ma);
+
+    while (!to_process.empty())
+    {
+        auto* curr_ma = to_process.front();
+        to_process.pop();
+
+        // Handle `MemoryPhi`
+        if (const auto* curr_mphi = llvm::dyn_cast<llvm::MemoryPhi>(curr_ma))
+        {
+            for (size_t i = 0; i < curr_mphi->getNumIncomingValues(); ++i)
+            {
+                to_process.push(curr_mphi->getIncomingValue(i));
+            }
+        }
+        // Handle `MemoryDef`
+        else if (const auto* curr_md = llvm::dyn_cast<llvm::MemoryDef>(curr_ma))
+        {
+            res.insert(curr_md);
+        }
+        else
+        {
+            llvm::outs() << "Unhandled MemoryAccess` " << curr_ma << "!\n";
+            throw std::runtime_error("");
+        }
+    }
+
+    return res;
+}
+
 /* UseMap *********************************************************************/
 
 IF_EntropyMap::UseMap::UseMap(
     const IF_EntropyMap::UseMap::insts_pair_t& _em_insts,
-    const IF_EntropyMap::UseMap::llvm_to_insts_map_t& _llvm_insts_map,
-    llvm::MemorySSA& _llvm_mem_ssa)
+    const IF_EntropyMap::UseMap::MemDeps& _em_mem_deps,
+    const IF_EntropyMap::UseMap::llvm_to_insts_map_t& _llvm_insts_map)
 {
     auto seen_insts = std::vector<bool>(_em_insts.size(), false);
     auto inst_to_node_map
         = std::unordered_map<const IF_EntropyMap::Instruction*,
             IF_EntropyMap::UseMap::Node*>();
-
-    auto mssa_walker = _llvm_mem_ssa.getWalker();
 
     auto get_or_make_node
         = [&_em_insts = std::as_const(_em_insts), &inst_to_node_map,
@@ -279,10 +419,6 @@ IF_EntropyMap::UseMap::UseMap(
             auto new_node = new IF_EntropyMap::UseMap::Node(_em_inst);
             inst_to_node_map.emplace(_em_inst, new_node);
             seen_insts[_em_inst->get_idx()] = true;
-            if (_em_inst->llvm_is_terminator)
-            {
-                this->root_nodes.push_back(new_node);
-            }
             return new_node;
         }
     };
@@ -292,71 +428,84 @@ IF_EntropyMap::UseMap::UseMap(
               &get_or_make_node](IF_EntropyMap::UseMap::Node* _curr_node,
               const llvm::Instruction* _inst) -> void
     {
-        auto em_inst = _llvm_insts_map.at(_inst);
-        auto em_node = get_or_make_node(em_inst);
-        _curr_node->uses.emplace_back(em_node);
+        auto* em_inst = _llvm_insts_map.at(_inst);
+        auto* em_node = get_or_make_node(em_inst);
+        _curr_node->uses.insert(em_node);
+        em_node->is_used = true;
     };
 
     for (const auto& [em_inst, llvm_inst] : _em_insts | std::views::reverse)
     {
         auto curr_node = get_or_make_node(em_inst);
-        llvm::outs() << "INST " << em_inst->get_idx();
-        llvm_inst->print(llvm::outs());
-        llvm::outs() << '\n';
+        llvm::outs() << "INST " << em_inst->get_idx() << " == " << *llvm_inst
+                     << '\n';
 
-        // If this is a `load` instruction, we handle it specially, as we need
-        // to look for the last clobber of the accessed memory address, rather
-        // than just looking at operands
-        if (const auto li = llvm::dyn_cast<llvm::LoadInst>(llvm_inst))
+        // Add edge towards pre-computed memory dependent instructions
+        if (const auto inst_deps_it = _em_mem_deps.mem_deps.find(llvm_inst);
+            inst_deps_it != _em_mem_deps.mem_deps.end())
         {
-            const auto ma = _llvm_mem_ssa.getMemoryAccess(li);
-            llvm::outs() << "\tMEM ";
-            // TODO check if Instruction
-            ma->getDefiningAccess()->print(llvm::outs());
-            auto md = llvm::dyn_cast<llvm::MemoryDef>(
-                mssa_walker->getClobberingMemoryAccess(ma));
-            llvm::outs() << "\n\t";
-            md->getMemoryInst()->print(llvm::outs());
-            llvm::outs() << "\n";
-
-            insert_node_from_llvm_inst(curr_node, md->getMemoryInst());
-            // auto md_em_inst = _llvm_insts_map.at(md->getMemoryInst());
-            // auto md_em_node = get_or_make_node(md_em_inst);
-            // curr_node->uses.emplace_back(md_em_node);
-        }
-        // If this is a `store` instruction, we only care about using the value
-        // operand, not the pointer one; that is handled by the dependency for
-        // `load` instructions
-        //
-        // XXX this ignores the `alloca`s where the `store` comes from, but we
-        // don't model memory information flow at this stage
-        else if (const auto si = llvm::dyn_cast<llvm::StoreInst>(llvm_inst))
-        {
-            if (const auto si_val_inst
-                = llvm::dyn_cast<llvm::Instruction>(si->getValueOperand()))
+            for (const auto* dep_inst : inst_deps_it->second)
             {
-                insert_node_from_llvm_inst(curr_node, si_val_inst);
+                insert_node_from_llvm_inst(curr_node, dep_inst);
             }
         }
-        // Otherwise, we iterate over operands, to get the `use-def` chain
+
+        // If this is a `store` instruction, we will create a dependency
+        // between the value we are storing (if it is an `llvm::Instruction`)
+        // and this `store`
+        if (const auto* llvm_inst_store
+            = llvm::dyn_cast<llvm::StoreInst>(llvm_inst))
+        {
+            llvm::outs() << "TEST STORE VALUE "
+                         << llvm_inst_store->getValueOperand() << '\n';
+            if (const auto* llvm_inst_store_value
+                = llvm::dyn_cast<llvm::Instruction>(
+                    llvm_inst_store->getValueOperand()))
+            {
+                llvm::outs()
+                    << "ADD STORE VALUE INST " << llvm_inst_store_value << '\n';
+                insert_node_from_llvm_inst(curr_node, llvm_inst_store_value);
+            }
+        }
+        // If this is a `load` instruction, the dependency is taken care of via
+        // `MemorySSA`
+        else if (llvm::isa<llvm::LoadInst>(llvm_inst))
+        {
+            continue;
+        }
+        // Otherwise, for other instructions, draw a dependency link between
+        // their operands and other instructions
         else
         {
+
+            // Add edge towards direct operands consumed by this instruction
             for (const auto& op : llvm_inst->operands())
             {
-                llvm::outs() << "\tOP ";
-                op->print(llvm::outs());
-                llvm::outs() << '\n';
+                llvm::outs() << "\tOP " << op << '\n';
 
-                const auto op_inst = llvm::dyn_cast<llvm::Instruction>(op);
-                if (!op_inst)
+                const auto* op_inst = llvm::dyn_cast<llvm::Instruction>(op);
+                if (const auto op_inst = llvm::dyn_cast<llvm::Instruction>(op))
                 {
-                    continue;
+                    llvm::outs() << "\tINST!!!\n";
+                    insert_node_from_llvm_inst(curr_node, op_inst);
                 }
-
-                llvm::outs() << "\tINST!!!\n";
-                insert_node_from_llvm_inst(curr_node, op_inst);
             }
         }
+    }
+
+    for (const auto& [em_inst, em_node] : inst_to_node_map)
+    {
+        if (!em_node->is_used)
+        {
+            this->root_nodes.insert(em_node);
+        }
+    }
+
+    for (const auto& [em_inst, em_node] : inst_to_node_map)
+    {
+        std::cout << "===============\n";
+        std::cout << em_node->to_str();
+        std::cout << "===============\n";
     }
 
     llvm::outs() << this->to_str() << '\n';

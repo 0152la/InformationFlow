@@ -40,7 +40,9 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
     IF_EntropyMap::UseMap::insts_pair_t em_usemap_em_insts;
     IF_EntropyMap::UseMap::llvm_to_insts_map_t em_usemap_llvm_insts_map;
 
+    // TODO
     auto unc_coef_getter = IF_Entropy_Vals::Getter { };
+    auto em_usemap_mem_deps = IF_EntropyMap::UseMap::MemDeps { };
 
     // Iterate over functions ...
     for (llvm::Function& fn : llvm_module.getFunctionList())
@@ -49,6 +51,9 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
         {
             continue;
         }
+
+        llvm::outs() << "** FUNCTION " << fn.getName().str()
+                     << " ****************************************\n";
 
         auto em_fn = std::make_unique<IF_EntropyMap::Function>(fn);
         IF_EntropyMap::Instruction* em_instr_prev = nullptr;
@@ -63,18 +68,18 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
         auto llvm_aar = llvm::AAResults(llvm_tli);
         auto llvm_mssa = llvm::MemorySSA(fn, &llvm_aar, &llvm_dt);
 
+        // TODO
+        auto* llvm_mssa_walker = llvm_mssa.getWalker();
+
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
         {
-            // fn_inst.print(llvm::outs());
-            // llvm::outs() << "\n";
-            // llvm::outs() << fn_inst.getName();
-            // llvm::outs() << "\n----------\n";
-
             auto em_instr = std::make_unique<IF_EntropyMap::Instruction>(
                 instr_idx, fn_inst);
             double retained_entropy
                 = unc_coef_getter.get_entropy_for_inst(fn_inst);
+            em_usemap_mem_deps.log_mem_deps(&fn_inst, llvm_mssa);
+
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
                 std::ostringstream err;
@@ -148,10 +153,12 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
         em->insert(std::move(em_fn));
 
         // TODO untangle EntropyMap and UseMap from this
-        auto use_em = std::make_unique<IF_EntropyMap::UseMap>(
-            em_usemap_em_insts, em_usemap_llvm_insts_map, llvm_mssa);
+        // auto use_em = std::make_unique<IF_EntropyMap::UseMap>(
+        // em_usemap_em_insts, em_usemap_llvm_insts_map, llvm_mssa);
     }
     em->set_instruction_count(instr_idx);
+    const auto em_usemap = std::make_unique<IF_EntropyMap::UseMap>(
+        em_usemap_em_insts, em_usemap_mem_deps, em_usemap_llvm_insts_map);
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)

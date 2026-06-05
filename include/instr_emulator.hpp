@@ -101,6 +101,13 @@ struct Getter
     Getter(void);
 
     double get_entropy_for_inst(const llvm::Instruction&);
+
+private:
+    using get_res_t = std::optional<double>;
+
+    get_res_t get_set_entropy(const llvm::Instruction&);
+    get_res_t get_emu_entropy(const llvm::Instruction&);
+    get_res_t get_est_entropy(const llvm::Instruction&);
 };
 };
 

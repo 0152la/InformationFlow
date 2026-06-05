@@ -393,50 +393,104 @@ IF_Entropy_Vals::Getter::Getter(void)
         = std::move(IF_Entropy_Vals::Parser::parse_emulated_entropy(
             get_env_guarded("IF_EMULATED_ENTROPY_FILE")));
 
-    //IF_Entropy_Vals::Parser::print_set_entropy(this->set_entropy);
-    //IF_Entropy_Vals::Parser::print_emu_entropy(this->emulated_entropy);
+    // IF_Entropy_Vals::Parser::print_set_entropy(this->set_entropy);
+    // IF_Entropy_Vals::Parser::print_emu_entropy(this->emulated_entropy);
 }
 
 double
-IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& inst)
+IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& _inst)
+{
+    auto get_fns
+        = std::vector<decltype(&IF_Entropy_Vals::Getter::get_set_entropy)> {
+              &IF_Entropy_Vals::Getter::get_set_entropy,
+              &IF_Entropy_Vals::Getter::get_emu_entropy,
+              &IF_Entropy_Vals::Getter::get_est_entropy
+          };
+
+    for (auto fn : get_fns)
+    {
+        if (const auto res = std::mem_fn(fn)(*this, _inst))
+        {
+            return res.value();
+        }
+    }
+
+    throw std::runtime_error(fmt::format(
+        "Unhandled entropy getting for _inst `{}`!", _inst.getOpcodeName()));
+}
+
+IF_Entropy_Vals::Getter::get_res_t
+IF_Entropy_Vals::Getter::get_set_entropy(const llvm::Instruction& _inst)
 {
     if (const auto fn_set_entropy
-        = this->set_entropy.find(inst.getOpcodeName());
+        = this->set_entropy.find(_inst.getOpcodeName());
         fn_set_entropy != this->set_entropy.end())
     {
         return fn_set_entropy->second;
     }
+    return std::nullopt;
+}
 
-    if (const auto fn_emu_entropy
-        = this->emulated_entropy.find(inst.getOpcodeName());
+IF_Entropy_Vals::Getter::get_res_t
+IF_Entropy_Vals::Getter::get_emu_entropy(const llvm::Instruction& _inst)
+{
+    auto fn_name = std::string { _inst.getOpcodeName() };
+    auto bit_sz = _inst.getType()->getPrimitiveSizeInBits();
+    if (const auto ci = llvm::dyn_cast<llvm::CmpInst>(&_inst))
+    {
+        fn_name = (fn_name + std::string("_")
+            + ci->getPredicateName(ci->getPredicate()))
+                      .str();
+        bit_sz = ci->getOperand(0)->getType()->getPrimitiveSizeInBits();
+    }
+
+    if (const auto fn_emu_entropy = this->emulated_entropy.find(fn_name);
         fn_emu_entropy != this->emulated_entropy.end())
     {
-        if (const auto bit_sz_uc_val = fn_emu_entropy->second.find(
-                inst.getType()->getPrimitiveSizeInBits());
+        if (const auto bit_sz_uc_val = fn_emu_entropy->second.find(bit_sz);
             bit_sz_uc_val != fn_emu_entropy->second.end())
         {
             return bit_sz_uc_val->second;
         }
 
-        throw std::runtime_error(
-            fmt::format("Didn't find UC val for function `{}` and bit size {}!",
-                inst.getOpcodeName(),
-                inst.getType()->getPrimitiveSizeInBits().getFixedValue()));
+        throw std::runtime_error(fmt::format(
+            "Didn't find UC val for function `{}` and bit size {}!", fn_name,
+            _inst.getType()->getPrimitiveSizeInBits().getFixedValue()));
     }
+    return std::nullopt;
+}
 
-    if (llvm::isa<llvm::CastInst>(inst))
+IF_Entropy_Vals::Getter::get_res_t
+IF_Entropy_Vals::Getter::get_est_entropy(const llvm::Instruction& _inst)
+{
+    if (const llvm::CastInst* ci = llvm::dyn_cast<llvm::CastInst>(&_inst))
     {
-        const llvm::CastInst* ci = llvm::dyn_cast<llvm::CastInst>(&inst);
         return IF_Entropy_Vals::Estimator::estimate<llvm::CastInst>(*ci);
     }
-    else if (llvm::isa<llvm::CmpInst>(inst))
+    else if (const llvm::CmpInst* ci = llvm::dyn_cast<llvm::CmpInst>(&_inst))
     {
-        const llvm::CmpInst* ci = llvm::dyn_cast<llvm::CmpInst>(&inst);
         return IF_Entropy_Vals::Estimator::estimate<llvm::CmpInst>(*ci);
     }
+    else if (const llvm::BranchInst* bi
+        = llvm::dyn_cast<llvm::BranchInst>(&_inst))
+    {
+        if (bi->isUnconditional())
+        {
+            return 1.0;
+        }
+        const auto bi_cond
+            = llvm::dyn_cast<llvm::Instruction>(bi->getCondition());
+        if (!bi_cond)
+        {
+            bi_cond->print(llvm::errs());
+            llvm::errs() << '\n';
+            throw std::runtime_error("Unhandled non-Instruction condition!");
+        }
 
-    throw std::runtime_error(fmt::format(
-        "Unhandled entropy getting for inst `{}`!", inst.getOpcodeName()));
+        return this->get_emu_entropy(*bi_cond);
+    }
+
+    return std::nullopt;
 }
 
 /*******************************************************************************

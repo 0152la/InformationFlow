@@ -54,7 +54,7 @@ private:
 
 public:
     const bool llvm_no_uses;
-    const bool llvm_is_terminator;
+    const bool is_control_flow = false; // TODO
 
     /* Constructors ***********************************************************/
 
@@ -235,14 +235,15 @@ public:
 
     const std::string to_str(void) const;
     void print(void) const;
-};
+}; // class Map
 
 class UseMap
 {
     struct Node
     {
         const IF_EntropyMap::Instruction* em_inst;
-        std::vector<const IF_EntropyMap::UseMap::Node*> uses;
+        std::unordered_set<const IF_EntropyMap::UseMap::Node*> uses;
+        bool is_used;
 
         Node(const IF_EntropyMap::Instruction*);
 
@@ -250,6 +251,7 @@ class UseMap
         double get_unc_coef(void) const;
         auto get_idx(void) const -> IF_EntropyMap::Instruction::idx_t;
 
+        std::string to_str(void) const;
         std::string to_str_path(uint32_t) const;
     };
 
@@ -265,19 +267,39 @@ class UseMap
     };
 
 private:
-    std::vector<const IF_EntropyMap::UseMap::Node*> root_nodes;
+    std::unordered_set<const IF_EntropyMap::UseMap::Node*> root_nodes;
 
 public:
+    struct MemDeps
+    {
+        using mem_deps_t = std::unordered_map<const llvm::Instruction*,
+            std::unordered_set<const llvm::Instruction*>>;
+
+        mem_deps_t mem_deps;
+
+        MemDeps(void) :
+            mem_deps(mem_deps_t()) { };
+
+        void log_mem_deps(const llvm::Instruction*, llvm::MemorySSA&);
+
+    private:
+        const std::unordered_set<const llvm::MemoryDef*> get_mem_acc_local_defs(
+            const llvm::MemoryAccess*) const;
+        const std::unordered_set<const llvm::MemoryDef*> get_mem_acc_defs(
+            const llvm::MemoryAccess*) const;
+    }; // struct MemDeps
+
     using insts_pair_t = std::vector<
         std::pair<const IF_EntropyMap::Instruction*, const llvm::Instruction*>>;
     using llvm_to_insts_map_t = std::unordered_map<const llvm::Instruction*,
         const IF_EntropyMap::Instruction*>;
 
-    UseMap(const insts_pair_t&, const llvm_to_insts_map_t&,
-        llvm::MemorySSA&);
+    UseMap(const insts_pair_t&, const IF_EntropyMap::UseMap::MemDeps&,
+        const IF_EntropyMap::UseMap::llvm_to_insts_map_t&);
 
     std::string to_str(void) const;
-};
+
+}; // class UseMap
 
 }; // namespace IF_EntropyMap
 
