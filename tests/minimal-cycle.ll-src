@@ -1,0 +1,12 @@
+#include <iostream>
+
+int
+main()
+{
+    int x = 4;
+    for (; x >= 0; --x)
+    {
+        std::cout << "X = " << x << std::endl;
+    }
+    return 0;
+}

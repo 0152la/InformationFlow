@@ -87,6 +87,7 @@ set(ll_srcs
     simple-vector
     sample
     minimal
+    minimal-cycle
     entropy-func_loss-exec
 )
 
