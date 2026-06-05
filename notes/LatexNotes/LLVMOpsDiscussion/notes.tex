@@ -10,11 +10,13 @@
 \newcommand{\cmnt}[2]{{\color{red}{\textbf{#1:} #2}}}
 \newcommand{\AL}[1]{\cmnt{AL}{#1}}
 
+\newcommand{\code}[1]{\texttt{#1}}
+
 \begin{document}
 
 The following is a discussion of how we handle low-level LLVM operations. The
 semantics and grouping are taken from the online reference
-manual~\cite{llvmref}.
+manual~\cite{llvm-ref}.
 
 \section*{Uncertainty Coefficient}
 We aim to compute the uncertainty coefficient~\cite{press2007numerical} for
@@ -294,6 +296,37 @@ exceptions and handled which might require special handling in terms of
 information flow, but at this stage of the project, there is likely little gain
 of handling these particularities compared to analysing the information flow in
 the rest of the compiled code.
+
+\section{Dependency Analysis}
+
+Information flow in the program is dependent on how state is consumed across
+instructions: some result computed by some instruction will be consumed by
+another, and so on until a terminal instruction is reach. Thus, we need a
+dependency analysis between LLVM IR instructions to realise this information
+flow explicitly, then compute the associated uncertainty coefficient for each
+identified path.
+
+Luckily, LLVM already comes with an in-built dependency graph: each
+\code{llvm::Instruction} has \code{operands}, which represent the instructions
+which are used as input. By starting at terminator instructions (similarly
+marked by a boolean \code{isTerminator()} function over
+\code{llvm::Instruction}s), we can follow the chain of \code{operands} to get
+an explicit dependency graph.
+
+There are two exceptions however: \code{load} and \code{store} instructions. A
+\code{load} instruction doesn't have any input operands \AL{double check},
+while a \code{store} instruction has both the value to be stored as input, and
+the memory location to store to. Thus, we use a separate LLVM analysis tool,
+\code{MemorySSA}~\cite{llvm-memoryssa}. With this, additional ``Memory Nodes''
+in SSA form are introduced, and we can follow the memory dependency along them
+statically, allowing us to model information flow across memory reads and
+writes.
+
+With these two approaches, following the syntactical dependency graph, and
+following memory reads and associated clobbers via \code{MemorySSA} analysis,
+we can model how information flows along the program. Of course, we need to
+manually handle some usual issues, such as cycles and path explosion \AL{Which
+I haven't gotten to yet ):}.
 
 \bibliographystyle{plain}
 \bibliography{notes}
