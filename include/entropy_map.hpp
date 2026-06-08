@@ -17,7 +17,10 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
@@ -280,7 +283,7 @@ public:
         MemDeps(void) :
             mem_deps(mem_deps_t()) { };
 
-        void log_mem_deps(const llvm::Instruction*, llvm::MemorySSA&);
+        void log_mem_deps(const llvm::Instruction*, llvm::Function&);
 
     private:
         const std::unordered_set<const llvm::MemoryDef*> get_mem_acc_local_defs(

@@ -270,40 +270,42 @@ IF_EntropyMap::UseMap::UC_Path::to_str(void) const
 
 void
 IF_EntropyMap::UseMap::MemDeps::log_mem_deps(
-    const llvm::Instruction* _inst, llvm::MemorySSA& _llvm_mssa)
+    const llvm::Instruction* _inst, llvm::Function& _fn)
 {
-    if (const auto* inst_ma = _llvm_mssa.getMemoryAccess(_inst))
+    auto llvm_dt = llvm::DominatorTree(_fn);
+    auto llvm_ac = llvm::AssumptionCache(_fn);
+    // TODO fix this?
+    // auto llvm_triple = llvm_module.getTargetTriple();
+    // auto llvm_tli_impl = llvm::TargetLibraryInfoImpl(llvm_triple);
+    auto llvm_tli_impl = llvm::TargetLibraryInfoImpl(llvm::Triple());
+    auto llvm_tli = llvm::TargetLibraryInfo(llvm_tli_impl);
+    auto llvm_aar = llvm::AAResults(llvm_tli);
+    auto llvm_mssa = llvm::MemorySSA(_fn, &llvm_aar, &llvm_dt);
+
+    if (const auto* inst_ma = llvm_mssa.getMemoryAccess(_inst))
     {
         if (!llvm::isa<llvm::MemoryUse>(inst_ma))
         {
-            llvm::outs() << "IGNORE NON USE MEM ACCESS " << *inst_ma << '\n';
             return;
         }
 
-        auto* llvm_mssa_walker = _llvm_mssa.getWalker();
         if (const auto* inst_ma_clobber
-            = llvm_mssa_walker->getClobberingMemoryAccess(_inst))
+            = llvm_mssa.getWalker()->getClobberingMemoryAccess(_inst))
         {
-            if (_llvm_mssa.isLiveOnEntryDef(inst_ma_clobber))
+            if (llvm_mssa.isLiveOnEntryDef(inst_ma_clobber))
             {
                 return;
             }
 
-            llvm::outs() << "INST " << *_inst << " /// ACCESS " << *inst_ma
-                         << '\n';
-
             this->mem_deps.emplace(_inst,
                 IF_EntropyMap::UseMap::MemDeps::mem_deps_t::mapped_type { });
             const auto& clobbers
-                //= this->get_mem_acc_local_defs(inst_ma_clobber);
                 = this->get_mem_acc_defs(inst_ma_clobber);
 
             for (const auto* dep : clobbers)
             {
-                llvm::outs() << "\tDEP " << dep << "\n";
                 this->mem_deps[_inst].insert(dep->getMemoryInst());
             }
-            llvm::outs() << "--------------------\n";
         }
     }
 }
@@ -334,12 +336,10 @@ IF_EntropyMap::UseMap::MemDeps::get_mem_acc_local_defs(
         else if (const auto* curr_md = llvm::dyn_cast<llvm::MemoryDef>(curr_ma))
         {
             bool is_external = false;
-            // llvm::outs() << "INST " << *curr_md->getMemoryInst() << '\n';
             if (const auto* cb_inst
                 = llvm::dyn_cast<llvm::CallBase>(curr_md->getMemoryInst()))
             {
                 const auto* cb_inst_fn = cb_inst->getCalledFunction();
-                // llvm::outs() << "CALLED " << *cb_inst_fn << '\n';
                 if (!cb_inst_fn || cb_inst_fn->isDeclaration())
                 {
                     is_external = true;

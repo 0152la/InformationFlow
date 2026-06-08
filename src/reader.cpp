@@ -58,18 +58,7 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
         auto em_fn = std::make_unique<IF_EntropyMap::Function>(fn);
         IF_EntropyMap::Instruction* em_instr_prev = nullptr;
 
-        auto llvm_dt = llvm::DominatorTree(fn);
-        auto llvm_ac = llvm::AssumptionCache(fn);
-        // auto llvm_triple = llvm_module.getTargetTriple();
-        // auto llvm_tli_impl
-        //= llvm::TargetLibraryInfoImpl(llvm_triple);
-        auto llvm_tli_impl = llvm::TargetLibraryInfoImpl(llvm::Triple());
-        auto llvm_tli = llvm::TargetLibraryInfo(llvm_tli_impl);
-        auto llvm_aar = llvm::AAResults(llvm_tli);
-        auto llvm_mssa = llvm::MemorySSA(fn, &llvm_aar, &llvm_dt);
-
         // TODO
-        auto* llvm_mssa_walker = llvm_mssa.getWalker();
 
         // ... and instructions
         for (const auto& fn_inst : llvm::instructions(fn))
@@ -78,7 +67,7 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
                 instr_idx, fn_inst);
             double retained_entropy
                 = unc_coef_getter.get_entropy_for_inst(fn_inst);
-            em_usemap_mem_deps.log_mem_deps(&fn_inst, llvm_mssa);
+            em_usemap_mem_deps.log_mem_deps(&fn_inst, fn);
 
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
@@ -151,10 +140,6 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
             instr_idx += 1;
         }
         em->insert(std::move(em_fn));
-
-        // TODO untangle EntropyMap and UseMap from this
-        // auto use_em = std::make_unique<IF_EntropyMap::UseMap>(
-        // em_usemap_em_insts, em_usemap_llvm_insts_map, llvm_mssa);
     }
     em->set_instruction_count(instr_idx);
     const auto em_usemap = std::make_unique<IF_EntropyMap::UseMap>(
