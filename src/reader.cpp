@@ -8,10 +8,10 @@ extern estimate_entropy_t estimate_entropy;
  ******************************************************************************/
 
 std::unique_ptr<IF_EntropyMap::Map>
-IF_Parser::make_entropy_map(llvm::Module& llvm_module)
+IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
 {
     uint32_t instr_idx = 0;
-    auto em = std::make_unique<IF_EntropyMap::Map>(llvm_module);
+    auto em = std::make_unique<IF_EntropyMap::Map>(_llvm_module);
 
     // Map holding successors of Instructions, for stuff like branches and
     // jumps; used to resolve to `IF_EntropyMap::Instruction` later
@@ -45,7 +45,7 @@ IF_Parser::make_entropy_map(llvm::Module& llvm_module)
     auto em_usemap_mem_deps = IF_EntropyMap::UseMap::MemDeps { };
 
     // Iterate over functions ...
-    for (llvm::Function& fn : llvm_module.getFunctionList())
+    for (llvm::Function& fn : _llvm_module.getFunctionList())
     {
         if (fn.isDeclaration())
         {

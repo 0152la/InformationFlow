@@ -416,7 +416,7 @@ IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& _inst)
     }
 
     throw std::runtime_error(fmt::format(
-        "Unhandled entropy getting for _inst `{}`!", _inst.getOpcodeName()));
+        "Unhandled entropy getting for inst `{}`!", _inst.getOpcodeName()));
 }
 
 IF_Entropy_Vals::Getter::get_res_t
@@ -434,14 +434,27 @@ IF_Entropy_Vals::Getter::get_set_entropy(const llvm::Instruction& _inst)
 IF_Entropy_Vals::Getter::get_res_t
 IF_Entropy_Vals::Getter::get_emu_entropy(const llvm::Instruction& _inst)
 {
+    if (!_inst.getType()->isSized())
+    {
+        return std::nullopt;
+    }
+
     auto fn_name = std::string { _inst.getOpcodeName() };
-    auto bit_sz = _inst.getType()->getPrimitiveSizeInBits();
+    auto bit_sz = _inst.getDataLayout()
+                      .getTypeSizeInBits(_inst.getType())
+                      .getFixedValue();
+
+    // If this is one of the `cmp` instructions, need to additionally match the
+    // predicate, and map against the bit size of the operand, not the type of
+    // the instruction (which is `i1`)
     if (const auto ci = llvm::dyn_cast<llvm::CmpInst>(&_inst))
     {
         fn_name = (fn_name + std::string("_")
             + ci->getPredicateName(ci->getPredicate()))
                       .str();
-        bit_sz = ci->getOperand(0)->getType()->getPrimitiveSizeInBits();
+        bit_sz = _inst.getDataLayout()
+                     .getTypeSizeInBits(ci->getOperand(0)->getType())
+                     .getFixedValue();
     }
 
     if (const auto fn_emu_entropy = this->emulated_entropy.find(fn_name);
@@ -453,9 +466,9 @@ IF_Entropy_Vals::Getter::get_emu_entropy(const llvm::Instruction& _inst)
             return bit_sz_uc_val->second;
         }
 
-        throw std::runtime_error(fmt::format(
-            "Didn't find UC val for function `{}` and bit size {}!", fn_name,
-            _inst.getType()->getPrimitiveSizeInBits().getFixedValue()));
+        throw std::runtime_error(
+            fmt::format("Didn't find UC val for function `{}` and bit size {}!",
+                fn_name, bit_sz));
     }
     return std::nullopt;
 }
@@ -487,7 +500,7 @@ IF_Entropy_Vals::Getter::get_est_entropy(const llvm::Instruction& _inst)
             throw std::runtime_error("Unhandled non-Instruction condition!");
         }
 
-        return this->get_emu_entropy(*bi_cond);
+        return this->get_entropy_for_inst(*bi_cond);
     }
 
     return std::nullopt;
