@@ -85,21 +85,23 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
             // branch instructions
             if (llvm::isa<llvm::CallBase>(&fn_inst))
             {
-                const llvm::Function* callee
+                if (const llvm::Function* callee
                     = llvm::dyn_cast<llvm::CallBase>(&fn_inst)
-                          ->getCalledFunction();
-                if (callee->isDeclaration())
+                        ->getCalledFunction())
                 {
-                    em->insert_external_func(callee->getName().str());
-                    em_instr->add_external_succ(callee->getName().str());
-                }
-                else
-                {
-                    instr_succ_map.emplace(em_instr.get(),
-                        std::vector<const llvm::Instruction*>());
-                    instr_succ_map.at(em_instr.get())
-                        .push_back(&(callee->getEntryBlock().front()));
-                    func_calls.emplace(em_instr.get(), callee);
+                    if (callee->isDeclaration())
+                    {
+                        em->insert_external_func(callee->getName().str());
+                        em_instr->add_external_succ(callee->getName().str());
+                    }
+                    else
+                    {
+                        instr_succ_map.emplace(em_instr.get(),
+                            std::vector<const llvm::Instruction*>());
+                        instr_succ_map.at(em_instr.get())
+                            .push_back(&(callee->getEntryBlock().front()));
+                        func_calls.emplace(em_instr.get(), callee);
+                    }
                 }
             }
             else if (llvm::isa<llvm::BranchInst>(&fn_inst))

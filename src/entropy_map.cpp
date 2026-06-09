@@ -10,7 +10,11 @@ IF_EntropyMap::Instruction::Instruction(
     uint32_t _idx, const llvm::Instruction& _inst) :
     idx(_idx),
     opcode(_inst.getOpcode()),
-    ret_ty_bit_sz(_inst.getType()->getPrimitiveSizeInBits().getFixedValue()),
+    ret_ty_bit_sz(_inst.getType()->isVoidTy()
+            ? 0
+            : _inst.getDataLayout()
+                  .getTypeSizeInBits(_inst.getType())
+                  .getFixedValue()),
     llvm_no_uses(_inst.use_empty()) { };
 
 void
@@ -240,14 +244,17 @@ IF_EntropyMap::UseMap::Node::to_str(void) const
 }
 
 std::string
-IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent) const
+IF_EntropyMap::UseMap::Node::to_str_path(
+    uint32_t _indent, double _uc) const
 {
     const auto indent_str = std::string(_indent, '-');
+    _uc *= this->em_inst->get_retained_entropy();
     std::ostringstream oss;
-    oss << fmt::format("{}NODE {}\n", indent_str, this->get_idx());
+    oss << fmt::format(
+        "{}NODE {} == UC {}\n", indent_str, this->get_idx(), _uc);
     for (const auto& user : this->uses)
     {
-        oss << user->to_str_path(_indent + 1);
+        oss << user->to_str_path(_indent + 1, _uc);
     }
     return oss.str();
 }
@@ -299,8 +306,7 @@ IF_EntropyMap::UseMap::MemDeps::log_mem_deps(
 
             this->mem_deps.emplace(_inst,
                 IF_EntropyMap::UseMap::MemDeps::mem_deps_t::mapped_type { });
-            const auto& clobbers
-                = this->get_mem_acc_defs(inst_ma_clobber);
+            const auto& clobbers = this->get_mem_acc_defs(inst_ma_clobber);
 
             for (const auto* dep : clobbers)
             {
@@ -501,12 +507,12 @@ IF_EntropyMap::UseMap::UseMap(
         }
     }
 
-    for (const auto& [em_inst, em_node] : inst_to_node_map)
-    {
-        std::cout << "===============\n";
-        std::cout << em_node->to_str();
-        std::cout << "===============\n";
-    }
+    // for (const auto& [em_inst, em_node] : inst_to_node_map)
+    //{
+    // std::cout << "===============\n";
+    // std::cout << em_node->to_str();
+    // std::cout << "===============\n";
+    //}
 
     llvm::outs() << this->to_str() << '\n';
 }
@@ -520,7 +526,7 @@ IF_EntropyMap::UseMap::UseMap::to_str(void) const
     ss << "USEMAP\n" << line_delim;
     for (const auto& n : this->root_nodes)
     {
-        ss << n->to_str_path(0);
+        ss << n->to_str_path(0, 1.0);
         ss << line_delim;
     }
     return ss.str();

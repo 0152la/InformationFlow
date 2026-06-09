@@ -255,7 +255,7 @@ class UseMap
         auto get_idx(void) const -> IF_EntropyMap::Instruction::idx_t;
 
         std::string to_str(void) const;
-        std::string to_str_path(uint32_t) const;
+        std::string to_str_path(uint32_t, double) const;
     };
 
     struct UC_Path

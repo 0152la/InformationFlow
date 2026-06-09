@@ -88,6 +88,7 @@ set(ll_srcs
     sample
     minimal
     minimal-cycle
+    minimal-branch
     entropy-func_loss-exec
 )
 
