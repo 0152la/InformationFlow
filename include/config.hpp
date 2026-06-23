@@ -13,7 +13,16 @@
 
 namespace Utils
 {
-    void debug_print(std::string_view);
+void debug_print(std::string_view);
+
+template <typename T>
+void
+print_type()
+{
+    std::puts(__PRETTY_FUNCTION__);
+};
+
+template <typename T> struct CompileTimeType;
 }
 
 constexpr unsigned long initial_tests = 10000;

@@ -1,8 +1,12 @@
 #ifndef _IF_ENTROPYMAP_HPP
 #define _IF_ENTROPYMAP_HPP
 
+#include "config.hpp"
+
 #include <iostream>
+#include <iterator>
 #include <memory>
+#include <numeric>
 #include <queue>
 #include <ranges>
 #include <set>
@@ -21,6 +25,7 @@
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
@@ -122,10 +127,6 @@ public:
         return this->idx == o.get_idx();
     };
 };
-
-using insts_t = std::vector<const IF_EntropyMap::Instruction*>;
-using insts_llvm_mapping_t = std::unordered_map<const llvm::Instruction*,
-    const IF_EntropyMap::Instruction*>;
 
 class Function
 {
@@ -238,10 +239,23 @@ public:
 
     const std::string to_str(void) const;
     void print(void) const;
+
 }; // class Map
+
+using llvm_insts_t = std::vector<const llvm::Instruction*>;
+using em_insts_t = std::vector<const IF_EntropyMap::Instruction*>;
 
 class UseMap
 {
+public:
+    using insts_pair_t = std::vector<
+        std::pair<const IF_EntropyMap::Instruction*, const llvm::Instruction*>>;
+    using llvm_to_insts_map_t = std::unordered_map<const llvm::Instruction*,
+        const IF_EntropyMap::Instruction*>;
+
+private:
+    struct UC_Path;
+
     struct Node
     {
         const IF_EntropyMap::Instruction* em_inst;
@@ -256,21 +270,66 @@ class UseMap
 
         std::string to_str(void) const;
         std::string to_str_path(uint32_t, double) const;
+
+        friend UC_Path;
+    };
+
+    using node_path_t = std::vector<const IF_EntropyMap::UseMap::Node*>;
+    using um_nodes_t = std::vector<const IF_EntropyMap::UseMap::Node*>;
+
+    struct InstData
+    {
+        const IF_EntropyMap::llvm_insts_t& llvm_insts;
+        const IF_EntropyMap::em_insts_t& em_insts;
+        const IF_EntropyMap::UseMap::um_nodes_t& um_nodes;
+
+        template <typename T>
+        static uint64_t get_idx(T& _val, const std::vector<T>& _arr)
+        {
+            auto val_it = std::find(_arr.begin(), _arr.end(), _val);
+            if (val_it == _arr.end())
+            {
+                throw std::runtime_error("Error getting index!");
+            }
+
+            auto idx = std::distance(_arr.begin(), val_it);
+            if (idx < 0)
+            {
+                throw std::runtime_error("Negative index gotten!");
+            }
+
+            return static_cast<uint64_t>(idx);
+        };
+
+        InstData(const IF_EntropyMap::llvm_insts_t& _llvm_insts,
+            const IF_EntropyMap::em_insts_t& _em_insts,
+            const IF_EntropyMap::UseMap::um_nodes_t& _um_nodes) :
+            llvm_insts(_llvm_insts),
+            em_insts(_em_insts),
+            um_nodes(_um_nodes) { };
     };
 
     struct UC_Path
     {
         const IF_EntropyMap::UseMap::Node* last_node;
-        std::string node_path;
+        node_path_t node_path;
+        std::vector<node_path_t> cfg_paths;
         double unc_coef;
 
         UC_Path(const IF_EntropyMap::UseMap::Node*);
+        UC_Path(const UC_Path&);
+
+        auto add_node(const IF_EntropyMap::UseMap::Node*,
+            const IF_EntropyMap::UseMap::InstData&) -> void;
+        auto add_cfg_path(const decltype(cfg_paths)::value_type&) -> void;
+        // const IF_EntropyMap::UseMap::InstData&) -> void;
 
         std::string to_str(void) const;
     };
 
-private:
-    std::unordered_set<const IF_EntropyMap::UseMap::Node*> root_nodes;
+    using em_insts_to_node_map_t
+        = std::unordered_map<const IF_EntropyMap::Instruction*,
+            IF_EntropyMap::UseMap::Node*>;
 
 public:
     struct MemDeps
@@ -292,17 +351,35 @@ public:
             const llvm::MemoryAccess*) const;
     }; // struct MemDeps
 
-    using insts_pair_t = std::vector<
-        std::pair<const IF_EntropyMap::Instruction*, const llvm::Instruction*>>;
-    using llvm_to_insts_map_t = std::unordered_map<const llvm::Instruction*,
-        const IF_EntropyMap::Instruction*>;
-
-    UseMap(const insts_pair_t&, const IF_EntropyMap::UseMap::MemDeps&,
-        const IF_EntropyMap::UseMap::llvm_to_insts_map_t&);
+    UseMap(const IF_EntropyMap::llvm_insts_t&, const IF_EntropyMap::em_insts_t&,
+        const IF_EntropyMap::UseMap::MemDeps&);
 
     std::string to_str(void) const;
 
+private:
+    std::unordered_set<const IF_EntropyMap::UseMap::Node*> root_nodes;
+
+    auto init_nodes(const IF_EntropyMap::llvm_insts_t&,
+        const IF_EntropyMap::em_insts_t&, const IF_EntropyMap::UseMap::MemDeps&)
+        -> um_nodes_t;
+
+    auto init_root_nodes(const std::vector<IF_EntropyMap::UseMap::Node*>)
+        -> void;
+
+    static auto get_cfg_inst_paths(
+        const llvm::Instruction*, const llvm::Instruction*)
+        -> std::vector<std::vector<const llvm::Instruction*>>;
+
+    static auto get_cfg_node_paths(
+        const decltype(std::function { get_cfg_inst_paths })::result_type&,
+        const IF_EntropyMap::UseMap::llvm_to_insts_map_t&,
+        const IF_EntropyMap::UseMap::em_insts_to_node_map_t&)
+        -> std::vector<std::vector<const IF_EntropyMap::UseMap::Node*>>;
+
 }; // class UseMap
+
+using insts_llvm_mapping_t = std::unordered_map<const llvm::Instruction*,
+    const IF_EntropyMap::Instruction*>;
 
 }; // namespace IF_EntropyMap
 

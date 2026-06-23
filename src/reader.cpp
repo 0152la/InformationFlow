@@ -1,4 +1,5 @@
 #include "reader.hpp"
+#include "entropy_map.hpp"
 
 extern set_entropy_t set_entropy;
 extern estimate_entropy_t estimate_entropy;
@@ -37,6 +38,9 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
     std::map<const IF_EntropyMap::Instruction*, const llvm::Function*>
         func_calls;
 
+    IF_EntropyMap::em_insts_t em_insts;
+    IF_EntropyMap::llvm_insts_t llvm_insts;
+
     IF_EntropyMap::UseMap::insts_pair_t em_usemap_em_insts;
     IF_EntropyMap::UseMap::llvm_to_insts_map_t em_usemap_llvm_insts_map;
 
@@ -68,6 +72,9 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
             double retained_entropy
                 = unc_coef_getter.get_entropy_for_inst(fn_inst);
             em_usemap_mem_deps.log_mem_deps(&fn_inst, fn);
+
+            em_insts.push_back(em_instr.get());
+            llvm_insts.push_back(&fn_inst);
 
             if (retained_entropy < std::numeric_limits<double>::epsilon())
             {
@@ -145,7 +152,7 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
     }
     em->set_instruction_count(instr_idx);
     const auto em_usemap = std::make_unique<IF_EntropyMap::UseMap>(
-        em_usemap_em_insts, em_usemap_mem_deps, em_usemap_llvm_insts_map);
+        llvm_insts, em_insts, em_usemap_mem_deps);
 
     // Resolve instruction successors to `IF_EntropyMap::Instruction`s
     for (auto& [em_instr, llvm_instrs] : instr_succ_map)
