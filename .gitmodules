@@ -1,6 +1,6 @@
 [submodule "third_party/fmt"]
 	path = third_party/fmt
-	url = git@github.com:fmtlib/fmt.git
+	url = https://github.com/fmtlib/fmt.git
 [submodule "third_party/tomlplusplus"]
 	path = third_party/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus

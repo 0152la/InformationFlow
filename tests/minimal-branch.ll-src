@@ -1,0 +1,15 @@
+int
+main(int argc, char** argv)
+{
+    int x = argv[1][0];
+    int y;
+    if (x == 'c')
+    {
+        y = 4;
+    }
+    else
+    {
+        y = 444;
+    }
+    return y;
+}
