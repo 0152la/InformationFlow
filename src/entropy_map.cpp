@@ -34,6 +34,7 @@ const std::string
 IF_EntropyMap::Instruction::to_str(void) const
 {
     std::ostringstream oss;
+    oss << "IDX " << this->get_idx() << " -- ";
     oss << llvm::Instruction::getOpcodeName(this->get_opcode());
     oss << " -- Entropy " << this->get_retained_entropy() << '\n';
     return oss.str();
@@ -551,14 +552,14 @@ IF_EntropyMap::UseMap::init_nodes(
         = [&_em_insts = std::as_const(_em_insts), &um_nodes, this](
               size_t _em_inst_idx) -> IF_EntropyMap::UseMap::Node*
     {
-        auto em_inst = _em_insts[_em_inst_idx];
-        if (em_inst == nullptr)
+        if (auto um_node = um_nodes[_em_inst_idx]; um_node != nullptr)
         {
-            return um_nodes[_em_inst_idx];
+            return um_node;
         }
         else
         {
-            auto new_node = new IF_EntropyMap::UseMap::Node(em_inst);
+            auto new_node
+                = new IF_EntropyMap::UseMap::Node(_em_insts[_em_inst_idx]);
             um_nodes[_em_inst_idx] = new_node;
             return new_node;
         }
@@ -574,13 +575,12 @@ IF_EntropyMap::UseMap::init_nodes(
     {
         auto llvm_inst_idx
             = IF_EntropyMap::UseMap::InstData::get_idx(_inst, _llvm_insts);
-        auto* em_inst = _em_insts[llvm_inst_idx];
-        auto* em_node = get_or_make_node(llvm_inst_idx);
-        _curr_node->uses.insert(em_node);
-        em_node->is_used = true;
+        auto* um_node = get_or_make_node(llvm_inst_idx);
+        _curr_node->uses.insert(um_node);
+        um_node->is_used = true;
     };
 
-    for (size_t idx = _llvm_insts.size(); idx > 0; --idx)
+    for (int32_t idx = _llvm_insts.size() - 1; idx >= 0; --idx)
     {
         auto em_inst = _em_insts[idx];
         auto llvm_inst = _llvm_insts[idx];
@@ -606,13 +606,13 @@ IF_EntropyMap::UseMap::init_nodes(
             = llvm::dyn_cast<llvm::StoreInst>(llvm_inst))
         {
             llvm::outs() << "TEST STORE VALUE "
-                         << llvm_inst_store->getValueOperand() << '\n';
+                         << *llvm_inst_store->getValueOperand() << '\n';
             if (const auto* llvm_inst_store_value
                 = llvm::dyn_cast<llvm::Instruction>(
                     llvm_inst_store->getValueOperand()))
             {
-                llvm::outs()
-                    << "ADD STORE VALUE INST " << llvm_inst_store_value << '\n';
+                llvm::outs() << "ADD STORE VALUE INST "
+                             << *llvm_inst_store_value << '\n';
                 insert_node_from_llvm_inst(curr_node, llvm_inst_store_value);
             }
         }
@@ -630,7 +630,7 @@ IF_EntropyMap::UseMap::init_nodes(
             // Add edge towards direct operands consumed by this instruction
             for (const auto& op : llvm_inst->operands())
             {
-                llvm::outs() << "\tOP " << op << '\n';
+                llvm::outs() << "\tOP " << *op << '\n';
 
                 const auto* op_inst = llvm::dyn_cast<llvm::Instruction>(op);
                 if (const auto op_inst = llvm::dyn_cast<llvm::Instruction>(op))
@@ -643,7 +643,9 @@ IF_EntropyMap::UseMap::init_nodes(
     }
 
     this->init_root_nodes(um_nodes);
-    auto um_nodes_const = IF_EntropyMap::UseMap::um_nodes_t(um_nodes.size());
+
+    auto um_nodes_const = IF_EntropyMap::UseMap::um_nodes_t();
+    um_nodes_const.reserve(um_nodes.size());
     um_nodes_const.insert(um_nodes_const.cend(),
         std::make_move_iterator(um_nodes.begin()),
         std::make_move_iterator(um_nodes.end()));
@@ -656,8 +658,9 @@ IF_EntropyMap::UseMap::init_root_nodes(
 {
     for (const auto* node : _nodes)
     {
-        if (node->is_used)
+        if (!node->is_used)
         {
+            std::cout << "INSERT ROOT " << node->to_str() << '\n';
             this->root_nodes.insert(node);
         }
     }

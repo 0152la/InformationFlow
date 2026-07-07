@@ -1,7 +1,6 @@
 #ifndef _IF_ENTROPYMAP_HPP
 #define _IF_ENTROPYMAP_HPP
 
-#include "config.hpp"
 
 #include <iostream>
 #include <iterator>
@@ -36,6 +35,8 @@
 
 #include "fmt/base.h"
 #include "fmt/format.h"
+
+#include "config.hpp"
 
 namespace IF_EntropyMap
 {
@@ -284,7 +285,7 @@ private:
         const IF_EntropyMap::UseMap::um_nodes_t& um_nodes;
 
         template <typename T>
-        static uint64_t get_idx(T& _val, const std::vector<T>& _arr)
+        static uint64_t get_idx(T _val, const std::vector<T>& _arr)
         {
             auto val_it = std::find(_arr.begin(), _arr.end(), _val);
             if (val_it == _arr.end())
