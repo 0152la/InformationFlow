@@ -354,11 +354,14 @@ public:
 
     UseMap(const IF_EntropyMap::llvm_insts_t&, const IF_EntropyMap::em_insts_t&,
         const IF_EntropyMap::UseMap::MemDeps&);
+    ~UseMap();
 
     std::string to_str(void) const;
 
 private:
+    IF_EntropyMap::UseMap::um_nodes_t um_nodes;
     std::unordered_set<const IF_EntropyMap::UseMap::Node*> root_nodes;
+    std::vector<const IF_EntropyMap::UseMap::UC_Path*> uc_paths;
 
     auto init_nodes(const IF_EntropyMap::llvm_insts_t&,
         const IF_EntropyMap::em_insts_t&, const IF_EntropyMap::UseMap::MemDeps&)
@@ -366,6 +369,8 @@ private:
 
     auto init_root_nodes(const std::vector<IF_EntropyMap::UseMap::Node*>)
         -> void;
+
+    auto compute_uc_paths(const IF_EntropyMap::UseMap::InstData&) -> void;
 
     static auto get_cfg_inst_paths(
         const llvm::Instruction*, const llvm::Instruction*)

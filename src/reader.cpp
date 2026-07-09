@@ -41,9 +41,6 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
     IF_EntropyMap::em_insts_t em_insts;
     IF_EntropyMap::llvm_insts_t llvm_insts;
 
-    IF_EntropyMap::UseMap::insts_pair_t em_usemap_em_insts;
-    IF_EntropyMap::UseMap::llvm_to_insts_map_t em_usemap_llvm_insts_map;
-
     // TODO
     auto unc_coef_getter = IF_Entropy_Vals::Getter { };
     auto em_usemap_mem_deps = IF_EntropyMap::UseMap::MemDeps { };
@@ -85,8 +82,6 @@ IF_Parser::make_entropy_map(llvm::Module& _llvm_module)
                 llvm::errs() << "Warning: " << err.str() << '\n';
             }
             em_instr_map.emplace(&fn_inst, em_instr.get());
-            em_usemap_em_insts.emplace_back(em_instr.get(), &fn_inst);
-            em_usemap_llvm_insts_map.emplace(&fn_inst, em_instr.get());
 
             // Record special instruction successors, such as from calls or
             // branch instructions

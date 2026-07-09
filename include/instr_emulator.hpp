@@ -19,6 +19,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -105,6 +106,7 @@ struct Getter
 private:
     using get_res_t = std::optional<double>;
 
+    get_res_t get_special_entropy(const llvm::Instruction&);
     get_res_t get_set_entropy(const llvm::Instruction&);
     get_res_t get_emu_entropy(const llvm::Instruction&);
     get_res_t get_est_entropy(const llvm::Instruction&);

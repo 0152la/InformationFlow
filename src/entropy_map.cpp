@@ -264,7 +264,8 @@ IF_EntropyMap::UseMap::Node::to_str_path(uint32_t _indent, double _uc) const
 IF_EntropyMap::UseMap::UC_Path::UC_Path(
     const IF_EntropyMap::UseMap::Node* _last_node) :
     last_node(_last_node),
-    node_path()
+    node_path(),
+    unc_coef(1.0)
 {
     this->node_path.push_back(_last_node);
     this->unc_coef = _last_node->get_unc_coef();
@@ -332,12 +333,13 @@ std::string
 IF_EntropyMap::UseMap::UC_Path::to_str(void) const
 {
     const char delim = '-';
-    return std::accumulate(std::next(this->node_path.begin()),
+    auto path_str = std::accumulate(std::next(this->node_path.begin()),
         this->node_path.end(),
         std::to_string(this->node_path.front()->get_idx()),
         [&delim](std::string s, decltype(this->node_path)::value_type n)
         { return s + delim + std::to_string(n->get_idx()); });
-    // return fmt::format("PATH {} -- UC {}", this->node_path, this->unc_coef);
+
+    return fmt::format("UC {} == PATH [{}]\n", this->unc_coef, path_str);
 }
 
 /* MemDeps ********************************************************************/
@@ -472,54 +474,10 @@ IF_EntropyMap::UseMap::UseMap(const IF_EntropyMap::llvm_insts_t& _llvm_insts,
     const IF_EntropyMap::em_insts_t& _em_insts,
     const IF_EntropyMap::UseMap::MemDeps& _em_mem_deps)
 {
-    auto um_nodes = this->init_nodes(_llvm_insts, _em_insts, _em_mem_deps);
-    auto inst_data
-        = IF_EntropyMap::UseMap::InstData(_llvm_insts, _em_insts, um_nodes);
-
-    auto uc_paths = std::vector<const IF_EntropyMap::UseMap::UC_Path*>();
-    auto uc_paths_rest = std::queue<std::pair<IF_EntropyMap::UseMap::UC_Path*,
-        const IF_EntropyMap::UseMap::Node*>>();
-    for (const auto* root : this->root_nodes)
-    {
-        for (const auto* next_node : root->uses)
-        {
-            uc_paths_rest.emplace(
-                new IF_EntropyMap::UseMap::UC_Path(root), next_node);
-        }
-    }
-
-    while (!uc_paths_rest.empty())
-    {
-        auto to_proc = uc_paths_rest.front();
-        uc_paths_rest.pop();
-
-        auto next_node = to_proc.second;
-
-        if (next_node->uses.empty())
-        {
-            uc_paths.push_back(to_proc.first);
-        }
-
-        while (next_node->uses.size() == 1)
-        {
-            to_proc.first->add_node(next_node, inst_data);
-            next_node = *next_node->uses.begin();
-        }
-
-        to_proc.first->add_node(next_node, inst_data);
-        for (const auto* next_node_uses : next_node->uses)
-        {
-            uc_paths_rest.emplace(
-                new IF_EntropyMap::UseMap::UC_Path(*to_proc.first),
-                next_node_uses);
-        }
-        delete to_proc.first;
-    }
-
-    for (const auto* ucp : uc_paths)
-    {
-        std::cout << " === PATH\n" << ucp->to_str() << '\n';
-    }
+    this->um_nodes = this->init_nodes(_llvm_insts, _em_insts, _em_mem_deps);
+    auto inst_data = IF_EntropyMap::UseMap::InstData(
+        _llvm_insts, _em_insts, this->um_nodes);
+    this->compute_uc_paths(inst_data);
 
     // for (const auto& [em_inst, em_node] : inst_to_node_map)
     //{
@@ -528,12 +486,21 @@ IF_EntropyMap::UseMap::UseMap(const IF_EntropyMap::llvm_insts_t& _llvm_insts,
     // std::cout << "===============\n";
     //}
     //
-    for (const auto* ucp : uc_paths)
+
+    // llvm::outs() << this->to_str() << '\n';
+}
+
+IF_EntropyMap::UseMap::~UseMap(void)
+{
+    for (const auto* ucp : this->uc_paths)
     {
         delete ucp;
     }
 
-    llvm::outs() << this->to_str() << '\n';
+    for (const auto* n : this->um_nodes)
+    {
+        delete n;
+    }
 }
 
 auto
@@ -663,6 +630,66 @@ IF_EntropyMap::UseMap::init_root_nodes(
             std::cout << "INSERT ROOT " << node->to_str() << '\n';
             this->root_nodes.insert(node);
         }
+    }
+}
+
+auto
+IF_EntropyMap::UseMap::compute_uc_paths(
+    const IF_EntropyMap::UseMap::InstData& _inst_data) -> void
+{
+    auto uc_paths = std::vector<const IF_EntropyMap::UseMap::UC_Path*>();
+    auto uc_paths_rest = std::queue<std::pair<IF_EntropyMap::UseMap::UC_Path*,
+        const IF_EntropyMap::UseMap::Node*>>();
+
+    for (const auto* root : this->root_nodes)
+    {
+        for (const auto* next_node : root->uses)
+        {
+            uc_paths_rest.emplace(
+                new IF_EntropyMap::UseMap::UC_Path(root), next_node);
+            std::cout << "ROOT " << root->to_str_path(0, 1.0) << "\n";
+        }
+    }
+
+    while (!uc_paths_rest.empty())
+    {
+        auto to_proc = uc_paths_rest.front();
+        uc_paths_rest.pop();
+
+        auto next_node = to_proc.second;
+
+        // While there is a single predecessor, add that to the path
+        while (next_node->uses.size() == 1)
+        {
+            to_proc.first->add_node(next_node, _inst_data);
+            next_node = *next_node->uses.begin();
+        }
+
+        to_proc.first->add_node(next_node, _inst_data);
+        // If there are no more predecessors, we have finished exploring this
+        // path
+        if (next_node->uses.empty())
+        {
+            uc_paths.push_back(to_proc.first);
+            continue;
+        }
+
+        // Otherwise, there are multiple predecessors; we add them to be
+        // explored
+        for (const auto* next_node_uses : next_node->uses)
+        {
+            uc_paths_rest.emplace(
+                new IF_EntropyMap::UseMap::UC_Path(*to_proc.first),
+                next_node_uses);
+        }
+
+        // Delete the original path before the split
+        delete to_proc.first;
+    }
+
+    for (const auto* ucp : uc_paths)
+    {
+        std::cout << "=== PATH\n" << ucp->to_str() << '\n';
     }
 }
 

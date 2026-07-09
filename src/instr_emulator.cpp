@@ -1,13 +1,4 @@
 #include "instr_emulator.hpp"
-#include "fmt/base.h"
-#include <limits>
-#include <llvm/IR/InstrTypes.h>
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <utility>
 
 /* For certain instructions, we can directly calculate the entropy, as they
  * either affect only control flow, or move data around.
@@ -402,6 +393,7 @@ IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& _inst)
 {
     auto get_fns
         = std::vector<decltype(&IF_Entropy_Vals::Getter::get_set_entropy)> {
+              &IF_Entropy_Vals::Getter::get_special_entropy,
               &IF_Entropy_Vals::Getter::get_set_entropy,
               &IF_Entropy_Vals::Getter::get_emu_entropy,
               &IF_Entropy_Vals::Getter::get_est_entropy
@@ -417,6 +409,58 @@ IF_Entropy_Vals::Getter::get_entropy_for_inst(const llvm::Instruction& _inst)
 
     throw std::runtime_error(fmt::format(
         "Unhandled entropy getting for inst `{}`!", _inst.getOpcodeName()));
+}
+
+IF_Entropy_Vals::Getter::get_res_t
+IF_Entropy_Vals::Getter::get_special_entropy(const llvm::Instruction& _inst)
+{
+
+    if (const auto* bi = llvm::dyn_cast<llvm::BinaryOperator>(&_inst))
+    {
+        using sp_ops_t = std::vector<llvm::Instruction::BinaryOps>;
+
+        // If this this is a binary operation with the same operands, then
+        // certain operations will yield a single result and lose all entropy
+        //
+        // TODO pointer aliasing (especially for O0)...
+        if (bi->getOperand(0) == bi->getOperand(1))
+        {
+            auto special_ops = std::vector<llvm::Instruction::BinaryOps> {
+                llvm::Instruction::BinaryOps::Sub,
+                llvm::Instruction::BinaryOps::SDiv,
+                llvm::Instruction::BinaryOps::UDiv,
+                llvm::Instruction::BinaryOps::SRem,
+                llvm::Instruction::BinaryOps::URem
+            };
+
+            if (std::find(
+                    special_ops.begin(), special_ops.end(), bi->getOpcode())
+                != special_ops.end())
+            {
+                Utils::debug_print("Special equal ops");
+                return 0.0;
+            }
+        }
+
+        // If any of the operands are constant, then certain operations will
+        // not lose any entropy
+        if (llvm::isa<llvm::Constant>(bi->getOperand(0))
+            || llvm::isa<llvm::Constant>(bi->getOperand(1)))
+        {
+            auto special_ops = sp_ops_t { llvm::Instruction::BinaryOps::Add,
+                llvm::Instruction::BinaryOps::Sub };
+
+            if (std::find(
+                    special_ops.begin(), special_ops.end(), bi->getOpcode())
+                != special_ops.end())
+            {
+                Utils::debug_print("Special constant bin");
+                return 1.0;
+            }
+        }
+    }
+
+    return std::nullopt;
 }
 
 IF_Entropy_Vals::Getter::get_res_t
@@ -447,7 +491,7 @@ IF_Entropy_Vals::Getter::get_emu_entropy(const llvm::Instruction& _inst)
     // If this is one of the `cmp` instructions, need to additionally match the
     // predicate, and map against the bit size of the operand, not the type of
     // the instruction (which is `i1`)
-    if (const auto ci = llvm::dyn_cast<llvm::CmpInst>(&_inst))
+    if (const auto* ci = llvm::dyn_cast<llvm::CmpInst>(&_inst))
     {
         fn_name = (fn_name + std::string("_")
             + ci->getPredicateName(ci->getPredicate()))
